@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openscribe"
+version = "0.1.0"
+description = "Open source CLI and TUI writing environment for long form projects"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Mick" }]
+dependencies = [
+  "pyyaml>=6.0.1",
+  "rich>=13.7.1",
+  "textual>=0.61.1",
+  "typer>=0.12.3",
+]
+
+[project.scripts]
+openscribe = "openscribe.cli:app"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
