@@ -20,3 +20,9 @@
 
 * added a root `future-upgrades.md` planning file for local roadmap tracking
 * updated `.gitignore` so `future-upgrades.md` stays local only
+
+### Specification
+
+* added `specs/001-compile-pipeline/` for the first GitHub Spec package
+* defined requirements, scope, plan, and tasks for the first compile milestone
+* linked the spec package from `README.md`

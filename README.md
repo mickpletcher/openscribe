@@ -5,6 +5,7 @@ Open source CLI and TUI writing environment for long form projects
 ## Project docs
 
 See [changelog.md](./changelog.md) for the repo change history.
+See [Spec 001](./specs/001-compile-pipeline/README.md) for the compile milestone definition.
 
 ## What it is
 
