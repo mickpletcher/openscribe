@@ -14,6 +14,16 @@ A writer can draft chapters and inspect structure, but there is no built in path
 
 Without compile support, the project is a manuscript organizer, not a full writing workflow.
 
+The current feature gap is clearer when compared to the core long form writing workflow:
+
+1. binder structure exists in early form
+2. compile does not exist yet
+3. a Scrivenings style continuous manuscript view does not exist yet
+4. metadata exists in files but is still thin in the interface
+5. outliner style structure plus metadata review is not built yet
+
+This spec covers the first of those missing pieces because compile is the shortest path from manuscript organizer to usable writing tool.
+
 ## Proposed MVP Definition
 
 The compile MVP is considered complete when this path works:
@@ -67,6 +77,21 @@ Expected template inputs:
 4. front matter include or skip settings
 5. scene break style if later supported
 
+## Feature Priority Context
+
+The current product priority for `openscribe` is:
+
+1. compile
+2. Scrivenings style continuous reading
+3. richer metadata commands and views
+4. outliner
+5. research viewing
+6. corkboard
+7. templates beyond compile defaults
+
+This spec only defines item one.
+It should not grow to absorb the later milestones.
+
 ## Data Flow
 
 1. load project config
@@ -112,3 +137,4 @@ The exact filename can be slugged for safety.
 4. Missing manuscript content produces a clear error.
 5. At least one default template works without manual edits.
 6. The README explains how to install the compile prerequisites and run the command.
+7. The implementation leaves room for a later Scrivenings command to reuse the same ordered manuscript assembly logic.

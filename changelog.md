@@ -26,3 +26,11 @@
 * added `specs/001-compile-pipeline/` for the first GitHub Spec package
 * defined requirements, scope, plan, and tasks for the first compile milestone
 * linked the spec package from `README.md`
+
+### Feature planning refresh
+
+* updated `future-upgrades.md` to reflect the current MVP feature order based on Scrivener style gaps
+* updated the compile spec so it stays focused on compile while preserving room for a later Scrivenings style feature
+* added a second spec package for a lightweight planning board mode inspired by Scapple style freeform note mapping
+* updated board planning to absorb the useful LivingWriter board ideas without taking on cloud, AI, or collaboration scope
+* added a third spec package for elements, aliases, relations, and appears in tracking

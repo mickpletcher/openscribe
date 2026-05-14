@@ -6,6 +6,8 @@ Open source CLI and TUI writing environment for long form projects
 
 See [changelog.md](./changelog.md) for the repo change history.
 See [Spec 001](./specs/001-compile-pipeline/README.md) for the compile milestone definition.
+See [Spec 002](./specs/002-board-mode/README.md) for the planning board milestone definition.
+See [Spec 003](./specs/003-elements-and-relations/README.md) for the elements and relations milestone definition.
 
 ## What it is
 

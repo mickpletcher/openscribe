@@ -16,6 +16,7 @@ Build manuscript collection and compile preparation.
 2. parse chapter metadata and body content
 3. generate a temporary compile document for Pandoc input
 4. validate empty manuscript and malformed project cases
+5. keep manuscript assembly logic reusable for a later Scrivenings command
 
 ## Phase 3
 

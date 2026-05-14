@@ -22,6 +22,7 @@
 - [ ] Parse frontmatter and body content for each chapter
 - [ ] Build the temporary compile input document
 - [ ] Decide how part titles and chapter titles appear in output
+- [ ] Keep ordered manuscript assembly reusable for a later Scrivenings feature
 
 ## Template Tasks
 
@@ -37,4 +38,5 @@
 - [ ] Compile a sample project to `pdf` on a machine with a working PDF engine
 - [ ] Confirm output order matches binder order
 - [ ] Confirm missing dependency errors are readable
+- [ ] Confirm the manuscript assembly path is separate enough to reuse in a future continuous reading command
 - [ ] Update README with compile instructions after implementation
