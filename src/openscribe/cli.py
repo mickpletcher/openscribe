@@ -5,12 +5,15 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
+from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
 from openscribe.project import (
     create_chapter,
     create_part,
+    find_chapter,
     init_project,
     list_chapters,
     load_project_config,
@@ -20,7 +23,9 @@ from openscribe.tui import OpenScribeApp
 
 app = typer.Typer(help="CLI and TUI writing environment for long form projects.")
 new_app = typer.Typer(help="Create manuscript content.")
+ai_app = typer.Typer(help="Optional AI helpers for manuscript work.")
 app.add_typer(new_app, name="new")
+app.add_typer(ai_app, name="ai")
 console = Console()
 
 
@@ -119,3 +124,28 @@ def status() -> None:
 def tui() -> None:
     root = project_root()
     OpenScribeApp(root).run()
+
+
+@ai_app.command("summarize")
+def ai_summarize(
+    chapter: str = typer.Argument(..., help="Chapter title or slug."),
+) -> None:
+    root = project_root()
+    config = load_project_config(root)
+    settings = load_ai_settings(config)
+    document = find_chapter(root, chapter)
+    if not document.body.strip():
+        raise typer.BadParameter("The chapter body is empty.")
+
+    try:
+        summary = summarize_text(document.body, settings, "chapter")
+    except AIConfigurationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    console.print(
+        Panel(
+            summary,
+            title=f"AI Summary: {document.title}",
+            border_style="cyan",
+        )
+    )

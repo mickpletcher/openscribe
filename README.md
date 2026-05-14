@@ -41,6 +41,7 @@ This first build includes:
 * manuscript outline view
 * manuscript status view
 * lightweight Textual TUI
+* optional AI summary command for chapter review
 
 This build does not yet include compile, snapshots, editor launch commands, or search indexing.
 
@@ -50,6 +51,8 @@ You need:
 
 * Python 3.11 or newer
 * PowerShell on Windows if you want to follow the examples exactly
+
+You do not need any AI provider, API key, or AI SDK setup to use the normal project, CLI, or TUI features.
 
 ## Install
 
@@ -66,6 +69,384 @@ If `openscribe` is not on your `PATH`, run it with:
 ```powershell
 py -3.11 -m openscribe --help
 ```
+
+## Standard setup
+
+This is the normal setup path.
+It does not require AI.
+
+```powershell
+py -3.11 -m openscribe --help
+openscribe init "My Novel"
+openscribe new part "Opening"
+openscribe new chapter "The Beginning" --part "Opening"
+openscribe outline
+openscribe status
+openscribe tui
+```
+
+If you only want the writing tool, you can stop there.
+You can ignore the rest of the AI section completely.
+
+## AI setup
+
+`openscribe` treats AI as an optional helper layer.
+The manuscript files stay the source of truth.
+AI should assist review and drafting work, not become a requirement for normal writing.
+
+If you do not want AI:
+
+* leave `ai.enabled` set to `false`
+* do not set any AI environment variables
+* do not run `openscribe ai ...` commands
+
+Nothing else in the project depends on AI being enabled.
+
+The current code supports:
+
+* `openai`
+* `azure-openai`
+
+The README below also shows how to extend the same provider adapter pattern to:
+
+* Anthropic
+* Google Gemini
+* Mistral
+
+### Current AI command
+
+Right now the CLI includes:
+
+```powershell
+openscribe ai summarize "The Beginning"
+```
+
+This reads a chapter body and returns:
+
+* a short overview paragraph
+* five concise bullet points
+* one revision risk to review next
+
+### Project config
+
+Each project now includes an AI section in `.openscribe/project.yaml`:
+
+```yaml
+ai:
+  enabled: false
+  provider: openai
+  model: gpt-4.1
+```
+
+To enable AI for a project:
+
+1. open `.openscribe/project.yaml`
+2. set `enabled: true`
+3. choose a provider
+4. choose the model or deployment name you want to use
+
+The default project config keeps AI disabled on purpose.
+
+### Environment variables
+
+#### OpenAI
+
+```powershell
+$env:OPENAI_API_KEY="your_key_here"
+```
+
+#### Azure OpenAI
+
+```powershell
+$env:AZURE_OPENAI_API_KEY="your_key_here"
+$env:AZURE_OPENAI_BASE_URL="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/"
+```
+
+#### Anthropic
+
+```powershell
+$env:ANTHROPIC_API_KEY="your_key_here"
+```
+
+#### Google Gemini
+
+```powershell
+$env:GEMINI_API_KEY="your_key_here"
+```
+
+#### Mistral
+
+```powershell
+$env:MISTRAL_API_KEY="your_key_here"
+```
+
+### First run
+
+Once the project config and environment variables are set:
+
+```powershell
+openscribe ai summarize "The Beginning"
+```
+
+If AI is disabled in the project config, `openscribe` stops with a clear message.
+If the expected environment variable is missing, it also stops with a clear message.
+
+## AI architecture
+
+The current code uses a small provider adapter layer in `src/openscribe/ai.py`.
+
+The design is simple:
+
+1. load provider settings from `.openscribe/project.yaml`
+2. normalize the manuscript text that will be sent to the model
+3. route the request through the configured provider adapter
+4. return plain text back to the CLI
+5. avoid silent writes into manuscript files
+
+That keeps the AI layer replaceable.
+It also means the same command surface can work across multiple vendors.
+
+### Recommended command layout
+
+Keep AI features separate from the core writing commands.
+
+Good examples:
+
+* `openscribe ai summarize`
+* `openscribe ai rewrite`
+* `openscribe ai outline`
+* `openscribe ai analyze`
+* `openscribe ai brainstorm`
+
+### Safe behavior
+
+AI output should not overwrite chapters automatically.
+
+Safer pattern:
+
+1. generate output
+2. show it in the terminal
+3. let the user decide whether to copy it into the manuscript or notes
+
+## How to implement major AI providers
+
+The clean way is to keep one provider interface and one adapter per platform.
+
+Suggested internal shape:
+
+```python
+class ProviderAdapter:
+    def summarize(self, text: str, model: str, context_label: str) -> str:
+        raise NotImplementedError
+```
+
+Then implement one adapter per vendor and keep the CLI unaware of vendor details.
+
+### OpenAI
+
+Use the Responses API for new work.
+
+Minimal Python pattern:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+response = client.responses.create(
+    model="gpt-5.5",
+    input="Summarize this chapter in five bullet points:\n\n" + chapter_text,
+)
+
+print(response.output_text)
+```
+
+Suggested config:
+
+```yaml
+ai:
+  enabled: true
+  provider: openai
+  model: gpt-5.5
+```
+
+This is the best first provider for `openscribe` because the current code already supports it.
+
+### Azure OpenAI
+
+Azure OpenAI can use the same OpenAI Python client with a different `base_url`.
+
+Minimal Python pattern:
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url=os.environ["AZURE_OPENAI_BASE_URL"],
+    api_key=os.environ["AZURE_OPENAI_API_KEY"],
+)
+
+response = client.responses.create(
+    model="gpt-4.1",
+    input="Summarize this chapter in five bullet points:\n\n" + chapter_text,
+)
+
+print(response.output_text)
+```
+
+Suggested config:
+
+```yaml
+ai:
+  enabled: true
+  provider: azure-openai
+  model: gpt-4.1
+```
+
+In Azure, the `model` value should match your deployment name if that is how your environment is configured.
+
+### Anthropic
+
+Anthropic fits well as a second direct provider adapter.
+
+Minimal Python pattern:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    messages=[
+        {
+            "role": "user",
+            "content": "Summarize this chapter in five bullet points:\n\n" + chapter_text,
+        }
+    ],
+)
+
+print(message.content)
+```
+
+Suggested config:
+
+```yaml
+ai:
+  enabled: true
+  provider: anthropic
+  model: claude-sonnet-4-5
+```
+
+Implementation note:
+
+Add an `anthropic` adapter next to the existing OpenAI adapter and normalize its message output into plain text before returning to the CLI.
+
+### Google Gemini
+
+Gemini is a good fit for a separate adapter with its own request shape.
+
+REST shape:
+
+```text
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+```
+
+Python adapter shape:
+
+```python
+from google import genai
+
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Summarize this chapter in five bullet points:\n\n" + chapter_text,
+)
+
+print(response.text)
+```
+
+Suggested config:
+
+```yaml
+ai:
+  enabled: true
+  provider: gemini
+  model: gemini-2.5-flash
+```
+
+Implementation note:
+
+Keep the Gemini adapter isolated because its request and response structures differ from OpenAI and Anthropic.
+
+### Mistral
+
+Mistral works well as another simple adapter for text generation features.
+
+Minimal Python pattern:
+
+```python
+import os
+from mistralai import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+response = client.chat.complete(
+    model="mistral-large-latest",
+    messages=[
+        {
+            "role": "user",
+            "content": "Summarize this chapter in five bullet points:\n\n" + chapter_text,
+        }
+    ],
+)
+
+print(response.choices[0].message.content)
+```
+
+Suggested config:
+
+```yaml
+ai:
+  enabled: true
+  provider: mistral
+  model: mistral-large-latest
+```
+
+## Recommended build order for AI
+
+Do not build every AI feature at once.
+
+Use this order:
+
+1. `ai summarize`
+2. `ai rewrite`
+3. `ai outline`
+4. `ai analyze`
+5. board aware prompts
+6. element aware prompts
+
+That keeps the AI layer useful without letting it overtake the writing workflow.
+
+## Adding more providers to the codebase
+
+When you are ready to add the next provider:
+
+1. add the SDK dependency to `pyproject.toml`
+2. add one adapter function or class in `src/openscribe/ai.py`
+3. add provider specific environment validation
+4. normalize the response into plain text
+5. keep the CLI command surface the same
+6. document the provider in this README
+
+## Current AI limitation
+
+Right now only `openai` and `azure-openai` are wired into the CLI.
+The README examples for Anthropic, Gemini, and Mistral show the intended adapter pattern, but those providers are not yet implemented in `src/openscribe/ai.py`.
+AI is optional and the base writing workflow is expected to work without any provider configuration.
 
 ## First project
 

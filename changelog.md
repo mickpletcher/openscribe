@@ -34,3 +34,11 @@
 * added a second spec package for a lightweight planning board mode inspired by Scapple style freeform note mapping
 * updated board planning to absorb the useful LivingWriter board ideas without taking on cloud, AI, or collaboration scope
 * added a third spec package for elements, aliases, relations, and appears in tracking
+
+### AI integration
+
+* added an optional `openscribe ai summarize` command for chapter review
+* added project level AI settings in `.openscribe/project.yaml`
+* added provider routing for `openai` and `azure-openai`
+* expanded `README.md` with setup guidance for OpenAI, Azure OpenAI, Anthropic, Gemini, and Mistral
+* clarified in `README.md` that AI is not required for normal `openscribe` setup or usage

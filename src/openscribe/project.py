@@ -69,6 +69,11 @@ def init_project(base_path: Path, title: str) -> Path:
                 "default_format": "docx",
                 "default_template": "novel",
             },
+            "ai": {
+                "enabled": False,
+                "provider": "openai",
+                "model": "gpt-4.1",
+            },
         },
     )
     return project_path
@@ -200,3 +205,16 @@ def list_chapters(root: Path) -> list[ChapterDocument]:
                 )
             )
     return chapters
+
+
+def find_chapter(root: Path, chapter_ref: str) -> ChapterDocument:
+    normalized = chapter_ref.strip().lower()
+    chapters = list_chapters(root)
+    for chapter in chapters:
+        if chapter.slug.lower() == normalized:
+            return chapter
+        if chapter.title.strip().lower() == normalized:
+            return chapter
+        if chapter.path.stem.lower() == normalized:
+            return chapter
+    raise FileNotFoundError(f"Chapter '{chapter_ref}' was not found.")
