@@ -235,6 +235,48 @@ def update_chapter_metadata(
     return chapter.path
 
 
+def batch_update_chapters(
+    root: Path,
+    *,
+    match_status: str | None = None,
+    match_label: str | None = None,
+    match_pov: str | None = None,
+    match_part: str | None = None,
+    match_text: str | None = None,
+    title: str | None = None,
+    status: str | None = None,
+    label: str | None = None,
+    synopsis: str | None = None,
+    pov: str | None = None,
+    word_target: int | None = None,
+    notes: str | None = None,
+) -> list[Path]:
+    matches = find_chapters(
+        root,
+        status=match_status,
+        label=match_label,
+        pov=match_pov,
+        part=match_part,
+        text=match_text,
+    )
+    updated_paths: list[Path] = []
+    for chapter in matches:
+        updated_paths.append(
+            update_chapter_metadata(
+                root,
+                chapter.slug,
+                title=title,
+                status=status,
+                label=label,
+                synopsis=synopsis,
+                pov=pov,
+                word_target=word_target,
+                notes=notes,
+            )
+        )
+    return updated_paths
+
+
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     if not text.startswith("---\n"):
         return {}, text
@@ -350,3 +392,33 @@ def find_chapters(
         results.append(chapter)
 
     return results
+
+
+def chapter_report(root: Path) -> dict[str, Any]:
+    chapters = list_chapters(root)
+    by_status: dict[str, int] = {}
+    by_label: dict[str, int] = {}
+    by_pov: dict[str, int] = {}
+    by_part: dict[str, int] = {}
+    part_word_totals: dict[str, int] = {}
+
+    for chapter in chapters:
+        _increment(by_status, chapter.status or "n/a")
+        _increment(by_label, chapter.label or "n/a")
+        _increment(by_pov, chapter.pov or "n/a")
+        _increment(by_part, chapter.part or "n/a")
+        part_word_totals[chapter.part] = part_word_totals.get(chapter.part, 0) + chapter.word_count
+
+    return {
+        "chapter_count": len(chapters),
+        "word_count": sum(chapter.word_count for chapter in chapters),
+        "by_status": by_status,
+        "by_label": by_label,
+        "by_pov": by_pov,
+        "by_part": by_part,
+        "part_word_totals": part_word_totals,
+    }
+
+
+def _increment(counter: dict[str, int], key: str) -> None:
+    counter[key] = counter.get(key, 0) + 1

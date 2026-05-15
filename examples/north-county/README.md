@@ -15,6 +15,8 @@ Use it when you want to see:
 This example includes:
 
 * `.openscribe/project.yaml`
+* one board data file under `.openscribe/boards/`
+* one element data file under `.openscribe/elements/`
 * one manuscript part
 * one `part.yaml` part metadata file
 * two chapter files
@@ -31,12 +33,21 @@ From the repo root:
 ```powershell
 Set-Location .\examples\north-county
 py -3.11 -m openscribe outline
+py -3.11 -m openscribe report project
 py -3.11 -m openscribe find chapters --text station
+py -3.11 -m openscribe board note add "Sheriff rumor" --body "A deputy hints the sheriff knew about the ledger." --group plot
+py -3.11 -m openscribe board note list
+py -3.11 -m openscribe element add character "Eli Harper" --notes "Primary point of view"
+py -3.11 -m openscribe element appears-in Eli
 py -3.11 -m openscribe read
 py -3.11 -m openscribe status
 py -3.11 -m openscribe tui
 ```
 
 Inside the TUI you can now use the search box to filter chapters and inspect part metadata from the binder.
+
+The board commands store freeform planning notes under `.openscribe/boards/`.
+
+The element commands store element, alias, and relation data under `.openscribe/elements/`.
 
 You can also open the Markdown files directly in your editor and compare them with the command output.

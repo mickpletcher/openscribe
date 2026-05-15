@@ -1,0 +1,18 @@
+elements:
+- id: cha-eli-harper
+  type: character
+  name: Eli Harper
+  aliases:
+  - Eli
+  tags: []
+  notes: Primary point of view
+  relations:
+  - target: set-north-county
+    type: returns-to
+- id: set-north-county
+  type: setting
+  name: North County
+  aliases: []
+  tags: []
+  notes: Rural Tennessee setting for the opening section.
+  relations: []

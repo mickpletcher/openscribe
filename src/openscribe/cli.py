@@ -11,8 +11,12 @@ from rich.table import Table
 from rich.tree import Tree
 
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
+from openscribe.board import add_link, add_note, list_notes, promote_note_to_chapter, set_group
 from openscribe.compile import CompileError, assemble_manuscript_text, compile_project
+from openscribe.elements import add_alias, add_element, add_relation, appears_in, get_element, list_element_records
 from openscribe.project import (
+    batch_update_chapters,
+    chapter_report,
     create_chapter,
     create_part,
     find_chapter,
@@ -33,11 +37,25 @@ ai_app = typer.Typer(help="Optional AI helpers for manuscript work.")
 set_app = typer.Typer(help="Update project metadata.")
 show_app = typer.Typer(help="Show project metadata.")
 find_app = typer.Typer(help="Find project content.")
+report_app = typer.Typer(help="Project reports.")
+board_app = typer.Typer(help="Board mode workflows.")
+board_note_app = typer.Typer(help="Board note workflows.")
+board_link_app = typer.Typer(help="Board link workflows.")
+board_group_app = typer.Typer(help="Board grouping workflows.")
+element_app = typer.Typer(help="Element and relation workflows.")
+element_alias_app = typer.Typer(help="Element alias workflows.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
 app.add_typer(set_app, name="set")
 app.add_typer(show_app, name="show")
 app.add_typer(find_app, name="find")
+app.add_typer(report_app, name="report")
+app.add_typer(board_app, name="board")
+app.add_typer(element_app, name="element")
+board_app.add_typer(board_note_app, name="note")
+board_app.add_typer(board_link_app, name="link")
+board_app.add_typer(board_group_app, name="group")
+element_app.add_typer(element_alias_app, name="alias")
 console = Console()
 
 
@@ -200,6 +218,40 @@ def set_chapter(
     console.print(f"Updated chapter {chapter_path.relative_to(root)}")
 
 
+@set_app.command("chapters")
+def set_chapters(
+    match_status: Optional[str] = typer.Option(None, "--match-status", help="Match status."),
+    match_label: Optional[str] = typer.Option(None, "--match-label", help="Match label."),
+    match_pov: Optional[str] = typer.Option(None, "--match-pov", help="Match point of view."),
+    match_part: Optional[str] = typer.Option(None, "--match-part", help="Match part title or slug."),
+    match_text: Optional[str] = typer.Option(None, "--match-text", help="Match text in title, synopsis, notes, or body."),
+    title: Optional[str] = typer.Option(None, "--title", help="New chapter title."),
+    status: Optional[str] = typer.Option(None, "--status", help="New status."),
+    label: Optional[str] = typer.Option(None, "--label", help="New label."),
+    synopsis: Optional[str] = typer.Option(None, "--synopsis", help="New synopsis."),
+    pov: Optional[str] = typer.Option(None, "--pov", help="New point of view."),
+    word_target: Optional[int] = typer.Option(None, "--word-target", help="New word target."),
+    notes: Optional[str] = typer.Option(None, "--notes", help="New notes."),
+) -> None:
+    root = project_root()
+    updated_paths = batch_update_chapters(
+        root,
+        match_status=match_status,
+        match_label=match_label,
+        match_pov=match_pov,
+        match_part=match_part,
+        match_text=match_text,
+        title=title,
+        status=status,
+        label=label,
+        synopsis=synopsis,
+        pov=pov,
+        word_target=word_target,
+        notes=notes,
+    )
+    console.print(f"Updated chapters: {len(updated_paths)}")
+
+
 @show_app.command("part")
 def show_part(part: str = typer.Argument(..., help="Part title or slug.")) -> None:
     root = project_root()
@@ -257,6 +309,168 @@ def find_chapter_matches(
     console.print(f"Matches: {len(matches)}")
 
 
+@report_app.command("project")
+def report_project() -> None:
+    root = project_root()
+    summary = chapter_report(root)
+    console.print(f"Chapters: {summary['chapter_count']}")
+    console.print(f"Words: {summary['word_count']}")
+
+    _print_counter_table("By Status", summary["by_status"])
+    _print_counter_table("By Label", summary["by_label"])
+    _print_counter_table("By POV", summary["by_pov"])
+    _print_counter_table("By Part", summary["by_part"])
+    _print_counter_table("Part Word Totals", summary["part_word_totals"], value_header="Words")
+
+
+@board_note_app.command("add")
+def board_note_add(
+    title: str = typer.Argument(..., help="Board note title."),
+    body: str = typer.Option("", "--body", help="Board note body."),
+    group: str = typer.Option("", "--group", help="Board note group."),
+    x: int = typer.Option(0, "--x", help="Optional x position."),
+    y: int = typer.Option(0, "--y", help="Optional y position."),
+) -> None:
+    root = project_root()
+    note = add_note(root, title, body=body, group=group, x=x, y=y)
+    console.print(f"Added board note {note.note_id}")
+
+
+@board_note_app.command("list")
+def board_note_list(group: Optional[str] = typer.Option(None, "--group", help="Filter by group.")) -> None:
+    root = project_root()
+    notes = list_notes(root)
+    table = Table(title="Board Notes")
+    table.add_column("ID")
+    table.add_column("Title")
+    table.add_column("Group")
+    table.add_column("Links")
+    table.add_column("Body")
+    for note in notes:
+        if group and note.group.strip().lower() != group.strip().lower():
+            continue
+        table.add_row(note.note_id, note.title, note.group or "", ", ".join(note.links), note.body or "")
+    console.print(table)
+
+
+@board_link_app.command("add")
+def board_link_add(
+    from_id: str = typer.Argument(..., help="Source note id."),
+    to_id: str = typer.Argument(..., help="Target note id."),
+) -> None:
+    root = project_root()
+    add_link(root, from_id, to_id)
+    console.print(f"Linked {from_id} to {to_id}")
+
+
+@board_group_app.command("set")
+def board_group_set(
+    note_id: str = typer.Argument(..., help="Board note id."),
+    group: str = typer.Argument(..., help="Group name."),
+) -> None:
+    root = project_root()
+    set_group(root, note_id, group)
+    console.print(f"Updated group for {note_id}")
+
+
+@board_app.command("promote")
+def board_promote(
+    note_id: str = typer.Argument(..., help="Board note id."),
+    chapter: Optional[str] = typer.Option(None, "--chapter", help="New chapter title."),
+    part: Optional[str] = typer.Option(None, "--part", help="Target part title or slug."),
+) -> None:
+    root = project_root()
+    note_title = next((note.title for note in list_notes(root) if note.note_id == note_id), note_id)
+    chapter_path = promote_note_to_chapter(root, note_id, chapter_title=chapter, part=part)
+    promoted_title = chapter or note_title
+    console.print(f"Promoted board note into chapter {promoted_title} at {chapter_path.relative_to(root)}")
+
+
+@element_app.command("add")
+def element_add(
+    type_name: str = typer.Argument(..., help="Element type. Use character, setting, or item."),
+    name: str = typer.Argument(..., help="Primary element name."),
+    notes: str = typer.Option("", "--notes", help="Element notes."),
+    tags: str = typer.Option("", "--tags", help="Comma separated tags."),
+) -> None:
+    root = project_root()
+    tag_values = [value.strip() for value in tags.split(",") if value.strip()]
+    record = add_element(root, type_name, name, notes=notes, tags=tag_values)
+    console.print(f"Added element {record.element_id}")
+
+
+@element_app.command("list")
+def element_list(type_name: Optional[str] = typer.Option(None, "--type", help="Filter by element type.")) -> None:
+    root = project_root()
+    records = list_element_records(root, type_name=type_name)
+    table = Table(title="Elements")
+    table.add_column("ID")
+    table.add_column("Type")
+    table.add_column("Name")
+    table.add_column("Aliases")
+    table.add_column("Tags")
+    for record in records:
+        table.add_row(
+            record.element_id,
+            record.type_name,
+            record.name,
+            ", ".join(record.aliases),
+            ", ".join(record.tags),
+        )
+    console.print(table)
+
+
+@element_app.command("show")
+def element_show(element_ref: str = typer.Argument(..., help="Element id or name.")) -> None:
+    root = project_root()
+    record = get_element(root, element_ref)
+    data = {
+        "id": record.element_id,
+        "type": record.type_name,
+        "name": record.name,
+        "aliases": record.aliases,
+        "tags": record.tags,
+        "notes": record.notes,
+        "relations": record.relations,
+    }
+    console.print(Panel(_yaml_dump(data), title="Element", border_style="cyan"))
+
+
+@element_alias_app.command("add")
+def element_alias_add(
+    element_ref: str = typer.Argument(..., help="Element id or name."),
+    alias: str = typer.Argument(..., help="Alias text."),
+) -> None:
+    root = project_root()
+    record = add_alias(root, element_ref, alias)
+    console.print(f"Added alias to {record.element_id}")
+
+
+@element_app.command("relate")
+def element_relate(
+    source: str = typer.Argument(..., help="Source element id or name."),
+    target: str = typer.Argument(..., help="Target element id or name."),
+    relation_type: str = typer.Option(..., "--type", help="Relation type."),
+) -> None:
+    root = project_root()
+    record = add_relation(root, source, target, relation_type)
+    console.print(f"Added relation for {record.element_id}")
+
+
+@element_app.command("appears-in")
+def element_appears_in(element_ref: str = typer.Argument(..., help="Element id or name.")) -> None:
+    root = project_root()
+    matches = appears_in(root, element_ref)
+    table = Table(title="Element Appearances")
+    table.add_column("Part")
+    table.add_column("Chapter")
+    table.add_column("Path")
+    for chapter in matches:
+        table.add_row(chapter.part, chapter.title, str(chapter.path.relative_to(root)))
+    console.print(table)
+    console.print(f"Matches: {len(matches)}")
+
+
 @ai_app.command("summarize")
 def ai_summarize(
     chapter: str = typer.Argument(..., help="Chapter title or slug."),
@@ -286,3 +500,12 @@ def _yaml_dump(data: dict) -> str:
     import yaml
 
     return yaml.safe_dump(data, sort_keys=False).strip()
+
+
+def _print_counter_table(title: str, data: dict[str, int], value_header: str = "Count") -> None:
+    table = Table(title=title)
+    table.add_column("Name")
+    table.add_column(value_header, justify="right")
+    for name, value in sorted(data.items()):
+        table.add_row(name, str(value))
+    console.print(table)

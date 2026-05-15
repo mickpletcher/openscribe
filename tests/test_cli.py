@@ -340,3 +340,134 @@ def test_find_chapters_filters_by_metadata_and_text(tmp_path: Path, monkeypatch)
     assert "Arrival" in result.stdout
     assert "Departure" in result.stdout
     assert "Matches: 2" in result.stdout
+
+
+def test_report_project_and_batch_update(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Ending"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["new", "chapter", "Arrival", "--part", "Opening", "--status", "draft", "--label", "setup", "--pov", "Eli"],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["new", "chapter", "Departure", "--part", "Ending", "--status", "draft", "--label", "finale", "--pov", "Nora"],
+        ).exit_code
+        == 0
+    )
+
+    result = runner.invoke(app, ["report", "project"])
+    assert result.exit_code == 0
+    assert "By Status" in result.stdout
+    assert "draft" in result.stdout
+    assert "By POV" in result.stdout
+    assert "Eli" in result.stdout
+
+    result = runner.invoke(app, ["set", "chapters", "--match-status", "draft", "--status", "revised"])
+    assert result.exit_code == 0
+    assert "Updated chapters: 2" in result.stdout
+
+    result = runner.invoke(app, ["find", "chapters", "--status", "revised"])
+    assert result.exit_code == 0
+    assert "Matches: 2" in result.stdout
+
+
+def test_board_note_workflow_and_promote(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+
+    result = runner.invoke(app, ["board", "note", "add", "Station Secret", "--body", "The station master is hiding records.", "--group", "plot"])
+    assert result.exit_code == 0
+    assert "note-001" in result.stdout
+
+    result = runner.invoke(app, ["board", "note", "add", "Eli Clue", "--body", "Eli finds a ledger."])
+    assert result.exit_code == 0
+    assert "note-002" in result.stdout
+
+    assert runner.invoke(app, ["board", "link", "add", "note-001", "note-002"]).exit_code == 0
+    assert runner.invoke(app, ["board", "group", "set", "note-002", "plot"]).exit_code == 0
+
+    result = runner.invoke(app, ["board", "note", "list", "--group", "plot"])
+    assert result.exit_code == 0
+    assert "Station Secret" in result.stdout
+    assert "Eli Clue" in result.stdout
+
+    result = runner.invoke(app, ["board", "promote", "note-001", "--part", "Opening", "--chapter", "Station Secret"])
+    assert result.exit_code == 0
+    assert "Station Secret" in result.stdout
+
+    result = runner.invoke(app, ["find", "chapters", "--text", "hiding records"])
+    assert result.exit_code == 0
+    assert "Station Secret" in result.stdout
+
+
+def test_element_workflow_and_appears_in(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Marcus Vale met the station keeper at dawn.\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["element", "add", "character", "Marcus Vale", "--notes", "Main investigator", "--tags", "lead,viewpoint"])
+    assert result.exit_code == 0
+    assert "cha-marcus-vale" in result.stdout
+
+    assert runner.invoke(app, ["element", "alias", "add", "cha-marcus-vale", "Marcus"]).exit_code == 0
+    assert runner.invoke(app, ["element", "add", "setting", "North Station"]).exit_code == 0
+    assert runner.invoke(app, ["element", "relate", "cha-marcus-vale", "set-north-station", "--type", "visits"]).exit_code == 0
+
+    result = runner.invoke(app, ["element", "show", "cha-marcus-vale"])
+    assert result.exit_code == 0
+    assert "Marcus Vale" in result.stdout
+    assert "Main investigator" in result.stdout
+    assert "visits" in result.stdout
+
+    result = runner.invoke(app, ["element", "appears-in", "Marcus"])
+    assert result.exit_code == 0
+    assert "Arrival" in result.stdout
+    assert "Matches: 1" in result.stdout
+
+
+def test_multi_part_read_and_export_regression(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Ending"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Reckoning", "--part", "Ending"]).exit_code == 0
+
+    arrival_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    arrival_path.write_text(arrival_path.read_text(encoding="utf-8") + "Opening text.\n", encoding="utf-8")
+    reckoning_path = tmp_path / "manuscript" / "part-02-ending" / "ch-01-reckoning.md"
+    reckoning_path.write_text(reckoning_path.read_text(encoding="utf-8") + "Ending text.\n", encoding="utf-8")
+
+    read_result = runner.invoke(app, ["read"])
+    assert read_result.exit_code == 0
+    assert read_result.stdout.index("Opening") < read_result.stdout.index("Arrival")
+    assert read_result.stdout.index("Ending") < read_result.stdout.index("Reckoning")
+    assert read_result.stdout.index("Arrival") < read_result.stdout.index("Reckoning")
+
+    compile_result = runner.invoke(app, ["compile"])
+    assert compile_result.exit_code == 0
+
+    output_path = tmp_path / "build" / "north-county.docx"
+    document = Document(output_path)
+    paragraph_text = [paragraph.text for paragraph in document.paragraphs if paragraph.text]
+    assert paragraph_text.index("Opening") < paragraph_text.index("Arrival")
+    assert paragraph_text.index("Ending") < paragraph_text.index("Reckoning")

@@ -41,6 +41,11 @@ This first build includes:
 * project initialization
 * part creation
 * chapter creation
+* batch chapter metadata updates
+* chapter search and query
+* project reports
+* planning board notes and promotion
+* element, alias, relation, and appears in tracking
 * Word document export
 * PDF export
 * EPUB export
@@ -673,6 +678,69 @@ openscribe find chapters --part Opening
 openscribe find chapters --text station
 ```
 
+## Project reports
+
+You can view project level chapter and word summaries:
+
+```powershell
+openscribe report project
+```
+
+This reports:
+
+* chapter count
+* word count
+* counts by status
+* counts by label
+* counts by POV
+* counts by part
+* part word totals
+
+## Batch updates
+
+You can update multiple chapters at once using the same filters as `find chapters`.
+
+Examples:
+
+```powershell
+openscribe set chapters --match-status draft --status revised
+openscribe set chapters --match-part Opening --label act-one
+openscribe set chapters --match-text station --notes "Needs station revision."
+```
+
+## Board mode
+
+Board notes live separately from the manuscript until you promote them.
+
+Examples:
+
+```powershell
+openscribe board note add "Station Secret" --body "The station master is hiding records." --group plot
+openscribe board note list
+openscribe board link add note-001 note-002
+openscribe board group set note-002 plot
+openscribe board promote note-001 --part Opening --chapter "Station Secret"
+```
+
+Board storage is plain YAML under `.openscribe/boards/default.yaml`.
+
+## Elements and relations
+
+You can track characters, settings, and items as structured project elements.
+
+Examples:
+
+```powershell
+openscribe element add character "Marcus Vale" --notes "Main investigator" --tags lead,viewpoint
+openscribe element alias add cha-marcus-vale "Marcus"
+openscribe element add setting "North Station"
+openscribe element relate cha-marcus-vale set-north-station --type visits
+openscribe element show cha-marcus-vale
+openscribe element appears-in Marcus
+```
+
+Element storage is plain YAML under `.openscribe/elements/elements.yaml`.
+
 ## Exporting your project
 
 You can export the current manuscript to Word, PDF, or EPUB.
@@ -920,6 +988,72 @@ openscribe find chapters --part Opening
 openscribe find chapters --text station
 ```
 
+### `openscribe report project`
+
+Shows project level chapter and word summaries.
+
+```powershell
+openscribe report project
+```
+
+### `openscribe set chapters`
+
+Updates multiple chapters at once.
+
+```powershell
+openscribe set chapters --match-status draft --status revised
+openscribe set chapters --match-part Opening --label act-one
+openscribe set chapters --match-text station --notes "Needs station revision."
+```
+
+### `openscribe board note add`
+
+Adds a board note.
+
+```powershell
+openscribe board note add "Station Secret" --body "The station master is hiding records." --group plot
+```
+
+### `openscribe board note list`
+
+Lists board notes.
+
+```powershell
+openscribe board note list
+```
+
+### `openscribe board promote`
+
+Promotes a board note into manuscript structure.
+
+```powershell
+openscribe board promote note-001 --part Opening --chapter "Station Secret"
+```
+
+### `openscribe element add`
+
+Adds an element record.
+
+```powershell
+openscribe element add character "Marcus Vale" --notes "Main investigator" --tags lead,viewpoint
+```
+
+### `openscribe element show`
+
+Shows an element record.
+
+```powershell
+openscribe element show cha-marcus-vale
+```
+
+### `openscribe element appears-in`
+
+Shows matching chapters for an element name or alias.
+
+```powershell
+openscribe element appears-in Marcus
+```
+
 ### `openscribe read`
 
 Prints the manuscript as one continuous reading view.
@@ -950,6 +1084,10 @@ openscribe new chapter "Arrival" --part "Opening" --pov "Eli" --word-target 1800
 openscribe new chapter "The Call" --part "Opening" --pov "Eli" --word-target 2200
 openscribe set chapter "Arrival" --status revised
 openscribe find chapters --status revised
+openscribe report project
+openscribe board note add "Ledger clue" --body "Eli finds the missing ledger." --group plot
+openscribe board promote note-001 --part Opening --chapter "Ledger clue"
+openscribe element add character "Eli Harper" --notes "Main point of view"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
@@ -969,6 +1107,7 @@ If you want to inspect a real sample project instead of creating one from scratc
 It includes:
 
 * a real `.openscribe/project.yaml`
+* sample board and element storage under `.openscribe/`
 * a manuscript folder with one part and two chapters
 * sample character, research, and notes files
 
@@ -1003,7 +1142,8 @@ Right now:
 * part storage still uses numbered folder names on disk
 * chapter ordering is based on numbered filenames and folders
 * compile currently exports to Word, PDF, and EPUB only
-* no query or search command exists yet
+* board mode is CLI first and not yet a separate TUI mode
+* element appears in tracking is derived from text matches and aliases
 
 ## Roadmap
 

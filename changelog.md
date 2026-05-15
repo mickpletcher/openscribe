@@ -85,6 +85,32 @@
 * added project compile setting visibility in the TUI metadata panel
 * added TUI tests for search filtering behavior
 
+### Reports and batch updates
+
+* added `openscribe report project` for chapter counts, word totals, and grouped metadata summaries
+* added `openscribe set chapters` for batch chapter metadata updates using the same filters as chapter search
+* added tests for reporting output and batch metadata updates
+
+### Board mode
+
+* added CLI first board note storage under `.openscribe/boards/`
+* added board note creation, listing, grouping, linking, and promotion into manuscript chapters
+* aligned board promotion with the current part and chapter metadata model
+* added tests for board note workflows and chapter promotion
+
+### Elements and relations
+
+* added element storage under `.openscribe/elements/`
+* added element records for characters, settings, and items
+* added alias support, relation tracking, and chapter appearance lookup derived from manuscript text and metadata
+* added tests for element creation, relation output, and appears in queries
+
+### Larger manuscript regression coverage
+
+* added multi part read regression coverage for binder order across larger sample manuscripts
+* added export regression coverage that verifies compiled `.docx` output preserves multi part chapter order
+* updated the README and sample project guide for reports, board mode, and element tracking
+
 ## 2026-05-14
 
 ### Initial scaffold
