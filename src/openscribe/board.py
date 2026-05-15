@@ -94,6 +94,64 @@ def set_group(root: Path, note_id: str, group: str) -> None:
     save_board(root, board)
 
 
+def move_note(root: Path, note_id: str, x: int, y: int) -> None:
+    board = load_board(root)
+    note = _require_note(board, note_id)
+    note["x"] = x
+    note["y"] = y
+    save_board(root, board)
+
+
+def auto_layout(root: Path, column_width: int = 22) -> None:
+    board = load_board(root)
+    grouped = sorted(board.get("notes", []), key=lambda item: (str(item.get("group", "")), str(item.get("id", ""))))
+    current_group = None
+    row = 0
+    column = 0
+    for item in grouped:
+        group_name = str(item.get("group", ""))
+        if current_group is None:
+            current_group = group_name
+        elif group_name != current_group:
+            current_group = group_name
+            row += 4
+            column = 0
+        item["x"] = column * column_width
+        item["y"] = row
+        column += 1
+        if column >= 3:
+            column = 0
+            row += 4
+    save_board(root, board)
+
+
+def render_board(root: Path, width: int = 72, height: int = 18) -> str:
+    notes = list_notes(root)
+    canvas = [[" " for _ in range(width)] for _ in range(height)]
+
+    for note in notes:
+        x = max(0, min(width - 8, note.x))
+        y = max(0, min(height - 1, note.y))
+        label = f"[{note.note_id}]"
+        for index, character in enumerate(label):
+            if x + index < width:
+                canvas[y][x + index] = character
+        title = note.title[: min(18, max(0, width - x))]
+        if y + 1 < height:
+            for index, character in enumerate(title):
+                if x + index < width:
+                    canvas[y + 1][x + index] = character
+
+    rendered = "\n".join("".join(row).rstrip() for row in canvas).rstrip()
+    links = []
+    for note in notes:
+        for link in note.links:
+            links.append(f"{note.note_id} -> {link}")
+    if links:
+        rendered = rendered + "\n\nLinks\n" + "\n".join(links)
+    return rendered or "[Empty board]"
+
+
 def promote_note_to_chapter(root: Path, note_id: str, chapter_title: str | None = None, part: str | None = None) -> Path:
     board = load_board(root)
     note = _require_note(board, note_id)

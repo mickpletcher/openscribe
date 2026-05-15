@@ -145,6 +145,14 @@
 * expanded the TUI so it can browse characters, research, notes, story ideas, and elements
 * updated the sample project, README, assessment, completed upgrades log, and future upgrades file for the new workflow surface
 
+### Custom templates, import, screenwriting or nonfiction helpers, and richer board visuals
+
+* added user defined template saving through `openscribe template save` and reuse through `openscribe init --template-file`
+* added `openscribe import folder` for existing folder based manuscript projects
+* added nonfiction section and screenplay scene workflow helpers
+* added board note movement, board auto layout, and a terminal board view command
+* updated tests, README, sample project guide, completed upgrades log, future upgrades file, and assessment for the expanded workflow support
+
 ## 2026-05-14
 
 ### Initial scaffold

@@ -11,27 +11,32 @@ from rich.table import Table
 from rich.tree import Tree
 
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
-from openscribe.board import add_link, add_note, list_notes, promote_note_to_chapter, set_group
+from openscribe.board import add_link, add_note, auto_layout, list_notes, move_note, promote_note_to_chapter, render_board, set_group
 from openscribe.compile import CompileError, assemble_manuscript_text, compile_project
 from openscribe.elements import add_alias, add_element, add_relation, appears_in, get_element, list_element_records
 from openscribe.index import index_is_current, load_project_index, rebuild_project_index
 from openscribe.project import (
     add_scene,
+    add_screenplay_scene,
     batch_update_chapters,
     built_in_templates,
     chapter_report,
     create_chapter,
+    create_nonfiction_section,
     create_part,
     create_story_idea,
     find_chapter,
     find_chapters,
     find_story_idea,
+    import_folder_project,
     init_project_from_template,
     list_chapters,
     list_story_ideas,
     load_part_metadata,
     load_project_config,
     project_root,
+    save_project_template,
+    template_library_path,
     update_chapter_metadata,
     update_part_title,
 )
@@ -49,11 +54,15 @@ board_app = typer.Typer(help="Board mode workflows.")
 board_note_app = typer.Typer(help="Board note workflows.")
 board_link_app = typer.Typer(help="Board link workflows.")
 board_group_app = typer.Typer(help="Board grouping workflows.")
+board_layout_app = typer.Typer(help="Board layout workflows.")
 element_app = typer.Typer(help="Element and relation workflows.")
 element_alias_app = typer.Typer(help="Element alias workflows.")
 idea_app = typer.Typer(help="Story idea workflows.")
 snapshot_app = typer.Typer(help="Snapshot workflows.")
 index_app = typer.Typer(help="Derived index workflows.")
+template_app = typer.Typer(help="Project template workflows.")
+import_app = typer.Typer(help="Import workflows.")
+workflow_app = typer.Typer(help="Format specific workflow helpers.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
 app.add_typer(set_app, name="set")
@@ -65,9 +74,13 @@ app.add_typer(element_app, name="element")
 app.add_typer(idea_app, name="idea")
 app.add_typer(snapshot_app, name="snapshot")
 app.add_typer(index_app, name="index")
+app.add_typer(template_app, name="template")
+app.add_typer(import_app, name="import")
+app.add_typer(workflow_app, name="workflow")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
 board_app.add_typer(board_group_app, name="group")
+board_app.add_typer(board_layout_app, name="layout")
 element_app.add_typer(element_alias_app, name="alias")
 console = Console()
 
@@ -77,8 +90,9 @@ def init(
     title: str = typer.Argument(..., help="Project title."),
     path: Path = typer.Option(Path("."), "--path", help="Target directory."),
     template_name: str = typer.Option("fiction", "--template", help="Project template. Use fiction, nonfiction, or technical."),
+    template_file: Optional[Path] = typer.Option(None, "--template-file", help="Path to a user defined template file."),
 ) -> None:
-    project_path = init_project_from_template(path, title, template_name=template_name)
+    project_path = init_project_from_template(path, title, template_name=template_name, template_file=template_file)
     console.print(f"Initialized openscribe project at {project_path}")
 
 
@@ -124,6 +138,18 @@ def new_scene(
     root = project_root()
     chapter_path = add_scene(root, chapter, title, body=body)
     console.print(f"Added scene to {chapter_path.relative_to(root)}")
+
+
+@new_app.command("section")
+def new_section(
+    title: str = typer.Argument(..., help="Section title."),
+    part: Optional[str] = typer.Option(None, "--part", help="Part name or slug."),
+    synopsis: str = typer.Option("", "--synopsis", help="Section synopsis."),
+    notes: str = typer.Option("", "--notes", help="Section notes."),
+) -> None:
+    root = project_root()
+    chapter_path = create_nonfiction_section(root, title, part=part, synopsis=synopsis, notes=notes)
+    console.print(f"Created section {chapter_path.relative_to(root)}")
 
 
 @idea_app.command("add")
@@ -469,7 +495,55 @@ def templates_list() -> None:
     table.add_column("Compile Default")
     for name, template in sorted(built_in_templates().items()):
         table.add_row(name, str(template["compile"].get("default_template", "")))
+    try:
+        root = project_root()
+        for path in sorted(template_library_path(root).glob("*.yaml")):
+            table.add_row(path.stem, "user-defined")
+    except FileNotFoundError:
+        pass
     console.print(table)
+
+
+@template_app.command("save")
+def template_save(name: str = typer.Argument(..., help="Template name.")) -> None:
+    root = project_root()
+    path = save_project_template(root, name)
+    console.print(f"Saved project template to {path.relative_to(root)}")
+
+
+@workflow_app.command("screenplay-scene")
+def workflow_screenplay_scene(
+    slugline: str = typer.Argument(..., help="Screenplay slugline, for example INT. KITCHEN - NIGHT."),
+    chapter: str = typer.Option(..., "--chapter", help="Chapter title or slug."),
+    body: str = typer.Option("", "--body", help="Optional scene body text."),
+) -> None:
+    root = project_root()
+    chapter_path = add_screenplay_scene(root, chapter, slugline, body=body)
+    console.print(f"Added screenplay scene to {chapter_path.relative_to(root)}")
+
+
+@workflow_app.command("nonfiction-section")
+def workflow_nonfiction_section(
+    title: str = typer.Argument(..., help="Section title."),
+    part: Optional[str] = typer.Option(None, "--part", help="Part title or slug."),
+    synopsis: str = typer.Option("", "--synopsis", help="Section synopsis."),
+    notes: str = typer.Option("", "--notes", help="Section notes."),
+) -> None:
+    root = project_root()
+    chapter_path = create_nonfiction_section(root, title, part=part, synopsis=synopsis, notes=notes)
+    console.print(f"Created nonfiction section {chapter_path.relative_to(root)}")
+
+
+@import_app.command("folder")
+def import_folder(
+    source_path: Path = typer.Argument(..., help="Existing folder based manuscript path."),
+    title: str = typer.Option(..., "--title", help="Imported project title."),
+    template_name: str = typer.Option("fiction", "--template", help="Project template to initialize first."),
+    template_file: Optional[Path] = typer.Option(None, "--template-file", help="Path to a user defined template file."),
+    path: Path = typer.Option(Path("."), "--path", help="Target directory for the imported project."),
+) -> None:
+    project_path = import_folder_project(path, source_path, title, template_name=template_name, template_file=template_file)
+    console.print(f"Imported project to {project_path}")
 
 
 @idea_app.command("list")
@@ -526,6 +600,17 @@ def board_note_list(group: Optional[str] = typer.Option(None, "--group", help="F
     console.print(table)
 
 
+@board_note_app.command("move")
+def board_note_move(
+    note_id: str = typer.Argument(..., help="Board note id."),
+    x: int = typer.Option(..., "--x", help="New x position."),
+    y: int = typer.Option(..., "--y", help="New y position."),
+) -> None:
+    root = project_root()
+    move_note(root, note_id, x, y)
+    console.print(f"Moved {note_id} to ({x}, {y})")
+
+
 @board_link_app.command("add")
 def board_link_add(
     from_id: str = typer.Argument(..., help="Source note id."),
@@ -557,6 +642,22 @@ def board_promote(
     chapter_path = promote_note_to_chapter(root, note_id, chapter_title=chapter, part=part)
     promoted_title = chapter or note_title
     console.print(f"Promoted board note into chapter {promoted_title} at {chapter_path.relative_to(root)}")
+
+
+@board_layout_app.command("auto")
+def board_layout_auto(column_width: int = typer.Option(22, "--column-width", help="Column width for the auto layout.")) -> None:
+    root = project_root()
+    auto_layout(root, column_width=column_width)
+    console.print("Applied board auto layout")
+
+
+@board_app.command("view")
+def board_view(
+    width: int = typer.Option(72, "--width", help="Board canvas width."),
+    height: int = typer.Option(18, "--height", help="Board canvas height."),
+) -> None:
+    root = project_root()
+    console.print(Panel(render_board(root, width=width, height=height), title="Board View", border_style="cyan"))
 
 
 @element_app.command("add")

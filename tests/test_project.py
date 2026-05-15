@@ -2,17 +2,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from openscribe.board import add_note, render_board
 from openscribe.index import rebuild_project_index
 from openscribe.project import (
     add_scene,
+    add_screenplay_scene,
     create_chapter,
+    create_nonfiction_section,
     create_part,
     create_story_idea,
+    import_folder_project,
     init_project,
     init_project_from_template,
     list_auxiliary_documents,
     list_chapters,
     list_story_ideas,
+    save_project_template,
 )
 from openscribe.snapshots import create_snapshot
 
@@ -155,3 +160,58 @@ def test_create_git_snapshot_writes_commit_metadata(tmp_path: Path, monkeypatch)
     assert "commit: abc123" in metadata
     assert "dirty: true" in metadata
     assert any(command[:3] == ["git", "rev-parse", "HEAD"] for command in calls)
+
+
+def test_save_project_template_and_reuse_it(tmp_path: Path) -> None:
+    source_root = init_project(tmp_path / "source", "North County")
+    custom_notes = source_root / "notes" / "field-outline.md"
+    custom_notes.write_text("# Field Outline\n\nBullet list.\n", encoding="utf-8")
+
+    template_path = save_project_template(source_root, "Field Guide")
+    target_root = init_project_from_template(tmp_path / "target", "West County", template_file=template_path)
+
+    assert template_path.exists()
+    assert (target_root / "notes" / "field-outline.md").exists()
+    config_text = (target_root / ".openscribe" / "project.yaml").read_text(encoding="utf-8")
+    assert "template: field-guide" in config_text
+
+
+def test_import_folder_project_preserves_parts_and_metadata(tmp_path: Path) -> None:
+    source_root = tmp_path / "source-manuscript"
+    (source_root / "act-one").mkdir(parents=True)
+    (source_root / "draft.md").write_text("# Root Draft\n\nOpening body.\n", encoding="utf-8")
+    (source_root / "act-one" / "arrival.md").write_text(
+        "---\ntitle: Arrival\nstatus: revised\nlabel: setup\n---\n\nTown entry.\n",
+        encoding="utf-8",
+    )
+
+    imported_root = import_folder_project(tmp_path / "imported", source_root, "Imported Book")
+    chapters = list_chapters(imported_root)
+    titles = {chapter.title for chapter in chapters}
+
+    assert "Arrival" in titles
+    assert "Root Draft" in titles
+    assert any(chapter.status == "revised" for chapter in chapters if chapter.title == "Arrival")
+
+
+def test_nonfiction_and_screenplay_helpers(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    section_path = create_nonfiction_section(root, "Case Study", part="Opening", synopsis="A supporting example.")
+    add_screenplay_scene(root, "Case Study", "int. courthouse - day", body="Lawyers cross the hall.")
+    chapters = list_chapters(root)
+
+    assert section_path.exists()
+    assert chapters[0].label == "section"
+    assert chapters[0].scenes[0].title == "INT. COURTHOUSE - DAY"
+
+
+def test_render_board_includes_note_titles(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    add_note(root, "Clue", group="plot", x=2, y=1)
+    add_note(root, "Threat", group="plot", x=25, y=1)
+
+    board_text = render_board(root, width=60, height=8)
+    assert "note-001" in board_text
+    assert "Clue" in board_text
+    assert "Threat" in board_text

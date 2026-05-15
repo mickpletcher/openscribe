@@ -385,6 +385,69 @@ def test_template_scene_index_and_snapshot_commands(tmp_path: Path, monkeypatch)
     assert "checkpoint" in result.stdout
 
 
+def test_custom_template_import_and_workflow_commands(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "Template Source", "--template", "screenwriting"]).exit_code == 0
+
+    result = runner.invoke(app, ["template", "save", "screenplay-custom"])
+    assert result.exit_code == 0
+    assert ".openscribe\\templates\\screenplay-custom.yaml" in result.stdout
+
+    source_folder = tmp_path / "existing-manuscript"
+    (source_folder / "act-one").mkdir(parents=True)
+    (source_folder / "act-one" / "opening.md").write_text("# Opening\n\nImported text.\n", encoding="utf-8")
+
+    target_folder = tmp_path / "imported-project"
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            "folder",
+            str(source_folder),
+            "--title",
+            "Imported Screenplay",
+            "--template-file",
+            str(tmp_path / ".openscribe" / "templates" / "screenplay-custom.yaml"),
+            "--path",
+            str(target_folder),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Imported project to" in result.stdout
+
+    monkeypatch.chdir(target_folder)
+    assert runner.invoke(app, ["new", "part", "Second Act"]).exit_code == 0
+    assert runner.invoke(app, ["workflow", "nonfiction-section", "Background", "--part", "Second Act"]).exit_code == 0
+    result = runner.invoke(app, ["workflow", "screenplay-scene", "int. diner - night", "--chapter", "Background", "--body", "Two strangers wait."])
+    assert result.exit_code == 0
+
+    result = runner.invoke(app, ["show", "chapter", "Background"])
+    assert result.exit_code == 0
+    assert "label: section" in result.stdout
+    assert "INT. DINER - NIGHT" in result.stdout
+
+
+def test_board_visual_commands(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["board", "note", "add", "Clue", "--group", "plot"]).exit_code == 0
+    assert runner.invoke(app, ["board", "note", "add", "Threat", "--group", "plot"]).exit_code == 0
+
+    result = runner.invoke(app, ["board", "note", "move", "note-001", "--x", "10", "--y", "3"])
+    assert result.exit_code == 0
+    assert "Moved note-001" in result.stdout
+
+    result = runner.invoke(app, ["board", "layout", "auto"])
+    assert result.exit_code == 0
+    assert "Applied board auto layout" in result.stdout
+
+    result = runner.invoke(app, ["board", "view", "--width", "50", "--height", "10"])
+    assert result.exit_code == 0
+    assert "Board View" in result.stdout
+
+
 def test_find_chapters_filters_by_metadata_and_text(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 

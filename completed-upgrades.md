@@ -27,3 +27,10 @@ Tracked record of roadmap items that shipped.
 * added a derived project index for faster search and reporting workflows
 * added character, notes, research, story idea, and element views inside the TUI
 * added built in project templates for fiction, nonfiction, and technical writing
+
+### Custom templates, import, and expanded workflows
+
+* added user defined project templates that can be saved from a project and reused with `--template-file`
+* added import helpers for existing folder based manuscript projects
+* added screenwriting and nonfiction specific workflow helpers
+* added richer board layout and terminal board view commands

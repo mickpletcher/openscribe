@@ -42,7 +42,8 @@ That works until you want automation, version control, or direct access to your 
 This first build includes:
 
 * project initialization
-* project templates for fiction, nonfiction, and technical writing
+* project templates for fiction, nonfiction, technical writing, and screenwriting
+* user defined project templates
 * part creation
 * chapter creation
 * scene creation inside chapters
@@ -50,10 +51,12 @@ This first build includes:
 * chapter search and query
 * project reports
 * derived project index rebuild and search
+* folder import for existing manuscript projects
 * story idea capture for future books
 * snapshots with checkpoint and git based modes
-* planning board notes and promotion
+* planning board notes, layout, visual board view, and promotion
 * element, alias, relation, and appears in tracking
+* nonfiction section and screenplay scene workflow helpers
 * Word document export
 * PDF export
 * EPUB export
@@ -106,11 +109,13 @@ openscribe init "My Novel" --template fiction
 openscribe new part "Opening"
 openscribe new chapter "The Beginning" --part "Opening"
 openscribe new scene "Cold Open" --chapter "The Beginning"
+openscribe workflow screenplay-scene "EXT. ROAD - NIGHT" --chapter "The Beginning"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
 openscribe index rebuild
 openscribe snapshot save "first-pass"
+openscribe board view
 openscribe read
 openscribe outline
 openscribe status
@@ -491,6 +496,10 @@ Use this for loose ideas, outline fragments, revision notes, and planning.
 `notes/story-ideas/`
 
 Use this for structured new book ideas that are not part of the current manuscript yet.
+
+`.openscribe/templates/`
+
+Use this for saved user defined project templates.
 
 `.openscribe/index/`
 
@@ -885,6 +894,9 @@ What it does:
 * shows chapter status, label, synopsis, point of view, notes, and word target in the right panel
 * shows part metadata, story idea metadata, element metadata, and project compile defaults in the right panel
 
+The board still lives in CLI commands.
+The TUI does not yet render the board canvas directly.
+
 Current key:
 
 * `q` quits the app
@@ -903,6 +915,7 @@ Initializes a new project in the target path.
 openscribe init "My Novel"
 openscribe init "My Novel" --path .\books\my-novel
 openscribe init "Field Guide" --template technical
+openscribe init "Custom Guide" --template-file .\my-template.yaml
 ```
 
 Built in project templates:
@@ -910,6 +923,7 @@ Built in project templates:
 * `fiction`
 * `nonfiction`
 * `technical`
+* `screenwriting`
 
 Arguments and options:
 
@@ -943,6 +957,14 @@ Adds a scene heading inside a chapter file.
 ```powershell
 openscribe new scene "Cold Open" --chapter "The Beginning"
 openscribe new scene "County Road" --chapter "Arrival" --body "Eli sees the porch men again."
+```
+
+### `openscribe new section`
+
+Adds a nonfiction friendly section chapter.
+
+```powershell
+openscribe new section "Case Study" --part "Examples" --synopsis "Support the main claim."
 ```
 
 Arguments:
@@ -1050,6 +1072,14 @@ Lists built in project templates.
 openscribe templates
 ```
 
+### `openscribe template save`
+
+Saves the current project as a user defined template file.
+
+```powershell
+openscribe template save "Client Report"
+```
+
 ### `openscribe index rebuild`
 
 Builds the derived project index.
@@ -1064,6 +1094,15 @@ Searches the derived project index.
 
 ```powershell
 openscribe index search station
+```
+
+### `openscribe import folder`
+
+Imports an existing folder based manuscript project.
+
+```powershell
+openscribe import folder C:\books\old-draft --title "Imported Draft"
+openscribe import folder C:\books\old-draft --title "Imported Screenplay" --template screenwriting
 ```
 
 ### `openscribe snapshot save`
@@ -1081,6 +1120,22 @@ Lists saved snapshots.
 
 ```powershell
 openscribe snapshot list
+```
+
+### `openscribe workflow screenplay-scene`
+
+Adds an uppercased screenplay slugline scene inside a chapter.
+
+```powershell
+openscribe workflow screenplay-scene "INT. DINER - NIGHT" --chapter "Opening"
+```
+
+### `openscribe workflow nonfiction-section`
+
+Creates a nonfiction style section chapter.
+
+```powershell
+openscribe workflow nonfiction-section "Background" --part "Section One"
 ```
 
 ### `openscribe set chapters`
@@ -1107,6 +1162,30 @@ Lists board notes.
 
 ```powershell
 openscribe board note list
+```
+
+### `openscribe board note move`
+
+Moves a board note to a saved canvas position.
+
+```powershell
+openscribe board note move note-001 --x 24 --y 8
+```
+
+### `openscribe board layout auto`
+
+Applies a simple automatic board layout.
+
+```powershell
+openscribe board layout auto
+```
+
+### `openscribe board view`
+
+Renders a simple board canvas in the terminal.
+
+```powershell
+openscribe board view
 ```
 
 ### `openscribe board promote`
@@ -1193,6 +1272,7 @@ openscribe init "North County" --template fiction
 openscribe new part "Opening"
 openscribe new chapter "Arrival" --part "Opening" --pov "Eli" --word-target 1800
 openscribe new scene "Bus Stop" --chapter "Arrival"
+openscribe workflow screenplay-scene "EXT. COURTHOUSE - DAY" --chapter "Arrival"
 openscribe new chapter "The Call" --part "Opening" --pov "Eli" --word-target 2200
 openscribe set chapter "Arrival" --status revised
 openscribe find chapters --status revised
@@ -1200,6 +1280,8 @@ openscribe report project
 openscribe index rebuild
 openscribe index search station
 openscribe board note add "Ledger clue" --body "Eli finds the missing ledger." --group plot
+openscribe board layout auto
+openscribe board view
 openscribe board promote note-001 --part Opening --chapter "Ledger clue"
 openscribe idea add "The Flood Ledger" --premise "A county clerk finds a ledger that predicts deaths."
 openscribe element add character "Eli Harper" --notes "Main point of view"
@@ -1224,6 +1306,7 @@ It includes:
 
 * a real `.openscribe/project.yaml`
 * sample board and element storage under `.openscribe/`
+* saved user template files under `.openscribe/templates/` when you create them
 * a manuscript folder with one part and two chapters
 * sample character, research, and notes files
 
@@ -1263,7 +1346,7 @@ Right now:
 * scene support is heading based and does not yet have separate scene metadata
 * compile currently exports to Word, PDF, and EPUB only
 * snapshots can be created but do not yet have first class restore commands
-* board mode is CLI first and not yet a separate TUI mode
+* board visuals currently live in CLI commands instead of the TUI
 * element appears in tracking is derived from text matches and aliases
 
 ## Roadmap

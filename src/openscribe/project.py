@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import shutil
 from typing import Any
 
 import yaml
@@ -13,6 +14,7 @@ PART_FILE = "part.yaml"
 STORY_IDEAS_DIR = "notes/story-ideas"
 INDEX_DIR = ".openscribe/index"
 SNAPSHOTS_DIR = ".openscribe/snapshots"
+TEMPLATES_DIR = ".openscribe/templates"
 
 
 @dataclass(slots=True)
@@ -85,7 +87,12 @@ def init_project(base_path: Path, title: str) -> Path:
     return init_project_from_template(base_path, title, template_name="fiction")
 
 
-def init_project_from_template(base_path: Path, title: str, template_name: str = "fiction") -> Path:
+def init_project_from_template(
+    base_path: Path,
+    title: str,
+    template_name: str = "fiction",
+    template_file: Path | None = None,
+) -> Path:
     project_path = base_path.resolve()
     config_dir = project_path / PROJECT_DIR
     if (config_dir / PROJECT_FILE).exists():
@@ -104,10 +111,7 @@ def init_project_from_template(base_path: Path, title: str, template_name: str =
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
-    template = built_in_templates().get(template_name.strip().lower())
-    if template is None:
-        supported = ", ".join(sorted(built_in_templates()))
-        raise ValueError(f"Unknown project template '{template_name}'. Use {supported}.")
+    resolved_template_name, template = load_template_definition(template_name, template_file)
 
     write_yaml(
         config_dir / PROJECT_FILE,
@@ -115,7 +119,7 @@ def init_project_from_template(base_path: Path, title: str, template_name: str =
             "title": title,
             "author": "",
             "version": 1,
-            "template": template_name.strip().lower(),
+            "template": resolved_template_name,
             "compile": {
                 "default_format": str(template["compile"].get("default_format", "docx")),
                 "backend": "auto",
@@ -132,7 +136,7 @@ def init_project_from_template(base_path: Path, title: str, template_name: str =
             },
         },
     )
-    _apply_template_files(project_path, title, template_name.strip().lower())
+    _apply_template_files(project_path, title, template)
     return project_path
 
 
@@ -178,15 +182,65 @@ def built_in_templates() -> dict[str, dict[str, Any]]:
                 "notes/implementation-notes.md": "# Implementation Notes\n\n## Audience\n\n\n## Open Questions\n\n* \n",
             },
         },
+        "screenwriting": {
+            "compile": {
+                "default_format": "docx",
+                "default_template": "minimal",
+                "include_title_page": True,
+                "include_part_headings": False,
+                "chapter_heading_style": "title-only",
+            },
+            "files": {
+                "research/visual-references.md": "# Visual References\n\n* \n",
+                "notes/beat-sheet.md": "# Beat Sheet\n\n## Opening Image\n\n\n## Midpoint\n\n\n## Finale\n\n",
+                "characters/lead.md": "# Lead\n\nWant:\n\nNeed:\n\nContradiction:\n",
+            },
+        },
     }
 
 
-def _apply_template_files(root: Path, title: str, template_name: str) -> None:
-    template = built_in_templates()[template_name]
+def _apply_template_files(root: Path, title: str, template: dict[str, Any]) -> None:
     for relative_path, content in template.get("files", {}).items():
         target_path = root / str(relative_path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(content.replace("{title}", title), encoding="utf-8")
+
+
+def template_library_path(root: Path) -> Path:
+    return root / TEMPLATES_DIR
+
+
+def save_project_template(root: Path, name: str) -> Path:
+    config = load_project_config(root)
+    template_data = {
+        "name": name,
+        "compile": dict(config.get("compile", {})),
+        "files": {},
+    }
+    for category in ("characters", "research", "notes"):
+        for document in list_auxiliary_documents(root, category):
+            relative_path = str(document.path.relative_to(root)).replace("\\", "/")
+            template_data["files"][relative_path] = document.body
+    target_path = template_library_path(root) / f"{slugify(name)}.yaml"
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    write_yaml(target_path, template_data)
+    return target_path
+
+
+def load_template_definition(template_name: str, template_file: Path | None = None) -> tuple[str, dict[str, Any]]:
+    if template_file is not None:
+        if not template_file.exists():
+            raise FileNotFoundError(f"Template file '{template_file}' was not found.")
+        data = yaml.safe_load(template_file.read_text(encoding="utf-8")) or {}
+        resolved_name = str(data.get("name", template_file.stem)).strip() or template_file.stem
+        return slugify(resolved_name), data
+
+    normalized = template_name.strip().lower()
+    template = built_in_templates().get(normalized)
+    if template is None:
+        supported = ", ".join(sorted(built_in_templates()))
+        raise ValueError(f"Unknown project template '{template_name}'. Use {supported} or provide --template-file.")
+    return normalized, template
 
 
 def load_project_config(root: Path) -> dict[str, Any]:
@@ -323,6 +377,30 @@ def create_chapter(
     return chapter_path
 
 
+def create_nonfiction_section(
+    root: Path,
+    title: str,
+    *,
+    part: str | None = None,
+    synopsis: str = "",
+    notes: str = "",
+) -> Path:
+    if part is not None:
+        try:
+            resolve_part_path(root, part)
+        except FileNotFoundError:
+            create_part(root, part)
+    return create_chapter(
+        root,
+        title,
+        part=part,
+        status="draft",
+        label="section",
+        synopsis=synopsis,
+        notes=notes,
+    )
+
+
 def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:
     chapter = find_chapter(root, chapter_ref)
     text = chapter.path.read_text(encoding="utf-8")
@@ -336,6 +414,11 @@ def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:
         encoding="utf-8",
     )
     return chapter.path
+
+
+def add_screenplay_scene(root: Path, chapter_ref: str, slugline: str, body: str = "") -> Path:
+    normalized_slugline = slugline.strip().upper()
+    return add_scene(root, chapter_ref, normalized_slugline, body=body)
 
 
 def update_part_title(root: Path, part: str, title: str) -> Path:
@@ -652,12 +735,74 @@ def parse_scenes(body: str) -> list[SceneDocument]:
     return scenes
 
 
+def import_folder_project(
+    target_path: Path,
+    source_path: Path,
+    title: str,
+    template_name: str = "fiction",
+    template_file: Path | None = None,
+) -> Path:
+    source_root = source_path.resolve()
+    if not source_root.exists():
+        raise FileNotFoundError(f"Source folder '{source_path}' was not found.")
+
+    project_root_path = init_project_from_template(target_path, title, template_name=template_name, template_file=template_file)
+
+    root_markdown_files = sorted(source_root.glob("*.md"))
+    if root_markdown_files:
+        create_part(project_root_path, "Imported Draft")
+        for markdown_file in root_markdown_files:
+            _import_markdown_as_chapter(project_root_path, markdown_file, part="Imported Draft")
+
+    for child in sorted(source_root.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name.lower() in {"characters", "research", "notes"}:
+            destination = project_root_path / child.name
+            shutil.copytree(child, destination, dirs_exist_ok=True)
+            continue
+        markdown_files = sorted(child.glob("*.md"))
+        if not markdown_files:
+            continue
+        create_part(project_root_path, child.name.replace("-", " ").title())
+        for markdown_file in markdown_files:
+            _import_markdown_as_chapter(
+                project_root_path,
+                markdown_file,
+                part=child.name.replace("-", " ").title(),
+            )
+
+    return project_root_path
+
+
 def _title_from_markdown(path: Path, text: str) -> str:
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("# "):
             return stripped[2:].strip()
     return path.stem.replace("-", " ").title()
+
+
+def _import_markdown_as_chapter(root: Path, source_file: Path, part: str) -> Path:
+    text = source_file.read_text(encoding="utf-8")
+    metadata, body = parse_frontmatter(text)
+    title = str(metadata.get("title", _title_from_markdown(source_file, text)))
+    chapter_path = create_chapter(
+        root,
+        title,
+        part=part,
+        status=str(metadata.get("status", "draft")),
+        label=str(metadata.get("label", "default")),
+        pov=str(metadata.get("pov", "")),
+        word_target=int(metadata.get("word_target", 0) or 0),
+        synopsis=str(metadata.get("synopsis", "")),
+        notes=str(metadata.get("notes", "")),
+    )
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + body.strip() + ("\n" if body.strip() else ""),
+        encoding="utf-8",
+    )
+    return chapter_path
 
 
 def _increment(counter: dict[str, int], key: str) -> None:

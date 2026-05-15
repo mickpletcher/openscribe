@@ -4,7 +4,7 @@
 
 `openscribe` is now a real manuscript workflow tool.
 It is past the early scaffold stage.
-The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, element tracking, continuous reading, and export.
+The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, board layout, element tracking, import, continuous reading, and export.
 
 The product shape is clear now.
 Markdown and YAML remain the source of truth.
@@ -24,17 +24,21 @@ The manuscript path is real and usable:
 7. work with scene headings inside chapter files
 8. rebuild a derived project index for search and reporting
 9. save snapshots as checkpoints or git based records
-10. read the manuscript as one continuous document
-11. export to `docx`, `pdf`, and `epub`
+10. save and reuse user defined project templates
+11. import an existing folder based manuscript into a new project
+12. use nonfiction section and screenplay scene helpers
+13. read the manuscript as one continuous document
+14. export to `docx`, `pdf`, and `epub`
 
 The planning and tracking layer is also real:
 
 1. board notes can be added, grouped, linked, and promoted into chapters
-2. elements can be tracked as characters, settings, and items
-3. aliases and relations are stored explicitly
-4. chapter appearance lookup works across chapter text and metadata
-5. story ideas can be stored separately from the active manuscript
-6. the TUI can browse characters, research, notes, story ideas, and elements
+2. board notes can be moved, auto laid out, and rendered in a terminal board view
+3. elements can be tracked as characters, settings, and items
+4. aliases and relations are stored explicitly
+5. chapter appearance lookup works across chapter text and metadata
+6. story ideas can be stored separately from the active manuscript
+7. the TUI can browse characters, research, notes, story ideas, and elements
 
 The quality baseline is better than it was at the start.
 There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.
@@ -79,25 +83,31 @@ Pandoc support improves the backend story, but the formatting model is still sma
 The current templates are useful, not rich.
 There is no deeper profile system yet for print, ebook, and submission output.
 
-### 3. board mode is functional but still early
+### 3. board mode is more useful now, but still early
 
-The board model is right sized for now, but still simple.
-It stores notes, groups, links, and promotion paths.
-It does not yet provide a stronger visual layout or a dedicated TUI mode.
+The board model has improved.
+It now supports saved positions, automatic layout, and a terminal board view.
+It still does not have a dedicated TUI canvas or richer interaction model.
 
-### 4. snapshot restore is still missing
+### 4. import and template flows are practical, not yet deep
+
+The repo can now import simple folder based manuscripts and reuse user templates.
+That is a real workflow gain.
+It is still early compared with a mature importer or a broader template marketplace.
+
+### 5. snapshot restore is still missing
 
 The repo can now save snapshots.
 It cannot yet restore them through first class commands.
 That means the safety story is stronger than before, but still one sided.
 
-### 5. element appearance tracking is still heuristic
+### 6. element appearance tracking is still heuristic
 
 The current appears in model is derived from name and alias matches in chapter text and metadata.
 That is acceptable for now.
 It will eventually need scene awareness or explicit tagging if the repo grows into denser manuscripts.
 
-### 6. roadmap discipline depends on keeping the docs current
+### 7. roadmap discipline depends on keeping the docs current
 
 The repo now has several source of truth files:
 
@@ -162,7 +172,7 @@ The next value is tighter connection between them and the manuscript:
 
 1. chapter links to related elements
 2. chapter links to board notes
-3. more direct TUI visibility
+3. board canvas behavior inside the TUI
 
 ## bottom line
 
