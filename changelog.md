@@ -195,3 +195,14 @@
 * added provider routing for `openai` and `azure-openai`
 * expanded `README.md` with setup guidance for OpenAI, Azure OpenAI, Anthropic, Gemini, and Mistral
 * clarified in `README.md` that AI is not required for normal `openscribe` setup or usage
+
+### Structure management and compile intent
+
+* added `openscribe outliner` to show structure, metadata, scenes, chapter targets, and part word totals together
+* added `openscribe move part` and `openscribe move chapter` so manuscript order can be changed without hand renaming folders or files
+* added compile profiles named `print`, `ebook`, and `submission`
+* updated compile resolution so profiles can choose default format, template, and output naming unless the CLI overrides them
+* added `default_profile` support in `.openscribe/project.yaml`
+* fixed the continuous read path so it uses the current compile option resolver
+* added regression tests for outliner output, reordering commands, and compile profiles
+* updated the sample project, `README.md`, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`

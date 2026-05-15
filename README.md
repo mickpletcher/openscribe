@@ -61,11 +61,14 @@ This first build includes:
 * PDF export
 * EPUB export
 * manuscript outline view
+* detailed outliner view with metadata, scenes, and word totals
 * manuscript status view
+* chapter and part reordering commands
+* compile profiles for print, ebook, and submission output
 * wider Textual TUI views for manuscript, characters, research, notes, story ideas, and elements
 * optional AI summary command for chapter review
 
-This build does not yet include chapter reordering, editor launch commands, or richer compile profiles.
+This build does not yet include editor launch commands, research paper compile output, or snapshot restore commands.
 
 ## Requirements
 
@@ -113,11 +116,13 @@ openscribe workflow screenplay-scene "EXT. ROAD - NIGHT" --chapter "The Beginnin
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
+openscribe compile --profile submission
 openscribe index rebuild
 openscribe snapshot save "first-pass"
 openscribe board view
 openscribe read
 openscribe outline
+openscribe outliner
 openscribe status
 openscribe tui
 ```
@@ -661,6 +666,24 @@ My Novel
 
 Use this when you want a quick structural view without opening the TUI.
 
+## Detailed outliner view
+
+Run:
+
+```powershell
+openscribe outliner
+```
+
+This prints:
+
+* part structure
+* chapter metadata
+* chapter word counts and targets
+* scene counts and scene titles
+* part word totals
+
+Use this when `outline` is too light and `status` is too flat.
+
 ## Continuous manuscript view
 
 Run:
@@ -674,6 +697,20 @@ This prints the manuscript as one continuous reading view in binder order.
 It uses the same part and chapter assembly path as compile.
 
 Use this when you want to review the whole manuscript flow in the terminal without exporting a file first.
+
+## Reordering parts and chapters
+
+You can reorder manuscript structure from the CLI.
+
+Examples:
+
+```powershell
+openscribe move part "Ending" --position 2
+openscribe move chapter "Reckoning" --position 1
+openscribe move chapter "Reckoning" --position 1 --part "Opening"
+```
+
+This renumbers part folders and chapter files so binder order, read order, and compile order stay aligned.
 
 ## Updating metadata
 
@@ -820,6 +857,7 @@ You can control default compile behavior in `.openscribe/project.yaml`:
 compile:
   default_format: docx
   backend: auto
+  default_profile: ""
   default_template: novel
   output_filename: ""
   include_title_page: true
@@ -837,17 +875,27 @@ Current settings:
 
 * `default_format` chooses the default export format
 * `backend` supports `auto`, `pandoc`, or `native`
+* `default_profile` applies a named export preset when you do not pass a CLI override
 * `default_template` chooses the built in template preset
 * `output_filename` overrides the default build filename
 * `include_title_page` turns the title page on or off
 * `include_part_headings` turns part headings on or off
 * `chapter_heading_style` supports `title-only` or `chapter-number-title`
 
+Built in compile profiles:
+
+* `print` writes a `docx` with book style defaults
+* `ebook` writes an `epub` with book style defaults
+* `submission` writes a `docx` with manuscript style chapter headings and no part headings
+
 If you want Pandoc output, install `pandoc` and keep `backend: auto` or set `backend: pandoc`.
 
-You can also override the template from the CLI:
+You can also override the profile or template from the CLI:
 
 ```powershell
+openscribe compile --profile print
+openscribe compile --profile ebook
+openscribe compile --profile submission
 openscribe compile --template manuscript
 openscribe compile --format pdf --template minimal
 ```
@@ -1005,10 +1053,36 @@ Exports the current manuscript to a document file.
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
+openscribe compile --profile ebook
 openscribe compile --template manuscript
 openscribe compile --output .\build\my-novel.docx
 openscribe compile --format pdf --output .\build\my-novel.pdf
 openscribe compile --format epub --output .\build\my-novel.epub
+```
+
+### `openscribe outliner`
+
+Prints a structure plus metadata view.
+
+```powershell
+openscribe outliner
+```
+
+### `openscribe move part`
+
+Reorders a part in the manuscript binder.
+
+```powershell
+openscribe move part "Ending" --position 2
+```
+
+### `openscribe move chapter`
+
+Reorders a chapter inside a part or moves it into another part.
+
+```powershell
+openscribe move chapter "Reckoning" --position 1
+openscribe move chapter "Reckoning" --position 1 --part "Opening"
 ```
 
 ### `openscribe set part`
@@ -1345,6 +1419,7 @@ Right now:
 * chapter ordering is based on numbered filenames and folders
 * scene support is heading based and does not yet have separate scene metadata
 * compile currently exports to Word, PDF, and EPUB only
+* compile profiles are present, but formatting depth is still intentionally simple
 * snapshots can be created but do not yet have first class restore commands
 * board visuals currently live in CLI commands instead of the TUI
 * element appears in tracking is derived from text matches and aliases
@@ -1353,7 +1428,7 @@ Right now:
 
 Planned next:
 
-* chapter and part reordering
-* richer compile profiles
 * snapshot restore helpers
 * editor launch helpers
+* compile support for research papers and academic outputs
+* stronger scene metadata and scene reordering

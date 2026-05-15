@@ -25,7 +25,7 @@ This example includes:
 * one revision note
 * one story idea note
 
-The sample project config also includes compile defaults you can edit to test template and export behavior.
+The sample project config also includes compile defaults you can edit to test template, profile, and export behavior.
 It also includes scene headings inside the sample chapters so scene level support has real data to inspect.
 You can also save user templates from this project and reuse them when you initialize another one.
 
@@ -40,6 +40,9 @@ py -3.11 -m openscribe report project
 py -3.11 -m openscribe index rebuild
 py -3.11 -m openscribe index search station
 py -3.11 -m openscribe find chapters --text station
+py -3.11 -m openscribe outliner
+py -3.11 -m openscribe move chapter "Town Hall" --position 1
+py -3.11 -m openscribe compile --profile submission
 py -3.11 -m openscribe board note add "Sheriff rumor" --body "A deputy hints the sheriff knew about the ledger." --group plot
 py -3.11 -m openscribe board note list
 py -3.11 -m openscribe board layout auto
@@ -66,5 +69,7 @@ The story idea commands store structured new book ideas under `notes/story-ideas
 The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/`.
 
 The template commands store saved user templates under `.openscribe/templates/`.
+
+The move commands renumber parts and chapters so manuscript order stays stable on disk.
 
 You can also open the Markdown files directly in your editor and compare them with the command output.

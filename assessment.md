@@ -28,7 +28,9 @@ The manuscript path is real and usable:
 11. import an existing folder based manuscript into a new project
 12. use nonfiction section and screenplay scene helpers
 13. read the manuscript as one continuous document
-14. export to `docx`, `pdf`, and `epub`
+14. reorder parts and chapters from the CLI
+15. inspect a richer outliner view with scene counts and part totals
+16. export to `docx`, `pdf`, and `epub` with print, ebook, and submission profiles
 
 The planning and tracking layer is also real:
 
@@ -77,11 +79,11 @@ The CLI is now the real control surface.
 The TUI is useful, but it is still mostly inspection and navigation.
 Board workflows, reports, element editing, and metadata updates are still command first.
 
-### 2. compile formatting is still fairly shallow
+### 2. compile formatting is broader, but still fairly shallow
 
 Pandoc support improves the backend story, but the formatting model is still small.
-The current templates are useful, not rich.
-There is no deeper profile system yet for print, ebook, and submission output.
+The current templates and profiles are useful, not rich.
+The export intent is clearer now, but the formatting depth is still limited.
 
 ### 3. board mode is more useful now, but still early
 
@@ -139,29 +141,29 @@ That is enough to validate the product direction with actual use.
 
 ### priority 1
 
-Tighten scene and outliner workflows.
+Add snapshot restore and project recovery helpers.
 
-The repo has scene support now, but scenes are still lightweight headings.
-The next step is stronger scene reordering, scene metadata, and better outline visibility.
+Checkpoint creation is useful.
+Recovery needs the other half of the workflow.
 
 ### priority 2
 
-Add richer compile profiles.
+Deepen scene workflows.
 
-The next compile step should separate output intent more clearly:
+The repo has scene support and the outliner now exposes scene counts and titles.
+The next step is stronger scene reordering, scene metadata, and scene aware search or reporting.
+
+### priority 3
+
+Deepen compile formatting beyond the new profile layer.
+
+The repo now separates export intent with:
 
 1. print
 2. ebook
 3. submission
 
-That will make the export story feel finished instead of merely present.
-
-### priority 3
-
-Add snapshot restore and project recovery helpers.
-
-Checkpoint creation is useful.
-Recovery needs the other half of the workflow.
+The next step is richer profile level formatting and new outputs such as research paper exports.
 
 ### priority 4
 

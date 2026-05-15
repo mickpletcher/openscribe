@@ -655,3 +655,118 @@ def test_multi_part_read_and_export_regression(tmp_path: Path, monkeypatch) -> N
     paragraph_text = [paragraph.text for paragraph in document.paragraphs if paragraph.text]
     assert paragraph_text.index("Opening") < paragraph_text.index("Arrival")
     assert paragraph_text.index("Ending") < paragraph_text.index("Reckoning")
+
+
+def test_outliner_combines_structure_metadata_and_word_counts(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "new",
+                "chapter",
+                "Arrival",
+                "--part",
+                "Opening",
+                "--status",
+                "draft",
+                "--label",
+                "setup",
+                "--pov",
+                "Eli",
+                "--word-target",
+                "1200",
+                "--synopsis",
+                "Eli reaches town.",
+            ],
+        ).exit_code
+        == 0
+    )
+    assert runner.invoke(app, ["new", "scene", "Cold Open", "--chapter", "Arrival", "--body", "Rain on the station."]).exit_code == 0
+
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Eli walked into town through the rain.\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["outliner"])
+    assert result.exit_code == 0
+    assert "Project: North County" in result.stdout
+    assert "Opening" in result.stdout
+    assert "Arrival | status=draft | label=setup | pov=Eli" in result.stdout
+    assert "target=1200" in result.stdout
+    assert "scenes=1" in result.stdout
+    assert "Synopsis: Eli reaches town." in result.stdout
+    assert "Scenes: Cold Open" in result.stdout
+    assert "Part Total Words:" in result.stdout
+
+
+def test_move_part_and_chapter_reorders_manuscript(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Middle"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Crossing", "--part", "Middle"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Signal", "--part", "Middle"]).exit_code == 0
+
+    result = runner.invoke(app, ["move", "part", "Middle", "--position", "1"])
+    assert result.exit_code == 0
+    assert "Moved part to position 1" in result.stdout
+
+    result = runner.invoke(app, ["move", "chapter", "Signal", "--position", "1", "--part", "Opening"])
+    assert result.exit_code == 0
+    assert "Moved chapter to position 1" in result.stdout
+
+    outline_result = runner.invoke(app, ["outline"])
+    assert outline_result.exit_code == 0
+    assert outline_result.stdout.index("Middle") < outline_result.stdout.index("Opening")
+    assert outline_result.stdout.index("Signal") < outline_result.stdout.index("Arrival")
+
+    moved_path = tmp_path / "manuscript" / "part-02-opening" / "ch-01-signal.md"
+    assert moved_path.exists()
+
+
+def test_compile_profiles_apply_expected_defaults(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(compile_module.shutil, "which", lambda name: None)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Eli stepped off the bus into wet summer heat.\n",
+        encoding="utf-8",
+    )
+
+    print_result = runner.invoke(app, ["compile", "--profile", "print"])
+    assert print_result.exit_code == 0
+
+    print_output = tmp_path / "build" / "north-county-print.docx"
+    assert print_output.exists()
+    print_document = Document(print_output)
+    print_paragraphs = [paragraph.text for paragraph in print_document.paragraphs if paragraph.text]
+    assert "Opening" in print_paragraphs
+    assert "Arrival" in print_paragraphs
+
+    submission_result = runner.invoke(app, ["compile", "--profile", "submission"])
+    assert submission_result.exit_code == 0
+
+    submission_output = tmp_path / "build" / "north-county-submission.docx"
+    assert submission_output.exists()
+    submission_document = Document(submission_output)
+    submission_paragraphs = [paragraph.text for paragraph in submission_document.paragraphs if paragraph.text]
+    assert "Opening" not in submission_paragraphs
+    assert "Chapter 1: Arrival" in submission_paragraphs
+
+    ebook_result = runner.invoke(app, ["compile", "--profile", "ebook"])
+    assert ebook_result.exit_code == 0
+    ebook_output = tmp_path / "build" / "north-county-ebook.epub"
+    assert ebook_output.exists()

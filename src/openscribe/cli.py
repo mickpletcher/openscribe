@@ -12,7 +12,7 @@ from rich.tree import Tree
 
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
 from openscribe.board import add_link, add_note, auto_layout, list_notes, move_note, promote_note_to_chapter, render_board, set_group
-from openscribe.compile import CompileError, assemble_manuscript_text, compile_project
+from openscribe.compile import CompileError, PROFILE_PRESETS, assemble_manuscript_text, compile_project
 from openscribe.elements import add_alias, add_element, add_relation, appears_in, get_element, list_element_records
 from openscribe.index import index_is_current, load_project_index, rebuild_project_index
 from openscribe.project import (
@@ -35,6 +35,8 @@ from openscribe.project import (
     load_part_metadata,
     load_project_config,
     project_root,
+    reorder_chapter,
+    reorder_part,
     save_project_template,
     template_library_path,
     update_chapter_metadata,
@@ -63,6 +65,7 @@ index_app = typer.Typer(help="Derived index workflows.")
 template_app = typer.Typer(help="Project template workflows.")
 import_app = typer.Typer(help="Import workflows.")
 workflow_app = typer.Typer(help="Format specific workflow helpers.")
+move_app = typer.Typer(help="Reordering workflows.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
 app.add_typer(set_app, name="set")
@@ -77,6 +80,7 @@ app.add_typer(index_app, name="index")
 app.add_typer(template_app, name="template")
 app.add_typer(import_app, name="import")
 app.add_typer(workflow_app, name="workflow")
+app.add_typer(move_app, name="move")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
 board_app.add_typer(board_group_app, name="group")
@@ -193,6 +197,42 @@ def outline() -> None:
 
 
 @app.command()
+def outliner() -> None:
+    root = project_root()
+    chapters = list_chapters(root)
+    config = load_project_config(root)
+    console.print(f"Project: {config.get('title', 'Untitled Project')}")
+    current_part_id = None
+    part_total_words = 0
+    part_total_scenes = 0
+    part_title = ""
+
+    for chapter in chapters + [None]:
+        if chapter is None or chapter.part_id != current_part_id:
+            if current_part_id is not None:
+                console.print(f"  Part Total Words: {part_total_words}")
+                console.print(f"  Part Total Scenes: {part_total_scenes}")
+                console.print("")
+            if chapter is None:
+                break
+            current_part_id = chapter.part_id
+            part_total_words = 0
+            part_total_scenes = 0
+            part_title = chapter.part
+            console.print(f"{part_title}")
+        part_total_words += chapter.word_count
+        part_total_scenes += chapter.scene_count
+        console.print(
+            f"  {chapter.title} | status={chapter.status} | label={chapter.label} | pov={chapter.pov or 'n/a'} | "
+            f"words={chapter.word_count} | target={chapter.word_target or 0} | scenes={chapter.scene_count}"
+        )
+        if chapter.synopsis:
+            console.print(f"    Synopsis: {chapter.synopsis}")
+        if chapter.scenes:
+            console.print(f"    Scenes: {', '.join(scene.title for scene in chapter.scenes)}")
+
+
+@app.command()
 def status() -> None:
     root = project_root()
     chapters = list_chapters(root)
@@ -225,13 +265,14 @@ def status() -> None:
 
 @app.command()
 def compile(
-    format_name: str = typer.Option("docx", "--format", help="Output format. Use docx, pdf, or epub."),
+    format_name: Optional[str] = typer.Option(None, "--format", help="Output format. Use docx, pdf, or epub."),
+    profile_name: Optional[str] = typer.Option(None, "--profile", help="Compile profile. Use print, ebook, or submission."),
     template_name: Optional[str] = typer.Option(None, "--template", help="Compile template. Use novel, manuscript, or minimal."),
     output: Optional[Path] = typer.Option(None, "--output", help="Output document path."),
 ) -> None:
     root = project_root()
     try:
-        output_path = compile_project(root, format_name, template_name, output)
+        output_path = compile_project(root, format_name, profile_name, template_name, output)
     except CompileError as exc:
         raise typer.BadParameter(str(exc)) from exc
     console.print(f"Compiled manuscript to {output_path}")
@@ -502,6 +543,13 @@ def templates_list() -> None:
     except FileNotFoundError:
         pass
     console.print(table)
+    profile_table = Table(title="Compile Profiles")
+    profile_table.add_column("Profile")
+    profile_table.add_column("Format")
+    profile_table.add_column("Template")
+    for name, profile in sorted(PROFILE_PRESETS.items()):
+        profile_table.add_row(name, str(profile.get("format_name", "")), str(profile.get("template_name", "")))
+    console.print(profile_table)
 
 
 @template_app.command("save")
@@ -544,6 +592,31 @@ def import_folder(
 ) -> None:
     project_path = import_folder_project(path, source_path, title, template_name=template_name, template_file=template_file)
     console.print(f"Imported project to {project_path}")
+
+
+@move_app.command("part")
+def move_part(
+    part: str = typer.Argument(..., help="Part title or slug."),
+    position: int = typer.Option(..., "--position", help="New 1 based position."),
+) -> None:
+    root = project_root()
+    parts = reorder_part(root, part, position)
+    console.print(f"Moved part to position {position}")
+    for index, part_path in enumerate(parts, start=1):
+        console.print(f"{index}. {load_part_metadata(root, part_path.name)['title']}")
+
+
+@move_app.command("chapter")
+def move_chapter(
+    chapter: str = typer.Argument(..., help="Chapter title or slug."),
+    position: int = typer.Option(..., "--position", help="New 1 based position in the target part."),
+    part: Optional[str] = typer.Option(None, "--part", help="Optional target part title or slug."),
+) -> None:
+    root = project_root()
+    chapters = reorder_chapter(root, chapter, position, part=part)
+    console.print(f"Moved chapter to position {position}")
+    for index, chapter_path in enumerate(chapters, start=1):
+        console.print(f"{index}. {chapter_path.name}")
 
 
 @idea_app.command("list")

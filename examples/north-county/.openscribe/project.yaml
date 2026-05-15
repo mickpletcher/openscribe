@@ -5,6 +5,7 @@ template: fiction
 compile:
   default_format: docx
   backend: auto
+  default_profile: ''
   default_template: novel
   output_filename: ''
   include_title_page: true

@@ -34,3 +34,9 @@ Tracked record of roadmap items that shipped.
 * added import helpers for existing folder based manuscript projects
 * added screenwriting and nonfiction specific workflow helpers
 * added richer board layout and terminal board view commands
+
+### Structure management and export intent
+
+* added a detailed outliner view that combines structure, metadata, scenes, and word counts
+* added chapter and part reordering commands that renumber manuscript storage cleanly
+* added compile profiles for print, ebook, and submission exports

@@ -23,6 +23,7 @@ class CompileError(RuntimeError):
 @dataclass(slots=True)
 class CompileOptions:
     format_name: str
+    profile_name: str
     template_name: str
     output_filename: str
     include_title_page: bool
@@ -50,15 +51,44 @@ TEMPLATE_PRESETS = {
 }
 
 
+PROFILE_PRESETS = {
+    "print": {
+        "format_name": "docx",
+        "template_name": "novel",
+        "include_title_page": True,
+        "include_part_headings": True,
+        "chapter_heading_style": "title-only",
+        "output_suffix": "print",
+    },
+    "ebook": {
+        "format_name": "epub",
+        "template_name": "novel",
+        "include_title_page": True,
+        "include_part_headings": True,
+        "chapter_heading_style": "title-only",
+        "output_suffix": "ebook",
+    },
+    "submission": {
+        "format_name": "docx",
+        "template_name": "manuscript",
+        "include_title_page": True,
+        "include_part_headings": False,
+        "chapter_heading_style": "chapter-number-title",
+        "output_suffix": "submission",
+    },
+}
+
+
 def compile_project(
     root: Path,
     format_name: str | None = None,
+    profile_name: str | None = None,
     template_name: str | None = None,
     output_path: Path | None = None,
 ) -> Path:
     config = load_project_config(root)
     project_title = str(config.get("title", "Untitled Project"))
-    options = _resolve_compile_options(config, format_name, template_name, output_path)
+    options = _resolve_compile_options(config, format_name, profile_name, template_name, output_path)
     chapters = _compiled_chapters(root)
     target_path = output_path or default_output_path(root, project_title, options)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,7 +140,7 @@ def assemble_manuscript_text(root: Path, template_name: str | None = None) -> st
     config = load_project_config(root)
     project_title = str(config.get("title", "Untitled Project"))
     author = str(config.get("author", "")).strip()
-    options = _resolve_compile_options(config, None, template_name, None)
+    options = _resolve_compile_options(config, None, None, template_name, None)
     chapters = _compiled_chapters(root)
 
     sections: list[str] = []
@@ -139,17 +169,21 @@ def default_output_path(root: Path, project_title: str, options: CompileOptions)
         filename = options.output_filename.strip()
     else:
         filename = slugify(project_title)
+        if options.profile_name:
+            filename = f"{filename}-{options.profile_name}"
 
     if not filename.lower().endswith(f".{options.format_name}"):
         filename = f"{filename}.{options.format_name}"
     return root / "build" / filename
 
 
-def _resolve_format(config: dict, format_name: str | None, output_path: Path | None) -> str:
+def _resolve_format(config: dict, format_name: str | None, output_path: Path | None, profile_name: str | None) -> str:
     if format_name:
         return format_name.strip().lower()
     if output_path and output_path.suffix:
         return output_path.suffix.lstrip(".").lower()
+    if profile_name:
+        return str(PROFILE_PRESETS[profile_name]["format_name"]).lower()
     compile_config = config.get("compile", {})
     return str(compile_config.get("default_format", "docx")).lower()
 
@@ -157,12 +191,23 @@ def _resolve_format(config: dict, format_name: str | None, output_path: Path | N
 def _resolve_compile_options(
     config: dict,
     format_name: str | None,
+    profile_name: str | None,
     template_name: str | None,
     output_path: Path | None,
 ) -> CompileOptions:
     compile_config = config.get("compile", {})
+    resolved_profile = (profile_name or str(compile_config.get("default_profile", "") or "")).strip().lower()
+    if resolved_profile and resolved_profile not in PROFILE_PRESETS:
+        supported_profiles = ", ".join(sorted(PROFILE_PRESETS))
+        raise CompileError(f"Profile '{resolved_profile}' is not supported yet. Use {supported_profiles}.")
+
+    profile_defaults = PROFILE_PRESETS.get(resolved_profile, {})
     explicit_template = template_name is not None
-    resolved_template = (template_name or str(compile_config.get("default_template", "novel"))).strip().lower()
+    resolved_template = (
+        template_name
+        or str(profile_defaults.get("template_name", ""))
+        or str(compile_config.get("default_template", "novel"))
+    ).strip().lower()
     if resolved_template not in TEMPLATE_PRESETS:
         supported = ", ".join(sorted(TEMPLATE_PRESETS))
         raise CompileError(
@@ -170,10 +215,14 @@ def _resolve_compile_options(
         )
 
     template_defaults = TEMPLATE_PRESETS[resolved_template]
+    resolved_format = _resolve_format(config, format_name, output_path, resolved_profile or None)
     chapter_heading_style_source = (
         template_defaults["chapter_heading_style"]
         if explicit_template
-        else compile_config.get("chapter_heading_style", template_defaults["chapter_heading_style"])
+        else profile_defaults.get(
+            "chapter_heading_style",
+            compile_config.get("chapter_heading_style", template_defaults["chapter_heading_style"]),
+        )
     )
     chapter_heading_style = str(chapter_heading_style_source).strip().lower()
     if chapter_heading_style not in {"title-only", "chapter-number-title"}:
@@ -182,18 +231,25 @@ def _resolve_compile_options(
         )
 
     return CompileOptions(
-        format_name=_resolve_format(config, format_name, output_path),
+        format_name=resolved_format,
+        profile_name=resolved_profile,
         template_name=resolved_template,
         output_filename=str(compile_config.get("output_filename", "") or "").strip(),
         include_title_page=bool(
             template_defaults["include_title_page"]
             if explicit_template
-            else compile_config.get("include_title_page", template_defaults["include_title_page"])
+            else profile_defaults.get(
+                "include_title_page",
+                compile_config.get("include_title_page", template_defaults["include_title_page"]),
+            )
         ),
         include_part_headings=bool(
             template_defaults["include_part_headings"]
             if explicit_template
-            else compile_config.get("include_part_headings", template_defaults["include_part_headings"])
+            else profile_defaults.get(
+                "include_part_headings",
+                compile_config.get("include_part_headings", template_defaults["include_part_headings"]),
+            )
         ),
         chapter_heading_style=chapter_heading_style,
         backend_name=str(compile_config.get("backend", "auto") or "auto").strip().lower(),

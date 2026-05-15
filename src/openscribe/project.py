@@ -123,6 +123,7 @@ def init_project_from_template(
             "compile": {
                 "default_format": str(template["compile"].get("default_format", "docx")),
                 "backend": "auto",
+                "default_profile": "",
                 "default_template": str(template["compile"].get("default_template", "novel")),
                 "output_filename": "",
                 "include_title_page": bool(template["compile"].get("include_title_page", True)),
@@ -425,6 +426,42 @@ def update_part_title(root: Path, part: str, title: str) -> Path:
     part_path = resolve_part_path(root, part)
     write_yaml(part_path / PART_FILE, {"title": title})
     return part_path
+
+
+def reorder_part(root: Path, part: str, position: int) -> list[Path]:
+    manuscript = root / "manuscript"
+    parts = sorted([child for child in manuscript.iterdir() if child.is_dir()])
+    if not parts:
+        raise FileNotFoundError("No manuscript part exists yet.")
+
+    target_path = resolve_part_path(root, part)
+    reordered = [child for child in parts if child != target_path]
+    bounded_position = max(1, min(position, len(parts)))
+    reordered.insert(bounded_position - 1, target_path)
+    _renumber_parts(reordered)
+    return sorted([child for child in manuscript.iterdir() if child.is_dir()])
+
+
+def reorder_chapter(root: Path, chapter_ref: str, position: int, part: str | None = None) -> list[Path]:
+    chapter = find_chapter(root, chapter_ref)
+    source_path = chapter.path
+    target_part_path = resolve_part_path(root, part) if part else source_path.parent
+
+    target_chapters = sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE])
+    if source_path.parent == target_part_path:
+        target_chapters = [child for child in target_chapters if child != source_path]
+    bounded_position = max(1, min(position, len(target_chapters) + 1))
+
+    moved_path = source_path
+    if source_path.parent != target_part_path:
+        moved_path = target_part_path / source_path.name
+        source_path.rename(moved_path)
+        _renumber_chapters(source_path.parent)
+
+    reordered = sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE and child != moved_path])
+    reordered.insert(bounded_position - 1, moved_path)
+    _renumber_chapters(target_part_path, reordered)
+    return sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE])
 
 
 def update_chapter_metadata(
@@ -807,3 +844,47 @@ def _import_markdown_as_chapter(root: Path, source_file: Path, part: str) -> Pat
 
 def _increment(counter: dict[str, int], key: str) -> None:
     counter[key] = counter.get(key, 0) + 1
+
+
+def _renumber_parts(parts: list[Path]) -> None:
+    temp_paths: list[Path] = []
+    for index, part_path in enumerate(parts, start=1):
+        temp_path = part_path.with_name(f"tmp-part-{index:02d}-{part_path.name}")
+        part_path.rename(temp_path)
+        temp_paths.append(temp_path)
+
+    for index, temp_path in enumerate(temp_paths, start=1):
+        suffix = _name_without_number(temp_path.name, "part")
+        final_path = temp_path.with_name(f"part-{index:02d}-{suffix}")
+        temp_path.rename(final_path)
+        _renumber_chapters(final_path)
+
+
+def _renumber_chapters(part_path: Path, ordered_paths: list[Path] | None = None) -> None:
+    chapter_paths = ordered_paths or sorted([child for child in part_path.glob("*.md") if child.name != PART_FILE])
+    temp_paths: list[Path] = []
+    for index, chapter_path in enumerate(chapter_paths, start=1):
+        temp_path = chapter_path.with_name(f"tmp-ch-{index:02d}-{chapter_path.name}")
+        chapter_path.rename(temp_path)
+        temp_paths.append(temp_path)
+
+    for index, temp_path in enumerate(temp_paths, start=1):
+        suffix = _name_without_number(temp_path.stem, "ch")
+        final_path = temp_path.with_name(f"ch-{index:02d}-{suffix}.md")
+        temp_path.rename(final_path)
+
+
+def _name_without_number(name: str, prefix: str) -> str:
+    if prefix == "part":
+        match = re.match(r"tmp-part-\d+-(?:part-\d+-)?(.+)$", name)
+    else:
+        match = re.match(r"tmp-ch-\d+-(?:ch-\d+-)?(.+)$", name)
+    if match:
+        return match.group(1)
+    if prefix == "part":
+        match = re.match(r"part-\d+-(.+)$", name)
+    else:
+        match = re.match(r"ch-\d+-(.+)$", name)
+    if match:
+        return match.group(1)
+    return name
