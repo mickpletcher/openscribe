@@ -215,7 +215,11 @@ marimo/_lsp/
 __marimo__/
 
 # Streamlit
+
+#File Exclusions
+openscribe.code-workspace
 .streamlit/secrets.toml
+github-social-preview.jpg
 
 # Private planning docs
 future-upgrades.md
