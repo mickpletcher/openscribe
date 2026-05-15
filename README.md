@@ -95,6 +95,7 @@ openscribe new chapter "The Beginning" --part "Opening"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
+openscribe read
 openscribe outline
 openscribe status
 openscribe tui
@@ -623,10 +624,59 @@ My Novel
 
 Use this when you want a quick structural view without opening the TUI.
 
+## Continuous manuscript view
+
+Run:
+
+```powershell
+openscribe read
+openscribe read --template manuscript
+```
+
+This prints the manuscript as one continuous reading view in binder order.
+It uses the same part and chapter assembly path as compile.
+
+Use this when you want to review the whole manuscript flow in the terminal without exporting a file first.
+
+## Updating metadata
+
+You can update part and chapter metadata from the CLI instead of hand editing YAML.
+
+Examples:
+
+```powershell
+openscribe set part "Opening" --title "Cold Open"
+openscribe set chapter "Arrival" --status revised --label action --pov Eli
+openscribe set chapter "Arrival" --word-target 2500 --synopsis "Eli reaches town."
+openscribe set chapter "Arrival" --notes "Tighten the station scene."
+```
+
+## Inspecting metadata
+
+You can also inspect the current metadata directly:
+
+```powershell
+openscribe show part "Cold Open"
+openscribe show chapter "Arrival"
+```
+
+## Finding chapters
+
+You can search chapters by metadata and text.
+
+Examples:
+
+```powershell
+openscribe find chapters --status draft
+openscribe find chapters --label action --pov Eli
+openscribe find chapters --part Opening
+openscribe find chapters --text station
+```
+
 ## Exporting your project
 
-You can export the current manuscript to Word or PDF.
 You can export the current manuscript to Word, PDF, or EPUB.
+Compile behavior also reads defaults from `.openscribe/project.yaml`.
 
 Run:
 
@@ -660,6 +710,42 @@ Current behavior:
 * chapter text is written into a real output file
 
 Right now `docx`, `pdf`, and `epub` are implemented.
+
+### Compile settings
+
+You can control default compile behavior in `.openscribe/project.yaml`:
+
+```yaml
+compile:
+  default_format: docx
+  default_template: novel
+  output_filename: ""
+  include_title_page: true
+  include_part_headings: true
+  chapter_heading_style: title-only
+```
+
+Built in templates:
+
+* `novel`
+* `manuscript`
+* `minimal`
+
+Current settings:
+
+* `default_format` chooses the default export format
+* `default_template` chooses the built in template preset
+* `output_filename` overrides the default build filename
+* `include_title_page` turns the title page on or off
+* `include_part_headings` turns part headings on or off
+* `chapter_heading_style` supports `title-only` or `chapter-number-title`
+
+You can also override the template from the CLI:
+
+```powershell
+openscribe compile --template manuscript
+openscribe compile --format pdf --template minimal
+```
 
 ## Viewing status
 
@@ -780,9 +866,64 @@ Exports the current manuscript to a document file.
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
+openscribe compile --template manuscript
 openscribe compile --output .\build\my-novel.docx
 openscribe compile --format pdf --output .\build\my-novel.pdf
 openscribe compile --format epub --output .\build\my-novel.epub
+```
+
+### `openscribe set part`
+
+Updates part metadata.
+
+```powershell
+openscribe set part "Opening" --title "Cold Open"
+```
+
+### `openscribe set chapter`
+
+Updates chapter metadata.
+
+```powershell
+openscribe set chapter "Arrival" --status revised --label action --pov Eli
+openscribe set chapter "Arrival" --word-target 2500 --synopsis "Eli reaches town."
+openscribe set chapter "Arrival" --notes "Tighten the station scene."
+```
+
+### `openscribe show part`
+
+Shows part metadata.
+
+```powershell
+openscribe show part "Cold Open"
+```
+
+### `openscribe show chapter`
+
+Shows chapter metadata.
+
+```powershell
+openscribe show chapter "Arrival"
+```
+
+### `openscribe find chapters`
+
+Finds chapters by metadata and text.
+
+```powershell
+openscribe find chapters --status draft
+openscribe find chapters --label action --pov Eli
+openscribe find chapters --part Opening
+openscribe find chapters --text station
+```
+
+### `openscribe read`
+
+Prints the manuscript as one continuous reading view.
+
+```powershell
+openscribe read
+openscribe read --template manuscript
 ```
 
 ### `openscribe tui`
@@ -804,9 +945,13 @@ openscribe init "North County"
 openscribe new part "Opening"
 openscribe new chapter "Arrival" --part "Opening" --pov "Eli" --word-target 1800
 openscribe new chapter "The Call" --part "Opening" --pov "Eli" --word-target 2200
+openscribe set chapter "Arrival" --status revised
+openscribe find chapters --status revised
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
+openscribe read
+openscribe show chapter "Arrival"
 openscribe outline
 openscribe status
 openscribe tui

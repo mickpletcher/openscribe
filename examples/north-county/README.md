@@ -22,6 +22,8 @@ This example includes:
 * one research note
 * one revision note
 
+The sample project config also includes compile defaults you can edit to test template and export behavior.
+
 ## How to inspect it
 
 From the repo root:
@@ -29,6 +31,8 @@ From the repo root:
 ```powershell
 Set-Location .\examples\north-county
 py -3.11 -m openscribe outline
+py -3.11 -m openscribe find chapters --text station
+py -3.11 -m openscribe read
 py -3.11 -m openscribe status
 py -3.11 -m openscribe tui
 ```

@@ -11,23 +11,33 @@ from rich.table import Table
 from rich.tree import Tree
 
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
-from openscribe.compile import CompileError, compile_project
+from openscribe.compile import CompileError, assemble_manuscript_text, compile_project
 from openscribe.project import (
     create_chapter,
     create_part,
     find_chapter,
+    find_chapters,
     init_project,
     list_chapters,
+    load_part_metadata,
     load_project_config,
     project_root,
+    update_chapter_metadata,
+    update_part_title,
 )
 from openscribe.tui import OpenScribeApp
 
 app = typer.Typer(help="CLI and TUI writing environment for long form projects.")
 new_app = typer.Typer(help="Create manuscript content.")
 ai_app = typer.Typer(help="Optional AI helpers for manuscript work.")
+set_app = typer.Typer(help="Update project metadata.")
+show_app = typer.Typer(help="Show project metadata.")
+find_app = typer.Typer(help="Find project content.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
+app.add_typer(set_app, name="set")
+app.add_typer(show_app, name="show")
+app.add_typer(find_app, name="find")
 console = Console()
 
 
@@ -125,20 +135,126 @@ def status() -> None:
 @app.command()
 def compile(
     format_name: str = typer.Option("docx", "--format", help="Output format. Use docx, pdf, or epub."),
+    template_name: Optional[str] = typer.Option(None, "--template", help="Compile template. Use novel, manuscript, or minimal."),
     output: Optional[Path] = typer.Option(None, "--output", help="Output document path."),
 ) -> None:
     root = project_root()
     try:
-        output_path = compile_project(root, format_name, output)
+        output_path = compile_project(root, format_name, template_name, output)
     except CompileError as exc:
         raise typer.BadParameter(str(exc)) from exc
     console.print(f"Compiled manuscript to {output_path}")
 
 
 @app.command()
+def read(
+    template_name: Optional[str] = typer.Option(None, "--template", help="Reading template. Use novel, manuscript, or minimal."),
+) -> None:
+    root = project_root()
+    try:
+        manuscript_text = assemble_manuscript_text(root, template_name)
+    except CompileError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(manuscript_text)
+
+
+@app.command()
 def tui() -> None:
     root = project_root()
     OpenScribeApp(root).run()
+
+
+@set_app.command("part")
+def set_part(
+    part: str = typer.Argument(..., help="Part title or slug."),
+    title: str = typer.Option(..., "--title", help="New part title."),
+) -> None:
+    root = project_root()
+    part_path = update_part_title(root, part, title)
+    console.print(f"Updated part {part_path.name}")
+
+
+@set_app.command("chapter")
+def set_chapter(
+    chapter: str = typer.Argument(..., help="Chapter title or slug."),
+    title: Optional[str] = typer.Option(None, "--title", help="New chapter title."),
+    status: Optional[str] = typer.Option(None, "--status", help="New status."),
+    label: Optional[str] = typer.Option(None, "--label", help="New label."),
+    synopsis: Optional[str] = typer.Option(None, "--synopsis", help="New synopsis."),
+    pov: Optional[str] = typer.Option(None, "--pov", help="New point of view."),
+    word_target: Optional[int] = typer.Option(None, "--word-target", help="New word target."),
+    notes: Optional[str] = typer.Option(None, "--notes", help="New notes."),
+) -> None:
+    root = project_root()
+    chapter_path = update_chapter_metadata(
+        root,
+        chapter,
+        title=title,
+        status=status,
+        label=label,
+        synopsis=synopsis,
+        pov=pov,
+        word_target=word_target,
+        notes=notes,
+    )
+    console.print(f"Updated chapter {chapter_path.relative_to(root)}")
+
+
+@show_app.command("part")
+def show_part(part: str = typer.Argument(..., help="Part title or slug.")) -> None:
+    root = project_root()
+    metadata = load_part_metadata(root, part)
+    console.print(Panel(_yaml_dump(metadata), title="Part Metadata", border_style="cyan"))
+
+
+@show_app.command("chapter")
+def show_chapter(chapter: str = typer.Argument(..., help="Chapter title or slug.")) -> None:
+    root = project_root()
+    document = find_chapter(root, chapter)
+    metadata = {
+        "title": document.title,
+        "status": document.status,
+        "label": document.label,
+        "synopsis": document.synopsis,
+        "pov": document.pov,
+        "word_target": document.word_target,
+        "notes": document.notes,
+        "part": document.part,
+        "part_id": document.part_id,
+        "path": str(document.path),
+        "word_count": document.word_count,
+    }
+    console.print(Panel(_yaml_dump(metadata), title="Chapter Metadata", border_style="cyan"))
+
+
+@find_app.command("chapters")
+def find_chapter_matches(
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status."),
+    label: Optional[str] = typer.Option(None, "--label", help="Filter by label."),
+    pov: Optional[str] = typer.Option(None, "--pov", help="Filter by point of view."),
+    part: Optional[str] = typer.Option(None, "--part", help="Filter by part title or slug."),
+    text: Optional[str] = typer.Option(None, "--text", help="Search title, synopsis, notes, and body text."),
+) -> None:
+    root = project_root()
+    matches = find_chapters(root, status=status, label=label, pov=pov, part=part, text=text)
+    table = Table(title="Chapter Matches")
+    table.add_column("Part")
+    table.add_column("Chapter")
+    table.add_column("Status")
+    table.add_column("POV")
+    table.add_column("Path")
+
+    for chapter in matches:
+        table.add_row(
+            chapter.part,
+            chapter.title,
+            chapter.status,
+            chapter.pov or "",
+            str(chapter.path.relative_to(root)),
+        )
+
+    console.print(table)
+    console.print(f"Matches: {len(matches)}")
 
 
 @ai_app.command("summarize")
@@ -164,3 +280,9 @@ def ai_summarize(
             border_style="cyan",
         )
     )
+
+
+def _yaml_dump(data: dict) -> str:
+    import yaml
+
+    return yaml.safe_dump(data, sort_keys=False).strip()

@@ -4,6 +4,10 @@ version: 1
 compile:
   default_format: docx
   default_template: novel
+  output_filename: ''
+  include_title_page: true
+  include_part_headings: true
+  chapter_heading_style: title-only
 ai:
   enabled: false
   provider: openai

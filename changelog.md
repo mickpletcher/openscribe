@@ -52,6 +52,32 @@
 * updated outline, status, TUI, and compile exports to show part titles instead of storage folder ids
 * updated the sample project and README files to document the new part metadata file
 
+### Compile settings
+
+* added configurable compile settings in `.openscribe/project.yaml`
+* added built in compile templates named `novel`, `manuscript`, and `minimal`
+* added support for compile output filename override, title page toggle, part heading toggle, and chapter heading style
+* added `--template` support to `openscribe compile`
+* added tests that verify compile settings change the generated output
+
+### Continuous manuscript view
+
+* added `openscribe read` to print the manuscript as one continuous reading view
+* reused the compile assembly path so reading order and template behavior stay aligned with exports
+* added tests and README updates for the new reading command
+
+### Metadata commands
+
+* added `openscribe set part` and `openscribe set chapter` for metadata updates without hand editing YAML
+* added `openscribe show part` and `openscribe show chapter` for metadata inspection
+* added tests and README updates for the new metadata command surface
+
+### Search and query
+
+* added `openscribe find chapters` for chapter lookup by status, label, POV, part, and text
+* added tests for metadata filtering and text search
+* updated the README and sample project guide for the new query workflow
+
 ## 2026-05-14
 
 ### Initial scaffold

@@ -70,6 +70,10 @@ def init_project(base_path: Path, title: str) -> Path:
             "compile": {
                 "default_format": "docx",
                 "default_template": "novel",
+                "output_filename": "",
+                "include_title_page": True,
+                "include_part_headings": True,
+                "chapter_heading_style": "title-only",
             },
             "ai": {
                 "enabled": False,
@@ -178,6 +182,59 @@ def create_chapter(
     return chapter_path
 
 
+def update_part_title(root: Path, part: str, title: str) -> Path:
+    part_path = resolve_part_path(root, part)
+    write_yaml(part_path / PART_FILE, {"title": title})
+    return part_path
+
+
+def update_chapter_metadata(
+    root: Path,
+    chapter_ref: str,
+    *,
+    title: str | None = None,
+    status: str | None = None,
+    label: str | None = None,
+    synopsis: str | None = None,
+    pov: str | None = None,
+    word_target: int | None = None,
+    notes: str | None = None,
+) -> Path:
+    chapter = find_chapter(root, chapter_ref)
+    text = chapter.path.read_text(encoding="utf-8")
+    metadata, body = parse_frontmatter(text)
+    metadata = {
+        "title": metadata.get("title", chapter.title),
+        "status": metadata.get("status", chapter.status),
+        "label": metadata.get("label", chapter.label),
+        "synopsis": metadata.get("synopsis", chapter.synopsis),
+        "pov": metadata.get("pov", chapter.pov),
+        "word_target": int(metadata.get("word_target", chapter.word_target) or 0),
+        "notes": metadata.get("notes", chapter.notes),
+    }
+
+    if title is not None:
+        metadata["title"] = title
+    if status is not None:
+        metadata["status"] = status
+    if label is not None:
+        metadata["label"] = label
+    if synopsis is not None:
+        metadata["synopsis"] = synopsis
+    if pov is not None:
+        metadata["pov"] = pov
+    if word_target is not None:
+        metadata["word_target"] = word_target
+    if notes is not None:
+        metadata["notes"] = notes
+
+    chapter.path.write_text(
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+        encoding="utf-8",
+    )
+    return chapter.path
+
+
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     if not text.startswith("---\n"):
         return {}, text
@@ -240,3 +297,56 @@ def load_part_title(part_path: Path) -> str:
         if title:
             return title
     return part_path.name
+
+
+def load_part_metadata(root: Path, part: str) -> dict[str, Any]:
+    part_path = resolve_part_path(root, part)
+    metadata_path = part_path / PART_FILE
+    metadata = {}
+    if metadata_path.exists():
+        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+    metadata["title"] = str(metadata.get("title", load_part_title(part_path)))
+    metadata["part_id"] = part_path.name
+    metadata["path"] = str(part_path)
+    return metadata
+
+
+def find_chapters(
+    root: Path,
+    *,
+    status: str | None = None,
+    label: str | None = None,
+    pov: str | None = None,
+    part: str | None = None,
+    text: str | None = None,
+) -> list[ChapterDocument]:
+    chapters = list_chapters(root)
+    results: list[ChapterDocument] = []
+    part_filter = part.strip().lower() if part else None
+    text_filter = text.strip().lower() if text else None
+
+    for chapter in chapters:
+        if status and chapter.status.strip().lower() != status.strip().lower():
+            continue
+        if label and chapter.label.strip().lower() != label.strip().lower():
+            continue
+        if pov and chapter.pov.strip().lower() != pov.strip().lower():
+            continue
+        if part_filter and part_filter not in {
+            chapter.part.strip().lower(),
+            chapter.part_id.strip().lower(),
+            slugify(chapter.part),
+        }:
+            continue
+        if text_filter:
+            haystacks = [
+                chapter.title,
+                chapter.synopsis,
+                chapter.notes,
+                chapter.body,
+            ]
+            if not any(text_filter in haystack.lower() for haystack in haystacks):
+                continue
+        results.append(chapter)
+
+    return results
