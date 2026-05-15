@@ -11,11 +11,21 @@ requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Mick" }]
 dependencies = [
-  "openai>=1.40.0",
+  "EbookLib>=0.18",
+  "python-docx>=1.1.2",
   "pyyaml>=6.0.1",
+  "reportlab>=4.4.1",
   "rich>=13.7.1",
   "textual>=0.61.1",
   "typer>=0.12.3",
+]
+
+[project.optional-dependencies]
+ai = [
+  "anthropic>=0.57.1",
+  "google-genai>=1.29.0",
+  "mistralai>=1.9.3",
+  "openai>=1.40.0",
 ]
 
 [project.scripts]

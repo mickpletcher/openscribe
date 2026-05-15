@@ -5,11 +5,13 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.text import Text
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
+from openscribe.compile import CompileError, compile_project
 from openscribe.project import (
     create_chapter,
     create_part,
@@ -84,7 +86,7 @@ def outline() -> None:
         if part_node is None:
             part_node = tree.add(chapter.part)
             nodes[chapter.part] = part_node
-        part_node.add(f"{chapter.title} [{chapter.status}]")
+        part_node.add(Text(f"{chapter.title} [{chapter.status}]"))
 
     console.print(tree)
 
@@ -118,6 +120,19 @@ def status() -> None:
         )
 
     console.print(table)
+
+
+@app.command()
+def compile(
+    format_name: str = typer.Option("docx", "--format", help="Output format. Use docx, pdf, or epub."),
+    output: Optional[Path] = typer.Option(None, "--output", help="Output document path."),
+) -> None:
+    root = project_root()
+    try:
+        output_path = compile_project(root, format_name, output)
+    except CompileError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(f"Compiled manuscript to {output_path}")
 
 
 @app.command()

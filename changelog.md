@@ -1,5 +1,50 @@
 # changelog
 
+## 2026-05-15
+
+### Assessment and quality
+
+* added `assessment.md` with a current project review, risks, and next priority recommendations
+* fixed the outline status rendering bug so chapter status displays literally in the tree output
+* added a basic pytest suite for project initialization, chapter parsing, outline output, and compile output
+
+### Example project
+
+* added `examples/north-county/` as a checked in sample project
+* added sample manuscript chapters, project config, character notes, research notes, and revision notes
+* linked the sample project and assessment from `README.md`
+
+### Compile workflow
+
+* added `openscribe compile`
+* added manuscript export to Microsoft Word `.docx`
+* added manuscript export to `.pdf`
+* added manuscript export to `.epub`
+* added compile output defaults under the project `build/` folder
+* added `--format` and `--output` support for compile exports
+
+### Dependencies and docs
+
+* added `python-docx` for Word export
+* added `reportlab` for PDF export
+* added `EbookLib` for EPUB export
+* updated `README.md` to document the example project, compile command, and all supported export formats
+
+### AI provider parity
+
+* added Anthropic, Gemini, and Mistral provider support to `openscribe ai summarize`
+* added `openai-compatible-local` provider support for local model servers such as LM Studio, Ollama compatibility mode, vLLM, and LocalAI
+* changed AI provider SDK loading to lazy imports so non AI installs stay clean
+* moved AI SDKs into an optional `ai` extras group in `pyproject.toml`
+* updated `README.md` so the AI setup and provider list match the current code
+* added provider routing tests for OpenAI, Azure OpenAI, Anthropic, Gemini, and Mistral
+
+### AI documentation
+
+* added `docs/ai-setup.md` with separate AI setup guidance
+* documented cloud API key providers and on prem or local model server setup in one guide
+* linked the new AI setup guide from the root `README.md`
+
 ## 2026-05-14
 
 ### Initial scaffold

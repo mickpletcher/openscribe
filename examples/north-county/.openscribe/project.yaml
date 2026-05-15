@@ -1,0 +1,10 @@
+title: North County
+author: Mick
+version: 1
+compile:
+  default_format: docx
+  default_template: novel
+ai:
+  enabled: false
+  provider: openai
+  model: gpt-4.1

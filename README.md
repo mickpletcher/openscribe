@@ -5,9 +5,12 @@ Open source CLI and TUI writing environment for long form projects
 ## Project docs
 
 See [changelog.md](./changelog.md) for the repo change history.
+See [assessment.md](./assessment.md) for the current project assessment.
+See [docs/ai-setup.md](./docs/ai-setup.md) for AI setup with cloud API keys and local model servers.
 See [Spec 001](./specs/001-compile-pipeline/README.md) for the compile milestone definition.
 See [Spec 002](./specs/002-board-mode/README.md) for the planning board milestone definition.
 See [Spec 003](./specs/003-elements-and-relations/README.md) for the elements and relations milestone definition.
+See the [North County example project](./examples/north-county/README.md) for a concrete sample project.
 
 ## What it is
 
@@ -38,12 +41,15 @@ This first build includes:
 * project initialization
 * part creation
 * chapter creation
+* Word document export
+* PDF export
+* EPUB export
 * manuscript outline view
 * manuscript status view
 * lightweight Textual TUI
 * optional AI summary command for chapter review
 
-This build does not yet include compile, snapshots, editor launch commands, or search indexing.
+This build does not yet include snapshots, editor launch commands, or search indexing.
 
 ## Requirements
 
@@ -64,6 +70,12 @@ py -3.11 -m venv .venv
 python -m pip install -e .
 ```
 
+If you want AI provider support, install the optional AI extras too:
+
+```powershell
+python -m pip install -e ".[ai]"
+```
+
 If `openscribe` is not on your `PATH`, run it with:
 
 ```powershell
@@ -80,6 +92,9 @@ py -3.11 -m openscribe --help
 openscribe init "My Novel"
 openscribe new part "Opening"
 openscribe new chapter "The Beginning" --part "Opening"
+openscribe compile
+openscribe compile --format pdf
+openscribe compile --format epub
 openscribe outline
 openscribe status
 openscribe tui
@@ -102,94 +117,23 @@ If you do not want AI:
 
 Nothing else in the project depends on AI being enabled.
 
-The current code supports:
+Use the separate setup guide for full provider instructions:
 
-* `openai`
-* `azure-openai`
+* [AI setup guide](./docs/ai-setup.md)
 
-The README below also shows how to extend the same provider adapter pattern to:
+That guide covers:
 
-* Anthropic
-* Google Gemini
-* Mistral
+* AI install extras
+* cloud API key setup
+* on prem or local model setup
+* project config examples
+* troubleshooting
 
-### Current AI command
-
-Right now the CLI includes:
-
-```powershell
-openscribe ai summarize "The Beginning"
-```
-
-This reads a chapter body and returns:
-
-* a short overview paragraph
-* five concise bullet points
-* one revision risk to review next
-
-### Project config
-
-Each project now includes an AI section in `.openscribe/project.yaml`:
-
-```yaml
-ai:
-  enabled: false
-  provider: openai
-  model: gpt-4.1
-```
-
-To enable AI for a project:
-
-1. open `.openscribe/project.yaml`
-2. set `enabled: true`
-3. choose a provider
-4. choose the model or deployment name you want to use
-
-The default project config keeps AI disabled on purpose.
-
-### Environment variables
-
-#### OpenAI
-
-```powershell
-$env:OPENAI_API_KEY="your_key_here"
-```
-
-#### Azure OpenAI
-
-```powershell
-$env:AZURE_OPENAI_API_KEY="your_key_here"
-$env:AZURE_OPENAI_BASE_URL="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/"
-```
-
-#### Anthropic
-
-```powershell
-$env:ANTHROPIC_API_KEY="your_key_here"
-```
-
-#### Google Gemini
-
-```powershell
-$env:GEMINI_API_KEY="your_key_here"
-```
-
-#### Mistral
-
-```powershell
-$env:MISTRAL_API_KEY="your_key_here"
-```
-
-### First run
-
-Once the project config and environment variables are set:
+Current AI command:
 
 ```powershell
 openscribe ai summarize "The Beginning"
 ```
-
-If AI is disabled in the project config, `openscribe` stops with a clear message.
-If the expected environment variable is missing, it also stops with a clear message.
 
 ## AI architecture
 
@@ -270,7 +214,7 @@ ai:
   model: gpt-5.5
 ```
 
-This is the best first provider for `openscribe` because the current code already supports it.
+This is a good first provider for `openscribe` because the current code already supports it.
 
 ### Azure OpenAI
 
@@ -306,6 +250,40 @@ ai:
 
 In Azure, the `model` value should match your deployment name if that is how your environment is configured.
 
+### OpenAI compatible local
+
+This provider is for local servers that expose an OpenAI compatible API.
+
+Examples:
+
+* LM Studio
+* Ollama with OpenAI compatibility enabled
+* vLLM
+* LocalAI
+
+Suggested config:
+
+```yaml
+ai:
+  enabled: true
+  provider: openai-compatible-local
+  model: qwen3-8b
+```
+
+Set the local base URL before running:
+
+```powershell
+$env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="http://localhost:1234/v1"
+```
+
+If your local server expects a token, also set:
+
+```powershell
+$env:OPENAI_COMPATIBLE_LOCAL_API_KEY="local"
+```
+
+This provider uses the same OpenAI Python client as the hosted OpenAI path, but points it at your local server instead.
+
 ### Anthropic
 
 Anthropic fits well as a second direct provider adapter.
@@ -340,9 +318,7 @@ ai:
   model: claude-sonnet-4-5
 ```
 
-Implementation note:
-
-Add an `anthropic` adapter next to the existing OpenAI adapter and normalize its message output into plain text before returning to the CLI.
+The current code already supports this provider.
 
 ### Google Gemini
 
@@ -378,9 +354,7 @@ ai:
   model: gemini-2.5-flash
 ```
 
-Implementation note:
-
-Keep the Gemini adapter isolated because its request and response structures differ from OpenAI and Anthropic.
+The current code already supports this provider.
 
 ### Mistral
 
@@ -442,11 +416,11 @@ When you are ready to add the next provider:
 5. keep the CLI command surface the same
 6. document the provider in this README
 
-## Current AI limitation
+## Current AI scope
 
-Right now only `openai` and `azure-openai` are wired into the CLI.
-The README examples for Anthropic, Gemini, and Mistral show the intended adapter pattern, but those providers are not yet implemented in `src/openscribe/ai.py`.
-AI is optional and the base writing workflow is expected to work without any provider configuration.
+`openai`, `azure-openai`, `openai-compatible-local`, `anthropic`, `gemini`, and `mistral` are all wired into the CLI.
+AI is still optional.
+The base writing workflow works without any provider configuration or AI SDK install.
 
 ## First project
 
@@ -639,6 +613,44 @@ My Novel
 
 Use this when you want a quick structural view without opening the TUI.
 
+## Exporting your project
+
+You can export the current manuscript to Word or PDF.
+You can export the current manuscript to Word, PDF, or EPUB.
+
+Run:
+
+```powershell
+openscribe compile
+openscribe compile --format pdf
+openscribe compile --format epub
+```
+
+Default output paths:
+
+```text
+build/<project-title>.docx
+build/<project-title>.pdf
+build/<project-title>.epub
+```
+
+You can also choose the output path:
+
+```powershell
+openscribe compile --output .\build\north-county-review.docx
+openscribe compile --format pdf --output .\build\north-county-review.pdf
+openscribe compile --format epub --output .\build\north-county-review.epub
+```
+
+Current behavior:
+
+* chapter order follows numbered folders and files
+* empty chapters are skipped
+* the project title is added to the document
+* chapter text is written into a real output file
+
+Right now `docx`, `pdf`, and `epub` are implemented.
+
 ## Viewing status
 
 Run:
@@ -750,6 +762,19 @@ Prints project totals and a chapter table.
 openscribe status
 ```
 
+### `openscribe compile`
+
+Exports the current manuscript to a document file.
+
+```powershell
+openscribe compile
+openscribe compile --format pdf
+openscribe compile --format epub
+openscribe compile --output .\build\my-novel.docx
+openscribe compile --format pdf --output .\build\my-novel.pdf
+openscribe compile --format epub --output .\build\my-novel.epub
+```
+
 ### `openscribe tui`
 
 Opens the Textual interface.
@@ -769,12 +794,34 @@ openscribe init "North County"
 openscribe new part "Opening"
 openscribe new chapter "Arrival" --part "Opening" --pov "Eli" --word-target 1800
 openscribe new chapter "The Call" --part "Opening" --pov "Eli" --word-target 2200
+openscribe compile
+openscribe compile --format pdf
+openscribe compile --format epub
 openscribe outline
 openscribe status
 openscribe tui
 ```
 
 After that, open the chapter files in your editor and start writing.
+
+## Example project
+
+If you want to inspect a real sample project instead of creating one from scratch, use the checked in example at `examples/north-county/`.
+
+It includes:
+
+* a real `.openscribe/project.yaml`
+* a manuscript folder with one part and two chapters
+* sample character, research, and notes files
+
+Quick start:
+
+```powershell
+Set-Location .\examples\north-county
+py -3.11 -m openscribe outline
+py -3.11 -m openscribe status
+py -3.11 -m openscribe tui
+```
 
 ## Working with git
 
@@ -797,7 +844,7 @@ Right now:
 * word counts only reflect the chapter body text
 * part names are shown from folder names
 * chapter ordering is based on numbered filenames and folders
-* compile output is not built yet
+* compile currently exports to Word, PDF, and EPUB only
 * no query or search command exists yet
 
 ## Roadmap
