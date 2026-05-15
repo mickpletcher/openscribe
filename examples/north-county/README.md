@@ -16,6 +16,7 @@ This example includes:
 
 * `.openscribe/project.yaml`
 * one manuscript part
+* one `part.yaml` part metadata file
 * two chapter files
 * one character note
 * one research note

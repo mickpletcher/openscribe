@@ -41,8 +41,10 @@ def test_create_chapter_parses_metadata_and_body(tmp_path: Path) -> None:
     chapters = list_chapters(root)
 
     assert len(chapters) == 1
+    assert (root / "manuscript" / "part-01-opening" / "part.yaml").exists()
     chapter = chapters[0]
-    assert chapter.part == "part-01-opening"
+    assert chapter.part == "Opening"
+    assert chapter.part_id == "part-01-opening"
     assert chapter.title == "Arrival"
     assert chapter.status == "draft"
     assert chapter.label == "scene"

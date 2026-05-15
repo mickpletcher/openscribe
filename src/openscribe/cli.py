@@ -82,10 +82,10 @@ def outline() -> None:
     nodes: dict[str, Tree] = {}
 
     for chapter in chapters:
-        part_node = nodes.get(chapter.part)
+        part_node = nodes.get(chapter.part_id)
         if part_node is None:
             part_node = tree.add(chapter.part)
-            nodes[chapter.part] = part_node
+            nodes[chapter.part_id] = part_node
         part_node.add(Text(f"{chapter.title} [{chapter.status}]"))
 
     console.print(tree)

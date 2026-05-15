@@ -64,10 +64,10 @@ class OpenScribeApp(App[None]):
         root_node = binder.root
         parts: dict[str, object] = {}
         for chapter in self.chapters:
-            part_node = parts.get(chapter.part)
+            part_node = parts.get(chapter.part_id)
             if part_node is None:
                 part_node = root_node.add(chapter.part, expand=True)
-                parts[chapter.part] = part_node
+                parts[chapter.part_id] = part_node
             part_node.add_leaf(chapter.title, data=chapter.path.as_posix())
         root_node.expand()
 

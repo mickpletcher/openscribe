@@ -45,6 +45,13 @@
 * documented cloud API key providers and on prem or local model server setup in one guide
 * linked the new AI setup guide from the root `README.md`
 
+### Part display titles
+
+* added `part.yaml` metadata files inside manuscript part folders
+* separated part display titles from part folder names in the project model
+* updated outline, status, TUI, and compile exports to show part titles instead of storage folder ids
+* updated the sample project and README files to document the new part metadata file
+
 ## 2026-05-14
 
 ### Initial scaffold

@@ -9,6 +9,7 @@ import yaml
 
 PROJECT_DIR = ".openscribe"
 PROJECT_FILE = "project.yaml"
+PART_FILE = "part.yaml"
 
 
 @dataclass(slots=True)
@@ -23,6 +24,7 @@ class ChapterDocument:
     notes: str
     body: str
     part: str
+    part_id: str
     slug: str
 
     @property
@@ -119,6 +121,7 @@ def create_part(root: Path, title: str) -> Path:
     folder_name = f"part-{part_number:02d}-{slugify(title)}"
     part_path = root / "manuscript" / folder_name
     part_path.mkdir(parents=True, exist_ok=False)
+    write_yaml(part_path / PART_FILE, {"title": title})
     return part_path
 
 
@@ -127,7 +130,14 @@ def resolve_part_path(root: Path, part: str | None) -> Path:
     if part:
         part_slug = slugify(part)
         for child in manuscript.iterdir():
-            if child.is_dir() and (child.name == part or child.name.endswith(part_slug)):
+            if not child.is_dir():
+                continue
+            part_title = load_part_title(child)
+            if (
+                child.name == part
+                or child.name.endswith(part_slug)
+                or part_title.strip().lower() == part.strip().lower()
+            ):
                 return child
         raise FileNotFoundError(f"Part '{part}' was not found.")
 
@@ -186,6 +196,7 @@ def list_chapters(root: Path) -> list[ChapterDocument]:
     manuscript = root / "manuscript"
     chapters: list[ChapterDocument] = []
     for part_path in sorted([child for child in manuscript.iterdir() if child.is_dir()]):
+        part_title = load_part_title(part_path)
         for chapter_path in sorted(part_path.glob("*.md")):
             text = chapter_path.read_text(encoding="utf-8")
             metadata, body = parse_frontmatter(text)
@@ -200,7 +211,8 @@ def list_chapters(root: Path) -> list[ChapterDocument]:
                     word_target=int(metadata.get("word_target", 0) or 0),
                     notes=metadata.get("notes", ""),
                     body=body,
-                    part=part_path.name,
+                    part=part_title,
+                    part_id=part_path.name,
                     slug=chapter_path.stem,
                 )
             )
@@ -218,3 +230,13 @@ def find_chapter(root: Path, chapter_ref: str) -> ChapterDocument:
         if chapter.path.stem.lower() == normalized:
             return chapter
     raise FileNotFoundError(f"Chapter '{chapter_ref}' was not found.")
+
+
+def load_part_title(part_path: Path) -> str:
+    metadata_path = part_path / PART_FILE
+    if metadata_path.exists():
+        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+        title = str(metadata.get("title", "")).strip()
+        if title:
+            return title
+    return part_path.name

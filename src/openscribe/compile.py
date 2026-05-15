@@ -80,8 +80,8 @@ def _compile_project_to_docx(
 
     current_part = None
     for chapter in chapters:
-        if chapter.part != current_part:
-            current_part = chapter.part
+        if chapter.part_id != current_part:
+            current_part = chapter.part_id
             document.add_page_break()
             document.add_heading(chapter.part, level=1)
         document.add_heading(chapter.title, level=2)
@@ -134,8 +134,8 @@ def _compile_project_to_pdf(
 
     current_part = None
     for chapter in chapters:
-        if chapter.part != current_part:
-            current_part = chapter.part
+        if chapter.part_id != current_part:
+            current_part = chapter.part_id
             new_page()
             pdf.setFont("Times-Bold", 16)
             ensure_space(2)
@@ -178,13 +178,11 @@ def _compile_project_to_epub(
 
     epub_items: list[epub.EpubHtml] = []
     current_part = None
-    part_index = 0
 
     for chapter_index, chapter in enumerate(chapters, start=1):
         part_heading = ""
-        if chapter.part != current_part:
-            current_part = chapter.part
-            part_index += 1
+        if chapter.part_id != current_part:
+            current_part = chapter.part_id
             part_heading = f"<h1>{escape(chapter.part)}</h1>"
 
         chapter_item = epub.EpubHtml(

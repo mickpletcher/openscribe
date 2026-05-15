@@ -493,14 +493,24 @@ openscribe new part "Ending"
 ```
 
 Each part gets a numbered folder name so the manuscript keeps a stable order on disk.
+Each part folder also gets a `part.yaml` file that stores the display title.
 
 Example:
 
 ```text
 manuscript/
   part-01-opening/
+    part.yaml
   part-02-act-two/
+    part.yaml
   part-03-ending/
+    part.yaml
+```
+
+Example `part.yaml`:
+
+```yaml
+title: Opening
 ```
 
 ## Creating chapters
@@ -607,7 +617,7 @@ Example:
 
 ```text
 My Novel
-`-- part-01-opening
+`-- Opening
     `-- The Beginning [draft]
 ```
 
@@ -842,7 +852,7 @@ Right now:
 
 * the TUI is for browsing, not editing
 * word counts only reflect the chapter body text
-* part names are shown from folder names
+* part storage still uses numbered folder names on disk
 * chapter ordering is based on numbered filenames and folders
 * compile currently exports to Word, PDF, and EPUB only
 * no query or search command exists yet

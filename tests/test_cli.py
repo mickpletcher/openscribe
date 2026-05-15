@@ -37,6 +37,8 @@ def test_outline_shows_literal_status_text(tmp_path: Path, monkeypatch) -> None:
 
     result = runner.invoke(app, ["outline"])
     assert result.exit_code == 0
+    assert "Opening" in result.stdout
+    assert "part-01-opening" not in result.stdout
     assert "Arrival [draft]" in result.stdout
 
 
@@ -71,7 +73,7 @@ def test_compile_writes_docx_output(tmp_path: Path, monkeypatch) -> None:
     document = Document(output_path)
     paragraph_text = [paragraph.text for paragraph in document.paragraphs if paragraph.text]
     assert "North County" in paragraph_text
-    assert "part-01-opening" in paragraph_text
+    assert "Opening" in paragraph_text
     assert "Arrival" in paragraph_text
     assert "Eli stepped off the bus into wet summer heat." in paragraph_text
 
