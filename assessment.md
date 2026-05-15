@@ -152,7 +152,7 @@ Recovery needs the other half of the workflow.
 Deepen scene workflows.
 
 The repo has scene support and the outliner now exposes scene counts and titles.
-The next step is stronger scene reordering, scene metadata, and scene aware search or reporting.
+The next step is stronger scene reordering, scene metadata, scene aware search or reporting, and better split or merge helpers for large chapters.
 
 ### priority 3
 
@@ -177,6 +177,7 @@ The next value is tighter connection between them and the manuscript:
 1. chapter links to related elements
 2. chapter links to board notes
 3. board canvas behavior inside the TUI
+4. quick TUI actions for metadata edits, chapter promotion, and compile runs
 
 ## bottom line
 

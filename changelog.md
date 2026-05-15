@@ -216,3 +216,9 @@
 * added `openscribe workflow conference-materials` to create conference abstracts, submission checklists, talk outlines, slide drafts, speaker notes, and poster outlines
 * added regression tests for research paper compile output and conference material generation
 * updated `README.md`, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
+
+### Roadmap review refresh
+
+* moved snapshot restore and diff helpers up to the top roadmap tier
+* added roadmap items for scene aware search and reporting, TUI quick actions, and chapter split or merge helpers
+* refreshed `assessment.md` so the next priorities match the revised roadmap
