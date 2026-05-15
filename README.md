@@ -781,13 +781,16 @@ The current TUI has three areas:
 What it does:
 
 * reads the part and chapter structure from `manuscript/`
+* includes a search box for filtering chapters by title, synopsis, notes, and body text
 * lets you select a chapter from the binder tree
+* lets you select a part node to inspect part metadata
 * shows the chapter body in the preview pane
-* shows chapter metadata in the right panel
+* shows chapter metadata, part metadata, and project compile defaults in the right panel
 
 Current key:
 
 * `q` quits the app
+* `Ctrl+F` focuses the search box
 
 This is a read focused interface right now.
 It is meant for navigation and review, not inline editing yet.

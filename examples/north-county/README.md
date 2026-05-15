@@ -37,4 +37,6 @@ py -3.11 -m openscribe status
 py -3.11 -m openscribe tui
 ```
 
+Inside the TUI you can now use the search box to filter chapters and inspect part metadata from the binder.
+
 You can also open the Markdown files directly in your editor and compare them with the command output.

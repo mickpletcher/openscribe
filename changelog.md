@@ -78,6 +78,13 @@
 * added tests for metadata filtering and text search
 * updated the README and sample project guide for the new query workflow
 
+### TUI improvements
+
+* added a TUI search box for filtering chapters by title, synopsis, notes, and body text
+* added part metadata inspection from binder part nodes
+* added project compile setting visibility in the TUI metadata panel
+* added TUI tests for search filtering behavior
+
 ## 2026-05-14
 
 ### Initial scaffold
