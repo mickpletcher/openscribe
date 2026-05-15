@@ -5,12 +5,15 @@ Open source CLI and TUI writing environment for long form projects
 ## Project docs
 
 See [changelog.md](./changelog.md) for the repo change history.
+See [completed-upgrades.md](./completed-upgrades.md) for shipped roadmap work.
 See [assessment.md](./assessment.md) for the current project assessment.
 See [docs/ai-setup.md](./docs/ai-setup.md) for AI setup with cloud API keys and local model servers.
 See [Spec 001](./specs/001-compile-pipeline/README.md) for the compile milestone definition.
 See [Spec 002](./specs/002-board-mode/README.md) for the planning board milestone definition.
 See [Spec 003](./specs/003-elements-and-relations/README.md) for the elements and relations milestone definition.
 See the [North County example project](./examples/north-county/README.md) for a concrete sample project.
+`future-upgrades.md` stays local and should be refreshed as work ships and new ideas come up.
+`assessment.md` should be refreshed when project status or priorities change.
 
 ## What it is
 
@@ -775,7 +778,8 @@ Current behavior:
 * chapter order follows numbered folders and files
 * empty chapters are skipped
 * the project title is added to the document
-* chapter text is written into a real output file
+* Pandoc is used for `docx`, `pdf`, and `epub` when it is available on `PATH`
+* native export remains as a fallback when Pandoc is not installed
 
 Right now `docx`, `pdf`, and `epub` are implemented.
 
@@ -786,6 +790,7 @@ You can control default compile behavior in `.openscribe/project.yaml`:
 ```yaml
 compile:
   default_format: docx
+  backend: auto
   default_template: novel
   output_filename: ""
   include_title_page: true
@@ -802,11 +807,14 @@ Built in templates:
 Current settings:
 
 * `default_format` chooses the default export format
+* `backend` supports `auto`, `pandoc`, or `native`
 * `default_template` chooses the built in template preset
 * `output_filename` overrides the default build filename
 * `include_title_page` turns the title page on or off
 * `include_part_headings` turns part headings on or off
 * `chapter_heading_style` supports `title-only` or `chapter-number-title`
+
+If you want Pandoc output, install `pandoc` and keep `backend: auto` or set `backend: pandoc`.
 
 You can also override the template from the CLI:
 
@@ -853,7 +861,8 @@ What it does:
 * lets you select a chapter from the binder tree
 * lets you select a part node to inspect part metadata
 * shows the chapter body in the preview pane
-* shows chapter metadata, part metadata, and project compile defaults in the right panel
+* shows chapter status, label, synopsis, point of view, notes, and word target in the right panel
+* shows part metadata and project compile defaults in the right panel
 
 Current key:
 
@@ -1149,7 +1158,6 @@ Right now:
 
 Planned next:
 
-* compile pipeline with Pandoc
 * project templates
 * snapshots
 * derived search index

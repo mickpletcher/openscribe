@@ -111,6 +111,24 @@
 * added export regression coverage that verifies compiled `.docx` output preserves multi part chapter order
 * updated the README and sample project guide for reports, board mode, and element tracking
 
+### Pandoc compile backend
+
+* updated `openscribe compile` to prefer Pandoc for `docx`, `pdf`, and `epub` when `pandoc` is available on `PATH`
+* kept the native export path as a fallback when Pandoc is not installed
+* added compile backend settings so projects can choose `auto`, `pandoc`, or `native`
+* added tests for the Pandoc compile path and TUI metadata coverage
+
+### Upgrade tracking
+
+* added tracked `completed-upgrades.md` for shipped roadmap items
+* updated `README.md` to link `completed-upgrades.md` and clarify that `future-upgrades.md` stays local
+* refreshed `future-upgrades.md` so completed items move out and new ideas replace them
+
+### Assessment maintenance
+
+* refreshed `assessment.md` so it reflects the current CLI, TUI, compile, board, and element feature set
+* established `assessment.md` as a file that should be updated whenever repo changes materially affect project status or priorities
+
 ## 2026-05-14
 
 ### Initial scaffold

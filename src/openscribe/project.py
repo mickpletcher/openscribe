@@ -69,6 +69,7 @@ def init_project(base_path: Path, title: str) -> Path:
             "version": 1,
             "compile": {
                 "default_format": "docx",
+                "backend": "auto",
                 "default_template": "novel",
                 "output_filename": "",
                 "include_title_page": True,

@@ -38,3 +38,31 @@ def test_tui_search_filters_visible_chapters(tmp_path: Path) -> None:
     assert len(matches) == 1
     assert matches[0].title == "Arrival"
     assert "Matches: 1" in app._search_summary()
+
+
+def test_tui_chapter_summary_shows_first_class_metadata(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(
+        root,
+        "Arrival",
+        part="Opening",
+        status="revised",
+        label="setup",
+        synopsis="Eli reaches town.",
+        pov="Eli",
+        word_target=1800,
+        notes="Tighten the station scene.",
+    )
+
+    chapter = OpenScribeApp(root).chapters[0]
+    summary = OpenScribeApp._chapter_summary(chapter)
+
+    assert "Status: revised" in summary
+    assert "Label: setup" in summary
+    assert "POV: Eli" in summary
+    assert "Target: 1800" in summary
+    assert "Synopsis" in summary
+    assert "Eli reaches town." in summary
+    assert "Notes" in summary
+    assert "Tighten the station scene." in summary

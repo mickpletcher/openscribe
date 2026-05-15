@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 
 from docx import Document
 from ebooklib import epub
@@ -25,6 +28,7 @@ class CompileOptions:
     include_title_page: bool
     include_part_headings: bool
     chapter_heading_style: str
+    backend_name: str
 
 
 TEMPLATE_PRESETS = {
@@ -58,6 +62,16 @@ def compile_project(
     chapters = _compiled_chapters(root)
     target_path = output_path or default_output_path(root, project_title, options)
     target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if _can_use_pandoc(options):
+        _compile_project_with_pandoc(
+            project_title,
+            str(config.get("author", "")).strip(),
+            chapters,
+            target_path,
+            options,
+        )
+        return target_path
 
     if options.format_name == "docx":
         _compile_project_to_docx(
@@ -182,6 +196,7 @@ def _resolve_compile_options(
             else compile_config.get("include_part_headings", template_defaults["include_part_headings"])
         ),
         chapter_heading_style=chapter_heading_style,
+        backend_name=str(compile_config.get("backend", "auto") or "auto").strip().lower(),
     )
 
 
@@ -194,6 +209,91 @@ def _compiled_chapters(root: Path) -> list[ChapterDocument]:
     if not populated_chapters:
         raise CompileError("No manuscript body text exists yet. Add text to at least one chapter first.")
     return populated_chapters
+
+
+def _can_use_pandoc(options: CompileOptions) -> bool:
+    if options.backend_name == "native":
+        return False
+    if options.backend_name == "pandoc":
+        return True
+    return shutil.which("pandoc") is not None
+
+
+def _compile_project_with_pandoc(
+    project_title: str,
+    author: str,
+    chapters: list[ChapterDocument],
+    target_path: Path,
+    options: CompileOptions,
+) -> None:
+    pandoc_path = shutil.which("pandoc")
+    if pandoc_path is None:
+        raise CompileError(
+            "Pandoc was requested but is not installed or not available on PATH."
+        )
+
+    manuscript_text = _pandoc_markdown(project_title, author, chapters, options)
+    with tempfile.TemporaryDirectory(prefix="openscribe-pandoc-") as temp_dir:
+        temp_path = Path(temp_dir)
+        source_path = temp_path / "manuscript.md"
+        source_path.write_text(manuscript_text, encoding="utf-8")
+
+        command = [
+            pandoc_path,
+            str(source_path),
+            "--from",
+            "markdown",
+            "--to",
+            options.format_name,
+            "--output",
+            str(target_path),
+            "--standalone",
+            "--metadata",
+            f"title={project_title}",
+        ]
+        if author:
+            command.extend(["--metadata", f"author={author}"])
+
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            error_text = (result.stderr or result.stdout or "").strip()
+            raise CompileError(f"Pandoc export failed. {error_text or 'Unknown Pandoc error.'}")
+
+
+def _pandoc_markdown(
+    project_title: str,
+    author: str,
+    chapters: list[ChapterDocument],
+    options: CompileOptions,
+) -> str:
+    lines: list[str] = [f"% {project_title}"]
+    if author:
+        lines.append(f"% {author}")
+    lines.append("%")
+    lines.append("")
+
+    if options.include_title_page:
+        lines.append(f"# {project_title}")
+        lines.append("")
+        if author:
+            lines.append(author)
+            lines.append("")
+
+    current_part = None
+    for chapter_number, chapter in enumerate(chapters, start=1):
+        if chapter.part_id != current_part:
+            current_part = chapter.part_id
+            if options.include_part_headings:
+                lines.append(f"# {chapter.part}")
+                lines.append("")
+
+        lines.append(f"## {_chapter_heading(chapter.title, chapter_number, options)}")
+        lines.append("")
+        for block in _paragraphs(chapter.body):
+            lines.append(block)
+            lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def _compile_project_to_docx(

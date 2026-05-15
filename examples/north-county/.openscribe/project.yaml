@@ -3,6 +3,7 @@ author: Mick
 version: 1
 compile:
   default_format: docx
+  backend: auto
   default_template: novel
   output_filename: ''
   include_title_page: true

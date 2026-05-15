@@ -2,159 +2,161 @@
 
 ## current state
 
-`openscribe` has a real first slice.
-The repo is not empty scaffolding anymore.
-You can initialize a project, create parts, create chapters, view an outline, view status, and open a basic read only TUI.
+`openscribe` is now a real manuscript workflow tool.
+It is past the early scaffold stage.
+The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, element tracking, continuous reading, and export.
 
-The project also has a clean milestone structure under `specs/`.
-That part is ahead of the code, but it is useful because the next phases are already broken into requirements, spec, plan, and task files.
+The product shape is clear now.
+Markdown and YAML remain the source of truth.
+The CLI is the primary surface.
+The TUI is a read and inspection surface with metadata visibility and search.
 
 ## what is working now
 
-The core manuscript path is functional.
-I verified the CLI help entrypoint and a smoke flow for:
+The manuscript path is real and usable:
 
-1. `openscribe init`
-2. `openscribe new part`
-3. `openscribe new chapter`
-4. `openscribe outline`
-5. `openscribe status`
+1. initialize a project
+2. create parts and chapters
+3. edit chapter metadata from the CLI
+4. query chapters by status, label, point of view, part, or text
+5. inspect reports and word totals
+6. read the manuscript as one continuous document
+7. export to `docx`, `pdf`, and `epub`
 
-The file based model is the right foundation for this kind of tool.
-Plain Markdown plus YAML frontmatter is a good fit for git friendly long form writing.
-The repo also keeps the app shape small enough to change without a rewrite.
+The planning and tracking layer is also real:
+
+1. board notes can be added, grouped, linked, and promoted into chapters
+2. elements can be tracked as characters, settings, and items
+3. aliases and relations are stored explicitly
+4. chapter appearance lookup works across chapter text and metadata
+
+The quality baseline is better than it was at the start.
+There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.
 
 ## strengths
 
-### clear product direction
+### clear file first model
 
-The repo already has a coherent opinion.
-Markdown files are the source of truth.
-The app is a thin layer over readable project files.
-That is the right differentiator.
+The strongest part of the repo is still the storage model.
+Project data is readable on disk.
+That keeps the tool compatible with git, backups, and outside editors.
 
-### simple codebase
+### better manuscript model
 
-The current package is small.
-`project.py` owns most of the file and metadata behavior.
-`cli.py` is easy to follow.
-That keeps the next milestone cheap to change.
+The app has moved past raw folder browsing.
+Parts have display titles.
+Chapters have first class metadata.
+Exports, status views, read mode, and queries all reuse the same ordered manuscript model.
 
-### decent spec discipline
+### practical feature layering
 
-The numbered spec packages are useful.
-They make the roadmap concrete instead of hand waving future ideas.
+The feature order has mostly been good.
+Compile, read, metadata editing, and search landed before heavier visual features.
+That kept the core writing path ahead of the novelty layer.
+
+### healthier test position
+
+This is no longer a no test repo.
+There is still room to grow, but the project now has enough coverage to change the core model with less risk.
 
 ## current issues
 
-### 1. the docs are broader than the shipped product
+### 1. the TUI still lags behind the CLI
 
-The README is strong on direction, but a lot of it is still future facing.
-The project currently ships one AI command and two provider paths, yet the README spends a large amount of space on provider expansion and future patterns.
-That pulls attention away from the actual writing workflow.
+The CLI is now the real control surface.
+The TUI is useful, but it is still mostly inspection and navigation.
+Board workflows, reports, element editing, and metadata updates are still command first.
 
-### 2. the part model is too thin
+### 2. compile formatting is still fairly shallow
 
-Parts only exist as numbered folder names.
-There is no part metadata file and no separate display title.
-That means the user sees storage ids like `part-01-opening` in the outline, status output, and TUI.
+Pandoc support improves the backend story, but the formatting model is still small.
+The current templates are useful, not rich.
+There is no deeper profile system yet for print, ebook, and submission output.
 
-That is acceptable for a first pass.
-It will become a real constraint once compile, board promotion, and element linking need stable human readable part identity.
+### 3. board mode is functional but still early
 
-### 3. one visible output bug already exists
+The board model is right sized for now, but still simple.
+It stores notes, groups, links, and promotion paths.
+It does not yet provide a stronger visual layout or a dedicated TUI mode.
 
-The outline command tries to print chapter status as `Title [status]`, but Rich treats square brackets as markup.
-In a real run the status text does not render as intended.
+### 4. element appearance tracking is still heuristic
 
-### 4. optional AI is not really optional at install time
+The current appears in model is derived from name and alias matches in chapter text and metadata.
+That is acceptable for now.
+It will eventually need scene awareness or explicit tagging if the repo grows into denser manuscripts.
 
-The product story says AI is optional.
-That is true at runtime for feature use.
-It is not true in packaging.
+### 5. roadmap discipline depends on keeping the docs current
 
-`openai` is a required dependency in `pyproject.toml`, and `cli.py` imports the AI module at startup.
-So the base install still carries AI client dependency even for users who only want the manuscript tool.
+The repo now has several source of truth files:
 
-### 5. there is no test safety yet
+1. `assessment.md`
+2. `changelog.md`
+3. `completed-upgrades.md`
+4. local `future-upgrades.md`
 
-I did not find an automated test suite or CI validation path in the repo.
-That is normal for this stage, but it matters now because the next milestones touch parsing, ordered assembly, promotion, and compile behavior.
-Those areas will regress easily without even a small smoke test layer.
+That is the right structure.
+It only works if those files stay synchronized every time the repo changes.
 
 ## delivery assessment
 
-The repo feels like a solid prototype, not a v1.
+The repo now feels like a strong CLI first alpha rather than a prototype.
 
-That is not a criticism.
-It means the foundation is good enough to keep building on, but the next work should tighten the core before chasing more feature surface.
+That matters.
+The tool can already support a real writing loop:
 
-Right now the value is:
+1. plan with notes or board items
+2. create or promote manuscript structure
+3. write in Markdown
+4. inspect metadata and progress
+5. read continuously
+6. export to common output formats
 
-1. file based manuscript setup
-2. basic structure management
-3. a simple review interface
-4. a real roadmap
-
-Right now the gaps are:
-
-1. no compile path
-2. no editing inside the TUI
-3. no tests
-4. no stronger domain model for parts and future entities
-5. no proof yet that the spec milestones can land without refactoring the current data model
+That is enough to validate the product direction with actual use.
 
 ## what to do next
 
 ### priority 1
 
-Build the compile milestone before board mode or elements.
+Bring the TUI closer to the CLI.
 
-Reason:
-compile is the first feature that proves the manuscript structure is worth using in real work.
-It also forces the codebase to define ordered assembly, title handling, and project metadata more cleanly.
+The biggest usability gap now is not raw capability.
+It is surface consistency.
+Reports, board activity, element inspection, and metadata editing should become easier to use without dropping back to commands for every action.
 
 ### priority 2
 
-Add a real part model before the compile work goes too far.
+Add richer compile profiles.
 
-Minimum version:
+The next compile step should separate output intent more clearly:
 
-1. keep numbered folders on disk
-2. add a part metadata file or frontmatter source for display title
-3. separate storage slug from user facing title
+1. print
+2. ebook
+3. submission
+
+That will make the export story feel finished instead of merely present.
 
 ### priority 3
 
-Add a tiny test layer.
+Add reordering and stronger outliner behavior.
 
-At minimum:
-
-1. project init test
-2. part creation numbering test
-3. chapter creation and frontmatter parse test
-4. outline or status smoke test
-5. compile assembly ordering test once compile exists
+The current numbered file model is stable, but still rigid.
+Explicit part and chapter reorder commands would improve everyday manuscript work.
 
 ### priority 4
 
-Trim the README so shipped behavior is always obvious.
+Deepen the board and element integration.
 
-Keep the AI section shorter until more of it is real.
-The strongest pitch today is the Markdown first writing workflow, not multi provider AI.
+The board and element features exist now.
+The next value is tighter connection between them and the manuscript:
+
+1. chapter links to related elements
+2. chapter links to board notes
+3. more direct TUI visibility
 
 ## bottom line
 
-The project is pointed in the right direction.
-The core idea is good.
-The repo is already useful as a prototype.
+The repo has crossed the important threshold.
+It is no longer proving that the app can exist.
+It is now proving that the workflow can hold together.
 
-The next success condition is not more breadth.
-It is proving one full manuscript lifecycle path:
-
-1. create structure
-2. write in Markdown
-3. inspect in CLI or TUI
-4. compile to output
-
-If that path gets solid, the rest of the roadmap has something real to build on.
+The next stage should focus on tightening the surfaces that already exist instead of adding broad new domains too early.

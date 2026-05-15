@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 import yaml
 
 from openscribe.cli import app
+import openscribe.compile as compile_module
 
 
 runner = CliRunner()
@@ -180,6 +181,48 @@ def test_compile_respects_project_compile_settings(tmp_path: Path, monkeypatch) 
     assert "North County" not in paragraph_text
     assert "Opening" not in paragraph_text
     assert "Chapter 1: Arrival" in paragraph_text
+
+
+def test_compile_prefers_pandoc_when_available(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Eli stepped off the bus into wet summer heat.\n",
+        encoding="utf-8",
+    )
+
+    command_log: list[list[str]] = []
+
+    def fake_run(command: list[str], capture_output: bool, text: bool, check: bool):
+        command_log.append(command)
+        output_path = Path(command[command.index("--output") + 1])
+        output_path.write_text("pandoc output", encoding="utf-8")
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr(compile_module.shutil, "which", lambda name: "pandoc.exe" if name == "pandoc" else None)
+    monkeypatch.setattr(compile_module.subprocess, "run", fake_run)
+
+    result = runner.invoke(app, ["compile"])
+    assert result.exit_code == 0
+
+    output_path = tmp_path / "build" / "north-county.docx"
+    assert output_path.exists()
+    assert output_path.read_text(encoding="utf-8") == "pandoc output"
+    assert command_log
+    assert command_log[0][0] == "pandoc.exe"
+    assert "--to" in command_log[0]
+    assert "docx" in command_log[0]
 
 
 def test_read_outputs_continuous_manuscript_using_template(tmp_path: Path, monkeypatch) -> None:
