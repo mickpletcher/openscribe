@@ -215,6 +215,9 @@ marimo/_lsp/
 __marimo__/
 
 # Streamlit
+
+#File Exclusions
+openscribe.code-workspace
 .streamlit/secrets.toml
 
 # Private planning docs
