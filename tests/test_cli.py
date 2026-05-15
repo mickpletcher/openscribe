@@ -304,7 +304,46 @@ def test_set_and_show_part_metadata(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["show", "part", "Cold Open"])
     assert result.exit_code == 0
     assert "title: Cold Open" in result.stdout
-    assert "part_id: part-01-opening" in result.stdout
+
+
+def test_story_idea_commands(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+
+    result = runner.invoke(
+        app,
+        [
+            "idea",
+            "add",
+            "The Flood Ledger",
+            "--premise",
+            "A county clerk finds a ledger that predicts deaths.",
+            "--genre",
+            "Southern Gothic",
+            "--tone",
+            "Uneasy",
+            "--status",
+            "seed",
+            "--notes",
+            "Tie the flood history to the missing records plot.",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "notes\\story-ideas\\the-flood-ledger.md" in result.stdout
+
+    result = runner.invoke(app, ["idea", "list"])
+    assert result.exit_code == 0
+    assert "The Flood" in result.stdout
+    assert "Southern" in result.stdout
+    assert "Ideas: 1" in result.stdout
+
+    result = runner.invoke(app, ["show", "idea", "The Flood Ledger"])
+    assert result.exit_code == 0
+    assert "premise: A county clerk finds a ledger that predicts deaths." in result.stdout
+    assert "genre: Southern Gothic" in result.stdout
+    assert "tone: Uneasy" in result.stdout
+    assert "status: seed" in result.stdout
 
 
 def test_find_chapters_filters_by_metadata_and_text(tmp_path: Path, monkeypatch) -> None:

@@ -47,6 +47,7 @@ This first build includes:
 * batch chapter metadata updates
 * chapter search and query
 * project reports
+* story idea capture for future books
 * planning board notes and promotion
 * element, alias, relation, and appears in tracking
 * Word document export
@@ -479,6 +480,10 @@ Use this for character profiles, timelines, arcs, and relationship notes.
 `notes/`
 
 Use this for loose ideas, outline fragments, revision notes, and planning.
+
+`notes/story-ideas/`
+
+Use this for structured new book ideas that are not part of the current manuscript yet.
 
 ## Basic workflow
 
@@ -1039,6 +1044,30 @@ Promotes a board note into manuscript structure.
 openscribe board promote note-001 --part Opening --chapter "Station Secret"
 ```
 
+### `openscribe idea add`
+
+Adds a structured story idea for a future book.
+
+```powershell
+openscribe idea add "The Flood Ledger" --premise "A county clerk finds a ledger that predicts deaths." --genre "Southern Gothic" --tone "Uneasy"
+```
+
+### `openscribe idea list`
+
+Lists stored story ideas.
+
+```powershell
+openscribe idea list
+```
+
+### `openscribe show idea`
+
+Shows one story idea with all stored fields.
+
+```powershell
+openscribe show idea "The Flood Ledger"
+```
+
 ### `openscribe element add`
 
 Adds an element record.
@@ -1096,6 +1125,7 @@ openscribe find chapters --status revised
 openscribe report project
 openscribe board note add "Ledger clue" --body "Eli finds the missing ledger." --group plot
 openscribe board promote note-001 --part Opening --chapter "Ledger clue"
+openscribe idea add "The Flood Ledger" --premise "A county clerk finds a ledger that predicts deaths."
 openscribe element add character "Eli Harper" --notes "Main point of view"
 openscribe compile
 openscribe compile --format pdf

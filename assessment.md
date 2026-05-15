@@ -20,8 +20,9 @@ The manuscript path is real and usable:
 3. edit chapter metadata from the CLI
 4. query chapters by status, label, point of view, part, or text
 5. inspect reports and word totals
-6. read the manuscript as one continuous document
-7. export to `docx`, `pdf`, and `epub`
+6. capture structured story ideas for future books
+7. read the manuscript as one continuous document
+8. export to `docx`, `pdf`, and `epub`
 
 The planning and tracking layer is also real:
 
@@ -29,6 +30,7 @@ The planning and tracking layer is also real:
 2. elements can be tracked as characters, settings, and items
 3. aliases and relations are stored explicitly
 4. chapter appearance lookup works across chapter text and metadata
+5. story ideas can be stored separately from the active manuscript
 
 The quality baseline is better than it was at the start.
 There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.

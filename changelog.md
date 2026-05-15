@@ -129,6 +129,13 @@
 * refreshed `assessment.md` so it reflects the current CLI, TUI, compile, board, and element feature set
 * established `assessment.md` as a file that should be updated whenever repo changes materially affect project status or priorities
 
+### Story ideas
+
+* added `openscribe idea add` for capturing structured new book ideas under `notes/story-ideas/`
+* added `openscribe idea list` and `openscribe show idea` for inspecting stored story ideas
+* added model and CLI tests for story idea creation and listing
+* updated the README, sample project, completed upgrades log, future upgrades file, and assessment for the new idea workflow
+
 ## 2026-05-14
 
 ### Initial scaffold

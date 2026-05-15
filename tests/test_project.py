@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openscribe.project import create_chapter, create_part, init_project, list_chapters
+from openscribe.project import create_chapter, create_part, create_story_idea, init_project, list_chapters, list_story_ideas
 
 
 def test_init_project_creates_expected_structure(tmp_path: Path) -> None:
@@ -53,3 +53,28 @@ def test_create_chapter_parses_metadata_and_body(tmp_path: Path) -> None:
     assert chapter.synopsis == "Eli arrives in town."
     assert chapter.notes == "Tighten the second paragraph."
     assert chapter.word_count == 9
+
+
+def test_create_story_idea_creates_structured_note(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+
+    idea_path = create_story_idea(
+        root,
+        "The Flood Ledger",
+        premise="A county clerk finds a ledger that predicts deaths.",
+        genre="Southern Gothic",
+        tone="Uneasy",
+        status="seed",
+        notes="Tie the flood history to the missing records plot.",
+    )
+
+    assert idea_path.exists()
+    ideas = list_story_ideas(root)
+
+    assert len(ideas) == 1
+    assert ideas[0].title == "The Flood Ledger"
+    assert ideas[0].premise == "A county clerk finds a ledger that predicts deaths."
+    assert ideas[0].genre == "Southern Gothic"
+    assert ideas[0].tone == "Uneasy"
+    assert ideas[0].status == "seed"
+    assert "missing records plot" in ideas[0].body

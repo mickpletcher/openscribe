@@ -19,10 +19,13 @@ from openscribe.project import (
     chapter_report,
     create_chapter,
     create_part,
+    create_story_idea,
     find_chapter,
     find_chapters,
+    find_story_idea,
     init_project,
     list_chapters,
+    list_story_ideas,
     load_part_metadata,
     load_project_config,
     project_root,
@@ -44,6 +47,7 @@ board_link_app = typer.Typer(help="Board link workflows.")
 board_group_app = typer.Typer(help="Board grouping workflows.")
 element_app = typer.Typer(help="Element and relation workflows.")
 element_alias_app = typer.Typer(help="Element alias workflows.")
+idea_app = typer.Typer(help="Story idea workflows.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
 app.add_typer(set_app, name="set")
@@ -52,6 +56,7 @@ app.add_typer(find_app, name="find")
 app.add_typer(report_app, name="report")
 app.add_typer(board_app, name="board")
 app.add_typer(element_app, name="element")
+app.add_typer(idea_app, name="idea")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
 board_app.add_typer(board_group_app, name="group")
@@ -99,6 +104,28 @@ def new_chapter(
         notes=notes,
     )
     console.print(f"Created chapter {chapter_path.relative_to(root)}")
+
+
+@idea_app.command("add")
+def idea_add(
+    title: str = typer.Argument(..., help="Story idea title."),
+    premise: str = typer.Option("", "--premise", help="Short story premise."),
+    genre: str = typer.Option("", "--genre", help="Story genre."),
+    tone: str = typer.Option("", "--tone", help="Story tone."),
+    status: str = typer.Option("seed", "--status", help="Idea status."),
+    notes: str = typer.Option("", "--notes", help="Longer idea notes."),
+) -> None:
+    root = project_root()
+    idea_path = create_story_idea(
+        root,
+        title,
+        premise=premise,
+        genre=genre,
+        tone=tone,
+        status=status,
+        notes=notes,
+    )
+    console.print(f"Added story idea {idea_path.relative_to(root)}")
 
 
 @app.command()
@@ -279,6 +306,22 @@ def show_chapter(chapter: str = typer.Argument(..., help="Chapter title or slug.
     console.print(Panel(_yaml_dump(metadata), title="Chapter Metadata", border_style="cyan"))
 
 
+@show_app.command("idea")
+def show_idea(idea: str = typer.Argument(..., help="Story idea title or slug.")) -> None:
+    root = project_root()
+    record = find_story_idea(root, idea)
+    metadata = {
+        "title": record.title,
+        "premise": record.premise,
+        "genre": record.genre,
+        "tone": record.tone,
+        "status": record.status,
+        "path": str(record.path),
+        "notes": record.body,
+    }
+    console.print(Panel(_yaml_dump(metadata), title="Story Idea", border_style="cyan"))
+
+
 @find_app.command("chapters")
 def find_chapter_matches(
     status: Optional[str] = typer.Option(None, "--status", help="Filter by status."),
@@ -321,6 +364,30 @@ def report_project() -> None:
     _print_counter_table("By POV", summary["by_pov"])
     _print_counter_table("By Part", summary["by_part"])
     _print_counter_table("Part Word Totals", summary["part_word_totals"], value_header="Words")
+
+
+@idea_app.command("list")
+def idea_list() -> None:
+    root = project_root()
+    ideas = list_story_ideas(root)
+    table = Table(title="Story Ideas")
+    table.add_column("Title")
+    table.add_column("Status")
+    table.add_column("Genre")
+    table.add_column("Tone")
+    table.add_column("Premise")
+    table.add_column("Path")
+    for idea in ideas:
+        table.add_row(
+            idea.title,
+            idea.status,
+            idea.genre,
+            idea.tone,
+            idea.premise,
+            str(idea.path.relative_to(root)),
+        )
+    console.print(table)
+    console.print(f"Ideas: {len(ideas)}")
 
 
 @board_note_app.command("add")

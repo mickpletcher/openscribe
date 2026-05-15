@@ -10,6 +10,7 @@ import yaml
 PROJECT_DIR = ".openscribe"
 PROJECT_FILE = "project.yaml"
 PART_FILE = "part.yaml"
+STORY_IDEAS_DIR = "notes/story-ideas"
 
 
 @dataclass(slots=True)
@@ -30,6 +31,18 @@ class ChapterDocument:
     @property
     def word_count(self) -> int:
         return len([word for word in re.findall(r"\b[\w']+\b", self.body)])
+
+
+@dataclass(slots=True)
+class StoryIdea:
+    path: Path
+    title: str
+    premise: str
+    genre: str
+    tone: str
+    status: str
+    body: str
+    slug: str
 
 
 def slugify(value: str) -> str:
@@ -58,6 +71,7 @@ def init_project(base_path: Path, title: str) -> Path:
         project_path / "research",
         project_path / "characters",
         project_path / "notes",
+        project_path / STORY_IDEAS_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -128,6 +142,43 @@ def create_part(root: Path, title: str) -> Path:
     part_path.mkdir(parents=True, exist_ok=False)
     write_yaml(part_path / PART_FILE, {"title": title})
     return part_path
+
+
+def story_ideas_path(root: Path) -> Path:
+    return root / STORY_IDEAS_DIR
+
+
+def create_story_idea(
+    root: Path,
+    title: str,
+    *,
+    premise: str = "",
+    genre: str = "",
+    tone: str = "",
+    status: str = "seed",
+    notes: str = "",
+) -> Path:
+    ideas_dir = story_ideas_path(root)
+    ideas_dir.mkdir(parents=True, exist_ok=True)
+    slug = slugify(title)
+    idea_path = ideas_dir / f"{slug}.md"
+    suffix = 2
+    while idea_path.exists():
+        idea_path = ideas_dir / f"{slug}-{suffix}.md"
+        suffix += 1
+
+    frontmatter = {
+        "title": title,
+        "premise": premise,
+        "genre": genre,
+        "tone": tone,
+        "status": status,
+    }
+    idea_path.write_text(
+        f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n{notes.strip()}".rstrip() + "\n",
+        encoding="utf-8",
+    )
+    return idea_path
 
 
 def resolve_part_path(root: Path, part: str | None) -> Path:
@@ -290,6 +341,41 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     raw_frontmatter = text[4 : text.find("\n---\n")]
     metadata = yaml.safe_load(raw_frontmatter) or {}
     return metadata, remainder.lstrip("\n")
+
+
+def list_story_ideas(root: Path) -> list[StoryIdea]:
+    ideas_dir = story_ideas_path(root)
+    if not ideas_dir.exists():
+        return []
+
+    ideas: list[StoryIdea] = []
+    for idea_path in sorted(ideas_dir.glob("*.md")):
+        metadata, body = parse_frontmatter(idea_path.read_text(encoding="utf-8"))
+        ideas.append(
+            StoryIdea(
+                path=idea_path,
+                title=str(metadata.get("title", idea_path.stem)),
+                premise=str(metadata.get("premise", "")),
+                genre=str(metadata.get("genre", "")),
+                tone=str(metadata.get("tone", "")),
+                status=str(metadata.get("status", "seed")),
+                body=body,
+                slug=idea_path.stem,
+            )
+        )
+    return ideas
+
+
+def find_story_idea(root: Path, idea_ref: str) -> StoryIdea:
+    normalized = idea_ref.strip().lower()
+    for idea in list_story_ideas(root):
+        if idea.slug.lower() == normalized:
+            return idea
+        if idea.title.strip().lower() == normalized:
+            return idea
+        if idea.path.stem.lower() == normalized:
+            return idea
+    raise FileNotFoundError(f"Story idea '{idea_ref}' was not found.")
 
 
 def list_chapters(root: Path) -> list[ChapterDocument]:

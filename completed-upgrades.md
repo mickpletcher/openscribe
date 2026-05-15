@@ -15,3 +15,7 @@ Tracked record of roadmap items that shipped.
 
 * added tests for project initialization, file creation, frontmatter parsing, and manuscript ordering
 * added larger regression coverage for multi part read and export flows
+
+### Planning and idea capture
+
+* added structured story idea capture, listing, and inspection for future books under `notes/story-ideas/`
