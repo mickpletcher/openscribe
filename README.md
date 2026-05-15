@@ -42,7 +42,7 @@ That works until you want automation, version control, or direct access to your 
 This first build includes:
 
 * project initialization
-* project templates for fiction, nonfiction, technical writing, and screenwriting
+* project templates for fiction, nonfiction, technical writing, screenwriting, and research
 * user defined project templates
 * part creation
 * chapter creation
@@ -57,6 +57,8 @@ This first build includes:
 * planning board notes, layout, visual board view, and promotion
 * element, alias, relation, and appears in tracking
 * nonfiction section and screenplay scene workflow helpers
+* research paper section scaffolding
+* conference material and presentation draft scaffolding
 * Word document export
 * PDF export
 * EPUB export
@@ -64,11 +66,11 @@ This first build includes:
 * detailed outliner view with metadata, scenes, and word totals
 * manuscript status view
 * chapter and part reordering commands
-* compile profiles for print, ebook, and submission output
+* compile profiles for print, ebook, submission, and research paper output
 * wider Textual TUI views for manuscript, characters, research, notes, story ideas, and elements
 * optional AI summary command for chapter review
 
-This build does not yet include editor launch commands, research paper compile output, or snapshot restore commands.
+This build does not yet include editor launch commands, richer research citation tracking, or snapshot restore commands.
 
 ## Requirements
 
@@ -113,6 +115,7 @@ openscribe new part "Opening"
 openscribe new chapter "The Beginning" --part "Opening"
 openscribe new scene "Cold Open" --chapter "The Beginning"
 openscribe workflow screenplay-scene "EXT. ROAD - NIGHT" --chapter "The Beginning"
+openscribe workflow research-paper --part "Paper"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
@@ -129,6 +132,20 @@ openscribe tui
 
 If you only want the writing tool, you can stop there.
 You can ignore the rest of the AI section completely.
+
+## Research workflow
+
+If you are using `openscribe` for papers or conference work:
+
+```powershell
+openscribe init "Grid Study" --template research
+openscribe workflow research-paper --part "Paper" --include-appendix
+openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
+openscribe compile --profile research-paper
+openscribe compile --profile research-paper --format pdf
+```
+
+Use this when you want a section based paper draft plus presentation support files.
 
 ## AI setup
 
@@ -870,6 +887,7 @@ Built in templates:
 * `novel`
 * `manuscript`
 * `minimal`
+* `academic`
 
 Current settings:
 
@@ -880,13 +898,14 @@ Current settings:
 * `output_filename` overrides the default build filename
 * `include_title_page` turns the title page on or off
 * `include_part_headings` turns part headings on or off
-* `chapter_heading_style` supports `title-only` or `chapter-number-title`
+* `chapter_heading_style` supports `title-only`, `chapter-number-title`, or `section-number-title`
 
 Built in compile profiles:
 
 * `print` writes a `docx` with book style defaults
 * `ebook` writes an `epub` with book style defaults
 * `submission` writes a `docx` with manuscript style chapter headings and no part headings
+* `research-paper` writes a `docx` with academic style numbered section headings
 
 If you want Pandoc output, install `pandoc` and keep `backend: auto` or set `backend: pandoc`.
 
@@ -896,7 +915,9 @@ You can also override the profile or template from the CLI:
 openscribe compile --profile print
 openscribe compile --profile ebook
 openscribe compile --profile submission
+openscribe compile --profile research-paper
 openscribe compile --template manuscript
+openscribe compile --template academic
 openscribe compile --format pdf --template minimal
 ```
 
@@ -972,6 +993,7 @@ Built in project templates:
 * `nonfiction`
 * `technical`
 * `screenwriting`
+* `research`
 
 Arguments and options:
 
@@ -1212,6 +1234,24 @@ Creates a nonfiction style section chapter.
 openscribe workflow nonfiction-section "Background" --part "Section One"
 ```
 
+### `openscribe workflow research-paper`
+
+Creates a standard research paper section scaffold.
+
+```powershell
+openscribe workflow research-paper --part "Paper"
+openscribe workflow research-paper --part "Paper" --include-appendix
+```
+
+### `openscribe workflow conference-materials`
+
+Creates conference submission notes, talk outlines, slide drafts, and speaker notes.
+
+```powershell
+openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
+openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf" --no-poster
+```
+
 ### `openscribe set chapters`
 
 Updates multiple chapters at once.
@@ -1420,6 +1460,7 @@ Right now:
 * scene support is heading based and does not yet have separate scene metadata
 * compile currently exports to Word, PDF, and EPUB only
 * compile profiles are present, but formatting depth is still intentionally simple
+* research paper support is scaffold first and does not yet manage citations or bibliography formatting
 * snapshots can be created but do not yet have first class restore commands
 * board visuals currently live in CLI commands instead of the TUI
 * element appears in tracking is derived from text matches and aliases
@@ -1430,5 +1471,5 @@ Planned next:
 
 * snapshot restore helpers
 * editor launch helpers
-* compile support for research papers and academic outputs
+* richer research citation and bibliography workflows
 * stronger scene metadata and scene reordering

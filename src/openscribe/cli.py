@@ -21,9 +21,11 @@ from openscribe.project import (
     batch_update_chapters,
     built_in_templates,
     chapter_report,
+    create_conference_materials,
     create_chapter,
     create_nonfiction_section,
     create_part,
+    create_research_paper_structure,
     create_story_idea,
     find_chapter,
     find_chapters,
@@ -93,7 +95,7 @@ console = Console()
 def init(
     title: str = typer.Argument(..., help="Project title."),
     path: Path = typer.Option(Path("."), "--path", help="Target directory."),
-    template_name: str = typer.Option("fiction", "--template", help="Project template. Use fiction, nonfiction, or technical."),
+    template_name: str = typer.Option("fiction", "--template", help="Project template. Use fiction, nonfiction, technical, screenwriting, or research."),
     template_file: Optional[Path] = typer.Option(None, "--template-file", help="Path to a user defined template file."),
 ) -> None:
     project_path = init_project_from_template(path, title, template_name=template_name, template_file=template_file)
@@ -266,8 +268,8 @@ def status() -> None:
 @app.command()
 def compile(
     format_name: Optional[str] = typer.Option(None, "--format", help="Output format. Use docx, pdf, or epub."),
-    profile_name: Optional[str] = typer.Option(None, "--profile", help="Compile profile. Use print, ebook, or submission."),
-    template_name: Optional[str] = typer.Option(None, "--template", help="Compile template. Use novel, manuscript, or minimal."),
+    profile_name: Optional[str] = typer.Option(None, "--profile", help="Compile profile. Use print, ebook, submission, or research-paper."),
+    template_name: Optional[str] = typer.Option(None, "--template", help="Compile template. Use novel, manuscript, minimal, or academic."),
     output: Optional[Path] = typer.Option(None, "--output", help="Output document path."),
 ) -> None:
     root = project_root()
@@ -580,6 +582,31 @@ def workflow_nonfiction_section(
     root = project_root()
     chapter_path = create_nonfiction_section(root, title, part=part, synopsis=synopsis, notes=notes)
     console.print(f"Created nonfiction section {chapter_path.relative_to(root)}")
+
+
+@workflow_app.command("research-paper")
+def workflow_research_paper(
+    part: str = typer.Option("Paper", "--part", help="Part title for the paper structure."),
+    include_appendix: bool = typer.Option(False, "--include-appendix", help="Add an appendix section."),
+) -> None:
+    root = project_root()
+    chapter_paths = create_research_paper_structure(root, part=part, include_appendix=include_appendix)
+    console.print(f"Created research paper sections: {len(chapter_paths)}")
+    for path in chapter_paths:
+        console.print(str(path.relative_to(root)))
+
+
+@workflow_app.command("conference-materials")
+def workflow_conference_materials(
+    title: str = typer.Argument(..., help="Conference submission or talk title."),
+    venue: str = typer.Option("", "--venue", help="Conference or venue name."),
+    include_poster: bool = typer.Option(True, "--include-poster/--no-poster", help="Create poster support files."),
+) -> None:
+    root = project_root()
+    paths = create_conference_materials(root, title, venue=venue, include_poster=include_poster)
+    console.print(f"Created conference materials: {len(paths)}")
+    for path in paths:
+        console.print(str(path.relative_to(root)))
 
 
 @import_app.command("folder")

@@ -352,7 +352,9 @@ def test_template_scene_index_and_snapshot_commands(tmp_path: Path, monkeypatch)
     result = runner.invoke(app, ["templates"])
     assert result.exit_code == 0
     assert "fiction" in result.stdout
+    assert "research" in result.stdout
     assert "technical" in result.stdout
+    assert "research-paper" in result.stdout
 
     assert runner.invoke(app, ["init", "North County", "--template", "technical"]).exit_code == 0
     assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
@@ -426,6 +428,52 @@ def test_custom_template_import_and_workflow_commands(tmp_path: Path, monkeypatc
     assert result.exit_code == 0
     assert "label: section" in result.stdout
     assert "INT. DINER - NIGHT" in result.stdout
+
+
+def test_research_paper_and_conference_workflows(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "Grid Study", "--template", "research"]).exit_code == 0
+
+    result = runner.invoke(app, ["workflow", "research-paper", "--part", "Paper", "--include-appendix"])
+    assert result.exit_code == 0
+    assert "Created research paper sections: 9" in result.stdout
+    assert "ch-01-abstract.md" in result.stdout
+    assert "ch-09-appendix.md" in result.stdout
+
+    abstract_path = tmp_path / "manuscript" / "part-01-paper" / "ch-01-abstract.md"
+    abstract_path.write_text(
+        abstract_path.read_text(encoding="utf-8") + "This paper studies resilient rural energy systems.\n",
+        encoding="utf-8",
+    )
+    intro_path = tmp_path / "manuscript" / "part-01-paper" / "ch-02-introduction.md"
+    intro_path.write_text(
+        intro_path.read_text(encoding="utf-8") + "Rural microgrids need better planning models.\n",
+        encoding="utf-8",
+    )
+
+    compile_result = runner.invoke(app, ["compile", "--profile", "research-paper"])
+    assert compile_result.exit_code == 0
+
+    output_path = tmp_path / "build" / "grid-study-research-paper.docx"
+    assert output_path.exists()
+    document = Document(output_path)
+    paragraph_text = [paragraph.text for paragraph in document.paragraphs if paragraph.text]
+    assert "1. Abstract" in paragraph_text
+    assert "2. Introduction" in paragraph_text
+
+    result = runner.invoke(app, ["workflow", "conference-materials", "Grid Study 2026", "--venue", "EnergyConf"])
+    assert result.exit_code == 0
+    assert "Created conference materials: 6" in result.stdout
+    assert "grid-study-2026-slide-draft.md" in result.stdout
+    assert "grid-study-2026-submission-checklist.md" in result.stdout
+
+    slide_path = tmp_path / "notes" / "presentations" / "grid-study-2026-slide-draft.md"
+    checklist_path = tmp_path / "research" / "conferences" / "grid-study-2026-submission-checklist.md"
+    assert slide_path.exists()
+    assert checklist_path.exists()
+    assert "Title Slide" in slide_path.read_text(encoding="utf-8")
+    assert "EnergyConf" in checklist_path.read_text(encoding="utf-8")
 
 
 def test_board_visual_commands(tmp_path: Path, monkeypatch) -> None:

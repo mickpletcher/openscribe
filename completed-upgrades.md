@@ -40,3 +40,9 @@ Tracked record of roadmap items that shipped.
 * added a detailed outliner view that combines structure, metadata, scenes, and word counts
 * added chapter and part reordering commands that renumber manuscript storage cleanly
 * added compile profiles for print, ebook, and submission exports
+
+### Research and conference workflow
+
+* added compile support for research papers with an academic template and a `research-paper` profile
+* added research project templates and paper section scaffolding helpers
+* added conference material and presentation draft workflows for abstracts, slide drafts, talk outlines, speaker notes, and poster outlines

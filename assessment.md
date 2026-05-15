@@ -26,11 +26,12 @@ The manuscript path is real and usable:
 9. save snapshots as checkpoints or git based records
 10. save and reuse user defined project templates
 11. import an existing folder based manuscript into a new project
-12. use nonfiction section and screenplay scene helpers
-13. read the manuscript as one continuous document
-14. reorder parts and chapters from the CLI
-15. inspect a richer outliner view with scene counts and part totals
-16. export to `docx`, `pdf`, and `epub` with print, ebook, and submission profiles
+12. use nonfiction, screenplay, and research paper workflow helpers
+13. create conference submission notes, slide drafts, and talk outlines
+14. read the manuscript as one continuous document
+15. reorder parts and chapters from the CLI
+16. inspect a richer outliner view with scene counts and part totals
+17. export to `docx`, `pdf`, and `epub` with print, ebook, submission, and research paper profiles
 
 The planning and tracking layer is also real:
 
@@ -155,15 +156,16 @@ The next step is stronger scene reordering, scene metadata, and scene aware sear
 
 ### priority 3
 
-Deepen compile formatting beyond the new profile layer.
+Deepen compile formatting beyond the current profile layer.
 
 The repo now separates export intent with:
 
 1. print
 2. ebook
 3. submission
+4. research paper
 
-The next step is richer profile level formatting and new outputs such as research paper exports.
+The next step is richer profile level formatting, citation handling, and bibliography aware outputs.
 
 ### priority 4
 

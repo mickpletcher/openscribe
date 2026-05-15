@@ -48,6 +48,11 @@ TEMPLATE_PRESETS = {
         "include_part_headings": False,
         "chapter_heading_style": "title-only",
     },
+    "academic": {
+        "include_title_page": True,
+        "include_part_headings": False,
+        "chapter_heading_style": "section-number-title",
+    },
 }
 
 
@@ -75,6 +80,14 @@ PROFILE_PRESETS = {
         "include_part_headings": False,
         "chapter_heading_style": "chapter-number-title",
         "output_suffix": "submission",
+    },
+    "research-paper": {
+        "format_name": "docx",
+        "template_name": "academic",
+        "include_title_page": True,
+        "include_part_headings": False,
+        "chapter_heading_style": "section-number-title",
+        "output_suffix": "research-paper",
     },
 }
 
@@ -225,9 +238,9 @@ def _resolve_compile_options(
         )
     )
     chapter_heading_style = str(chapter_heading_style_source).strip().lower()
-    if chapter_heading_style not in {"title-only", "chapter-number-title"}:
+    if chapter_heading_style not in {"title-only", "chapter-number-title", "section-number-title"}:
         raise CompileError(
-            "chapter_heading_style must be 'title-only' or 'chapter-number-title'."
+            "chapter_heading_style must be 'title-only', 'chapter-number-title', or 'section-number-title'."
         )
 
     return CompileOptions(
@@ -549,6 +562,8 @@ def _epub_body(text: str) -> str:
 
 
 def _chapter_heading(title: str, chapter_number: int, options: CompileOptions) -> str:
+    if options.chapter_heading_style == "section-number-title":
+        return f"{chapter_number}. {title}"
     if options.chapter_heading_style == "chapter-number-title":
         return f"Chapter {chapter_number}: {title}"
     return title

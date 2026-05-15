@@ -15,6 +15,8 @@ STORY_IDEAS_DIR = "notes/story-ideas"
 INDEX_DIR = ".openscribe/index"
 SNAPSHOTS_DIR = ".openscribe/snapshots"
 TEMPLATES_DIR = ".openscribe/templates"
+CONFERENCE_DIR = "research/conferences"
+PRESENTATIONS_DIR = "notes/presentations"
 
 
 @dataclass(slots=True)
@@ -195,6 +197,21 @@ def built_in_templates() -> dict[str, dict[str, Any]]:
                 "research/visual-references.md": "# Visual References\n\n* \n",
                 "notes/beat-sheet.md": "# Beat Sheet\n\n## Opening Image\n\n\n## Midpoint\n\n\n## Finale\n\n",
                 "characters/lead.md": "# Lead\n\nWant:\n\nNeed:\n\nContradiction:\n",
+            },
+        },
+        "research": {
+            "compile": {
+                "default_format": "docx",
+                "default_template": "academic",
+                "include_title_page": True,
+                "include_part_headings": False,
+                "chapter_heading_style": "section-number-title",
+            },
+            "files": {
+                "research/source-log.md": "# Source Log\n\n## References\n\n* \n",
+                "research/literature-review.md": "# Literature Review\n\n## Key Sources\n\n* \n",
+                "notes/research-questions.md": "# Research Questions\n\n## Primary Question\n\n\n## Secondary Questions\n\n* \n",
+                "notes/presentations/slide-draft.md": "# Slide Draft\n\n## Opening\n\n* \n",
             },
         },
     }
@@ -400,6 +417,128 @@ def create_nonfiction_section(
         synopsis=synopsis,
         notes=notes,
     )
+
+
+def create_research_paper_structure(
+    root: Path,
+    *,
+    part: str = "Paper",
+    include_appendix: bool = False,
+) -> list[Path]:
+    try:
+        part_path = resolve_part_path(root, part)
+    except FileNotFoundError:
+        part_path = create_part(root, part)
+
+    sections = [
+        ("Abstract", "Research summary and core findings."),
+        ("Introduction", "Problem statement, context, and motivation."),
+        ("Related Work", "Relevant literature and prior approaches."),
+        ("Methods", "Methodology, data, and experimental setup."),
+        ("Results", "Observed results and supporting evidence."),
+        ("Discussion", "Interpretation, limits, and implications."),
+        ("Conclusion", "Final takeaways and next steps."),
+        ("References", "Citation placeholder section."),
+    ]
+    if include_appendix:
+        sections.append(("Appendix", "Supplemental material."))
+
+    created_paths: list[Path] = []
+    existing_titles = {
+        str(parse_frontmatter(path.read_text(encoding="utf-8"))[0].get("title", path.stem)).strip().lower()
+        for path in part_path.glob("*.md")
+    }
+    for title, synopsis in sections:
+        if title.strip().lower() in existing_titles:
+            continue
+        created_paths.append(
+            create_chapter(
+                root,
+                title,
+                part=part,
+                status="draft",
+                label="research",
+                synopsis=synopsis,
+                notes="Academic paper section.",
+            )
+        )
+    return created_paths
+
+
+def create_conference_materials(
+    root: Path,
+    title: str,
+    *,
+    venue: str = "",
+    include_poster: bool = True,
+) -> list[Path]:
+    slug = slugify(title)
+    created_paths: list[Path] = []
+    files: list[tuple[Path, str]] = [
+        (
+            root / CONFERENCE_DIR / f"{slug}-submission-checklist.md",
+            "# Submission Checklist\n\n"
+            f"## Project\n\n{title}\n\n"
+            f"## Venue\n\n{venue or 'TBD'}\n\n"
+            "## Required Items\n\n"
+            "* Abstract\n"
+            "* Paper draft\n"
+            "* Author details\n"
+            "* Figure review\n"
+            "* Final proof pass\n",
+        ),
+        (
+            root / CONFERENCE_DIR / f"{slug}-conference-abstract.md",
+            "# Conference Abstract\n\n"
+            f"## Title\n\n{title}\n\n"
+            f"## Venue\n\n{venue or 'TBD'}\n\n"
+            "## Abstract\n\n\n"
+            "## Key Findings\n\n* \n",
+        ),
+        (
+            root / PRESENTATIONS_DIR / f"{slug}-talk-outline.md",
+            "# Talk Outline\n\n"
+            f"## Title\n\n{title}\n\n"
+            "## Audience\n\n\n"
+            "## Opening\n\n* \n"
+            "## Core Points\n\n* \n"
+            "## Closing\n\n* \n",
+        ),
+        (
+            root / PRESENTATIONS_DIR / f"{slug}-slide-draft.md",
+            "# Slide Draft\n\n"
+            f"## Title Slide\n\n{title}\n\n"
+            "## Slide 1\n\n* Problem\n\n"
+            "## Slide 2\n\n* Method\n\n"
+            "## Slide 3\n\n* Results\n\n"
+            "## Slide 4\n\n* Discussion\n\n"
+            "## Slide 5\n\n* Questions\n",
+        ),
+        (
+            root / PRESENTATIONS_DIR / f"{slug}-speaker-notes.md",
+            "# Speaker Notes\n\n"
+            f"## Session\n\n{title}\n\n"
+            "## Timing\n\n* Intro\n* Main points\n* Questions\n\n"
+            "## Notes\n\n* \n",
+        ),
+    ]
+    if include_poster:
+        files.append(
+            (
+                root / CONFERENCE_DIR / f"{slug}-poster-outline.md",
+                "# Poster Outline\n\n"
+                f"## Title\n\n{title}\n\n"
+                "## Sections\n\n* Background\n* Methods\n* Results\n* Conclusion\n",
+            )
+        )
+
+    for path, content in files:
+        if path.exists():
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        created_paths.append(path)
+    return created_paths
 
 
 def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:

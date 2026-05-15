@@ -206,3 +206,13 @@
 * fixed the continuous read path so it uses the current compile option resolver
 * added regression tests for outliner output, reordering commands, and compile profiles
 * updated the sample project, `README.md`, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
+
+### Research and conference workflows
+
+* added a built in `research` project template
+* added an `academic` compile template and a `research-paper` compile profile
+* added support for `section-number-title` academic style headings in compile output
+* added `openscribe workflow research-paper` to scaffold standard paper sections
+* added `openscribe workflow conference-materials` to create conference abstracts, submission checklists, talk outlines, slide drafts, speaker notes, and poster outlines
+* added regression tests for research paper compile output and conference material generation
+* updated `README.md`, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
