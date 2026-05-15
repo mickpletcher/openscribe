@@ -42,12 +42,16 @@ That works until you want automation, version control, or direct access to your 
 This first build includes:
 
 * project initialization
+* project templates for fiction, nonfiction, and technical writing
 * part creation
 * chapter creation
+* scene creation inside chapters
 * batch chapter metadata updates
 * chapter search and query
 * project reports
+* derived project index rebuild and search
 * story idea capture for future books
+* snapshots with checkpoint and git based modes
 * planning board notes and promotion
 * element, alias, relation, and appears in tracking
 * Word document export
@@ -55,10 +59,10 @@ This first build includes:
 * EPUB export
 * manuscript outline view
 * manuscript status view
-* lightweight Textual TUI
+* wider Textual TUI views for manuscript, characters, research, notes, story ideas, and elements
 * optional AI summary command for chapter review
 
-This build does not yet include snapshots, editor launch commands, or search indexing.
+This build does not yet include chapter reordering, editor launch commands, or richer compile profiles.
 
 ## Requirements
 
@@ -98,12 +102,15 @@ It does not require AI.
 
 ```powershell
 py -3.11 -m openscribe --help
-openscribe init "My Novel"
+openscribe init "My Novel" --template fiction
 openscribe new part "Opening"
 openscribe new chapter "The Beginning" --part "Opening"
+openscribe new scene "Cold Open" --chapter "The Beginning"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
+openscribe index rebuild
+openscribe snapshot save "first-pass"
 openscribe read
 openscribe outline
 openscribe status
@@ -485,6 +492,14 @@ Use this for loose ideas, outline fragments, revision notes, and planning.
 
 Use this for structured new book ideas that are not part of the current manuscript yet.
 
+`.openscribe/index/`
+
+Use this for the derived project index built from manuscript, note, research, and element data.
+
+`.openscribe/snapshots/`
+
+Use this for checkpoint archives and git based snapshot records.
+
 ## Basic workflow
 
 The normal writing flow looks like this:
@@ -862,12 +877,13 @@ The current TUI has three areas:
 What it does:
 
 * reads the part and chapter structure from `manuscript/`
+* reads character, research, notes, story idea, and element content into the same browser
 * includes a search box for filtering chapters by title, synopsis, notes, and body text
 * lets you select a chapter from the binder tree
 * lets you select a part node to inspect part metadata
 * shows the chapter body in the preview pane
 * shows chapter status, label, synopsis, point of view, notes, and word target in the right panel
-* shows part metadata and project compile defaults in the right panel
+* shows part metadata, story idea metadata, element metadata, and project compile defaults in the right panel
 
 Current key:
 
@@ -886,7 +902,14 @@ Initializes a new project in the target path.
 ```powershell
 openscribe init "My Novel"
 openscribe init "My Novel" --path .\books\my-novel
+openscribe init "Field Guide" --template technical
 ```
+
+Built in project templates:
+
+* `fiction`
+* `nonfiction`
+* `technical`
 
 Arguments and options:
 
@@ -911,6 +934,15 @@ Creates a chapter file inside a part folder.
 
 ```powershell
 openscribe new chapter "The Beginning" --part "Opening"
+```
+
+### `openscribe new scene`
+
+Adds a scene heading inside a chapter file.
+
+```powershell
+openscribe new scene "Cold Open" --chapter "The Beginning"
+openscribe new scene "County Road" --chapter "Arrival" --body "Eli sees the porch men again."
 ```
 
 Arguments:
@@ -1008,6 +1040,47 @@ Shows project level chapter and word summaries.
 
 ```powershell
 openscribe report project
+```
+
+### `openscribe templates`
+
+Lists built in project templates.
+
+```powershell
+openscribe templates
+```
+
+### `openscribe index rebuild`
+
+Builds the derived project index.
+
+```powershell
+openscribe index rebuild
+```
+
+### `openscribe index search`
+
+Searches the derived project index.
+
+```powershell
+openscribe index search station
+```
+
+### `openscribe snapshot save`
+
+Creates a project snapshot.
+
+```powershell
+openscribe snapshot save "first-pass"
+openscribe snapshot save "clean-head" --mode git
+```
+
+### `openscribe snapshot list`
+
+Lists saved snapshots.
+
+```powershell
+openscribe snapshot list
 ```
 
 ### `openscribe set chapters`
@@ -1116,17 +1189,21 @@ This is a full example from an empty folder.
 ```powershell
 mkdir novel-demo
 Set-Location .\novel-demo
-openscribe init "North County"
+openscribe init "North County" --template fiction
 openscribe new part "Opening"
 openscribe new chapter "Arrival" --part "Opening" --pov "Eli" --word-target 1800
+openscribe new scene "Bus Stop" --chapter "Arrival"
 openscribe new chapter "The Call" --part "Opening" --pov "Eli" --word-target 2200
 openscribe set chapter "Arrival" --status revised
 openscribe find chapters --status revised
 openscribe report project
+openscribe index rebuild
+openscribe index search station
 openscribe board note add "Ledger clue" --body "Eli finds the missing ledger." --group plot
 openscribe board promote note-001 --part Opening --chapter "Ledger clue"
 openscribe idea add "The Flood Ledger" --premise "A county clerk finds a ledger that predicts deaths."
 openscribe element add character "Eli Harper" --notes "Main point of view"
+openscribe snapshot save "after-outline"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
@@ -1170,7 +1247,10 @@ A simple pattern:
 * use diffs to review revisions
 * branch if you want to test major structural changes
 
-This project does not currently add snapshot commands on top of git.
+You can also record snapshots from inside `openscribe`:
+
+* `openscribe snapshot save "label"` creates a checkpoint archive
+* `openscribe snapshot save "label" --mode git` records the current git commit and dirty state
 
 ## Current limitations
 
@@ -1180,7 +1260,9 @@ Right now:
 * word counts only reflect the chapter body text
 * part storage still uses numbered folder names on disk
 * chapter ordering is based on numbered filenames and folders
+* scene support is heading based and does not yet have separate scene metadata
 * compile currently exports to Word, PDF, and EPUB only
+* snapshots can be created but do not yet have first class restore commands
 * board mode is CLI first and not yet a separate TUI mode
 * element appears in tracking is derived from text matches and aliases
 
@@ -1188,7 +1270,7 @@ Right now:
 
 Planned next:
 
-* project templates
-* snapshots
-* derived search index
-* editor integration
+* chapter and part reordering
+* richer compile profiles
+* snapshot restore helpers
+* editor launch helpers

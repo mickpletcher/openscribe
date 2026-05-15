@@ -21,8 +21,11 @@ The manuscript path is real and usable:
 4. query chapters by status, label, point of view, part, or text
 5. inspect reports and word totals
 6. capture structured story ideas for future books
-7. read the manuscript as one continuous document
-8. export to `docx`, `pdf`, and `epub`
+7. work with scene headings inside chapter files
+8. rebuild a derived project index for search and reporting
+9. save snapshots as checkpoints or git based records
+10. read the manuscript as one continuous document
+11. export to `docx`, `pdf`, and `epub`
 
 The planning and tracking layer is also real:
 
@@ -31,6 +34,7 @@ The planning and tracking layer is also real:
 3. aliases and relations are stored explicitly
 4. chapter appearance lookup works across chapter text and metadata
 5. story ideas can be stored separately from the active manuscript
+6. the TUI can browse characters, research, notes, story ideas, and elements
 
 The quality baseline is better than it was at the start.
 There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.
@@ -81,13 +85,19 @@ The board model is right sized for now, but still simple.
 It stores notes, groups, links, and promotion paths.
 It does not yet provide a stronger visual layout or a dedicated TUI mode.
 
-### 4. element appearance tracking is still heuristic
+### 4. snapshot restore is still missing
+
+The repo can now save snapshots.
+It cannot yet restore them through first class commands.
+That means the safety story is stronger than before, but still one sided.
+
+### 5. element appearance tracking is still heuristic
 
 The current appears in model is derived from name and alias matches in chapter text and metadata.
 That is acceptable for now.
 It will eventually need scene awareness or explicit tagging if the repo grows into denser manuscripts.
 
-### 5. roadmap discipline depends on keeping the docs current
+### 6. roadmap discipline depends on keeping the docs current
 
 The repo now has several source of truth files:
 
@@ -119,11 +129,10 @@ That is enough to validate the product direction with actual use.
 
 ### priority 1
 
-Bring the TUI closer to the CLI.
+Tighten scene and outliner workflows.
 
-The biggest usability gap now is not raw capability.
-It is surface consistency.
-Reports, board activity, element inspection, and metadata editing should become easier to use without dropping back to commands for every action.
+The repo has scene support now, but scenes are still lightweight headings.
+The next step is stronger scene reordering, scene metadata, and better outline visibility.
 
 ### priority 2
 
@@ -139,14 +148,14 @@ That will make the export story feel finished instead of merely present.
 
 ### priority 3
 
-Add reordering and stronger outliner behavior.
+Add snapshot restore and project recovery helpers.
 
-The current numbered file model is stable, but still rigid.
-Explicit part and chapter reorder commands would improve everyday manuscript work.
+Checkpoint creation is useful.
+Recovery needs the other half of the workflow.
 
 ### priority 4
 
-Deepen the board and element integration.
+Deepen the board, element, and TUI integration.
 
 The board and element features exist now.
 The next value is tighter connection between them and the manuscript:

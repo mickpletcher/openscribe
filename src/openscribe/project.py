@@ -11,6 +11,24 @@ PROJECT_DIR = ".openscribe"
 PROJECT_FILE = "project.yaml"
 PART_FILE = "part.yaml"
 STORY_IDEAS_DIR = "notes/story-ideas"
+INDEX_DIR = ".openscribe/index"
+SNAPSHOTS_DIR = ".openscribe/snapshots"
+
+
+@dataclass(slots=True)
+class SceneDocument:
+    title: str
+    body: str
+    slug: str
+
+
+@dataclass(slots=True)
+class AuxiliaryDocument:
+    path: Path
+    title: str
+    body: str
+    category: str
+    slug: str
 
 
 @dataclass(slots=True)
@@ -27,10 +45,15 @@ class ChapterDocument:
     part: str
     part_id: str
     slug: str
+    scenes: list[SceneDocument]
 
     @property
     def word_count(self) -> int:
         return len([word for word in re.findall(r"\b[\w']+\b", self.body)])
+
+    @property
+    def scene_count(self) -> int:
+        return len(self.scenes)
 
 
 @dataclass(slots=True)
@@ -59,6 +82,10 @@ def project_root(start: Path | None = None) -> Path:
 
 
 def init_project(base_path: Path, title: str) -> Path:
+    return init_project_from_template(base_path, title, template_name="fiction")
+
+
+def init_project_from_template(base_path: Path, title: str, template_name: str = "fiction") -> Path:
     project_path = base_path.resolve()
     config_dir = project_path / PROJECT_DIR
     if (config_dir / PROJECT_FILE).exists():
@@ -72,8 +99,15 @@ def init_project(base_path: Path, title: str) -> Path:
         project_path / "characters",
         project_path / "notes",
         project_path / STORY_IDEAS_DIR,
+        project_path / INDEX_DIR,
+        project_path / SNAPSHOTS_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)
+
+    template = built_in_templates().get(template_name.strip().lower())
+    if template is None:
+        supported = ", ".join(sorted(built_in_templates()))
+        raise ValueError(f"Unknown project template '{template_name}'. Use {supported}.")
 
     write_yaml(
         config_dir / PROJECT_FILE,
@@ -81,14 +115,15 @@ def init_project(base_path: Path, title: str) -> Path:
             "title": title,
             "author": "",
             "version": 1,
+            "template": template_name.strip().lower(),
             "compile": {
-                "default_format": "docx",
+                "default_format": str(template["compile"].get("default_format", "docx")),
                 "backend": "auto",
-                "default_template": "novel",
+                "default_template": str(template["compile"].get("default_template", "novel")),
                 "output_filename": "",
-                "include_title_page": True,
-                "include_part_headings": True,
-                "chapter_heading_style": "title-only",
+                "include_title_page": bool(template["compile"].get("include_title_page", True)),
+                "include_part_headings": bool(template["compile"].get("include_part_headings", True)),
+                "chapter_heading_style": str(template["compile"].get("chapter_heading_style", "title-only")),
             },
             "ai": {
                 "enabled": False,
@@ -97,7 +132,61 @@ def init_project(base_path: Path, title: str) -> Path:
             },
         },
     )
+    _apply_template_files(project_path, title, template_name.strip().lower())
     return project_path
+
+
+def built_in_templates() -> dict[str, dict[str, Any]]:
+    return {
+        "fiction": {
+            "compile": {
+                "default_format": "docx",
+                "default_template": "novel",
+                "include_title_page": True,
+                "include_part_headings": True,
+                "chapter_heading_style": "title-only",
+            },
+            "files": {
+                "characters/protagonist.md": "# Protagonist\n\nRole: Main point of view\n\nConflict:\n\n* \n",
+                "research/setting-notes.md": "# Setting Notes\n\nLocation:\n\nEra:\n\nAtmosphere:\n",
+                "notes/revision-notes.md": "# Revision Notes\n\n* \n",
+            },
+        },
+        "nonfiction": {
+            "compile": {
+                "default_format": "docx",
+                "default_template": "manuscript",
+                "include_title_page": True,
+                "include_part_headings": True,
+                "chapter_heading_style": "chapter-number-title",
+            },
+            "files": {
+                "research/source-log.md": "# Source Log\n\n## References\n\n* \n",
+                "notes/argument-map.md": "# Argument Map\n\n## Core Claim\n\n\n## Supporting Points\n\n* \n",
+            },
+        },
+        "technical": {
+            "compile": {
+                "default_format": "docx",
+                "default_template": "minimal",
+                "include_title_page": False,
+                "include_part_headings": True,
+                "chapter_heading_style": "chapter-number-title",
+            },
+            "files": {
+                "research/reference-links.md": "# Reference Links\n\n* \n",
+                "notes/implementation-notes.md": "# Implementation Notes\n\n## Audience\n\n\n## Open Questions\n\n* \n",
+            },
+        },
+    }
+
+
+def _apply_template_files(root: Path, title: str, template_name: str) -> None:
+    template = built_in_templates()[template_name]
+    for relative_path, content in template.get("files", {}).items():
+        target_path = root / str(relative_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content.replace("{title}", title), encoding="utf-8")
 
 
 def load_project_config(root: Path) -> dict[str, Any]:
@@ -232,6 +321,21 @@ def create_chapter(
         encoding="utf-8",
     )
     return chapter_path
+
+
+def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:
+    chapter = find_chapter(root, chapter_ref)
+    text = chapter.path.read_text(encoding="utf-8")
+    metadata, current_body = parse_frontmatter(text)
+    scene_heading = f"## {title.strip()}\n\n"
+    scene_body = body.strip()
+    new_scene = scene_heading + (scene_body + "\n" if scene_body else "")
+    separator = "\n" if current_body.strip() else ""
+    chapter.path.write_text(
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{current_body.rstrip()}{separator}{new_scene}".rstrip() + "\n",
+        encoding="utf-8",
+    )
+    return chapter.path
 
 
 def update_part_title(root: Path, part: str, title: str) -> Path:
@@ -378,6 +482,29 @@ def find_story_idea(root: Path, idea_ref: str) -> StoryIdea:
     raise FileNotFoundError(f"Story idea '{idea_ref}' was not found.")
 
 
+def list_auxiliary_documents(root: Path, category: str) -> list[AuxiliaryDocument]:
+    category_path = root / category
+    if not category_path.exists():
+        return []
+
+    documents: list[AuxiliaryDocument] = []
+    for path in sorted(category_path.rglob("*.md")):
+        if category == "notes" and STORY_IDEAS_DIR.replace("/", "\\") in str(path.relative_to(root)).replace("/", "\\"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        title = _title_from_markdown(path, text)
+        documents.append(
+            AuxiliaryDocument(
+                path=path,
+                title=title,
+                body=text,
+                category=category,
+                slug=path.stem,
+            )
+        )
+    return documents
+
+
 def list_chapters(root: Path) -> list[ChapterDocument]:
     manuscript = root / "manuscript"
     chapters: list[ChapterDocument] = []
@@ -400,6 +527,7 @@ def list_chapters(root: Path) -> list[ChapterDocument]:
                     part=part_title,
                     part_id=part_path.name,
                     slug=chapter_path.stem,
+                    scenes=parse_scenes(body),
                 )
             )
     return chapters
@@ -499,12 +627,37 @@ def chapter_report(root: Path) -> dict[str, Any]:
     return {
         "chapter_count": len(chapters),
         "word_count": sum(chapter.word_count for chapter in chapters),
+        "scene_count": sum(chapter.scene_count for chapter in chapters),
         "by_status": by_status,
         "by_label": by_label,
         "by_pov": by_pov,
         "by_part": by_part,
         "part_word_totals": part_word_totals,
     }
+
+
+def parse_scenes(body: str) -> list[SceneDocument]:
+    heading_pattern = re.compile(r"^##\s+(.+?)\s*$", flags=re.MULTILINE)
+    matches = list(heading_pattern.finditer(body))
+    if not matches:
+        return []
+
+    scenes: list[SceneDocument] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
+        scene_title = match.group(1).strip()
+        scene_body = body[start:end].strip()
+        scenes.append(SceneDocument(title=scene_title, body=scene_body, slug=slugify(scene_title)))
+    return scenes
+
+
+def _title_from_markdown(path: Path, text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip()
+    return path.stem.replace("-", " ").title()
 
 
 def _increment(counter: dict[str, int], key: str) -> None:

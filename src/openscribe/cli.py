@@ -14,8 +14,11 @@ from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
 from openscribe.board import add_link, add_note, list_notes, promote_note_to_chapter, set_group
 from openscribe.compile import CompileError, assemble_manuscript_text, compile_project
 from openscribe.elements import add_alias, add_element, add_relation, appears_in, get_element, list_element_records
+from openscribe.index import index_is_current, load_project_index, rebuild_project_index
 from openscribe.project import (
+    add_scene,
     batch_update_chapters,
+    built_in_templates,
     chapter_report,
     create_chapter,
     create_part,
@@ -23,7 +26,7 @@ from openscribe.project import (
     find_chapter,
     find_chapters,
     find_story_idea,
-    init_project,
+    init_project_from_template,
     list_chapters,
     list_story_ideas,
     load_part_metadata,
@@ -32,6 +35,7 @@ from openscribe.project import (
     update_chapter_metadata,
     update_part_title,
 )
+from openscribe.snapshots import create_snapshot, list_snapshots
 from openscribe.tui import OpenScribeApp
 
 app = typer.Typer(help="CLI and TUI writing environment for long form projects.")
@@ -48,6 +52,8 @@ board_group_app = typer.Typer(help="Board grouping workflows.")
 element_app = typer.Typer(help="Element and relation workflows.")
 element_alias_app = typer.Typer(help="Element alias workflows.")
 idea_app = typer.Typer(help="Story idea workflows.")
+snapshot_app = typer.Typer(help="Snapshot workflows.")
+index_app = typer.Typer(help="Derived index workflows.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
 app.add_typer(set_app, name="set")
@@ -57,6 +63,8 @@ app.add_typer(report_app, name="report")
 app.add_typer(board_app, name="board")
 app.add_typer(element_app, name="element")
 app.add_typer(idea_app, name="idea")
+app.add_typer(snapshot_app, name="snapshot")
+app.add_typer(index_app, name="index")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
 board_app.add_typer(board_group_app, name="group")
@@ -68,8 +76,9 @@ console = Console()
 def init(
     title: str = typer.Argument(..., help="Project title."),
     path: Path = typer.Option(Path("."), "--path", help="Target directory."),
+    template_name: str = typer.Option("fiction", "--template", help="Project template. Use fiction, nonfiction, or technical."),
 ) -> None:
-    project_path = init_project(path, title)
+    project_path = init_project_from_template(path, title, template_name=template_name)
     console.print(f"Initialized openscribe project at {project_path}")
 
 
@@ -104,6 +113,17 @@ def new_chapter(
         notes=notes,
     )
     console.print(f"Created chapter {chapter_path.relative_to(root)}")
+
+
+@new_app.command("scene")
+def new_scene(
+    title: str = typer.Argument(..., help="Scene title."),
+    chapter: str = typer.Option(..., "--chapter", help="Chapter title or slug."),
+    body: str = typer.Option("", "--body", help="Optional scene body text."),
+) -> None:
+    root = project_root()
+    chapter_path = add_scene(root, chapter, title, body=body)
+    console.print(f"Added scene to {chapter_path.relative_to(root)}")
 
 
 @idea_app.command("add")
@@ -302,6 +322,8 @@ def show_chapter(chapter: str = typer.Argument(..., help="Chapter title or slug.
         "part_id": document.part_id,
         "path": str(document.path),
         "word_count": document.word_count,
+        "scene_count": document.scene_count,
+        "scenes": [scene.title for scene in document.scenes],
     }
     console.print(Panel(_yaml_dump(metadata), title="Chapter Metadata", border_style="cyan"))
 
@@ -357,13 +379,97 @@ def report_project() -> None:
     root = project_root()
     summary = chapter_report(root)
     console.print(f"Chapters: {summary['chapter_count']}")
+    console.print(f"Scenes: {summary['scene_count']}")
     console.print(f"Words: {summary['word_count']}")
+    console.print(f"Index current: {index_is_current(root)}")
 
     _print_counter_table("By Status", summary["by_status"])
     _print_counter_table("By Label", summary["by_label"])
     _print_counter_table("By POV", summary["by_pov"])
     _print_counter_table("By Part", summary["by_part"])
     _print_counter_table("Part Word Totals", summary["part_word_totals"], value_header="Words")
+
+
+@index_app.command("rebuild")
+def index_rebuild() -> None:
+    root = project_root()
+    path = rebuild_project_index(root)
+    console.print(f"Rebuilt project index at {path.relative_to(root)}")
+
+
+@index_app.command("show")
+def index_show() -> None:
+    root = project_root()
+    data = load_project_index(root)
+    console.print(Panel(_yaml_dump(data), title="Project Index", border_style="cyan"))
+
+
+@index_app.command("search")
+def index_search(text: str = typer.Argument(..., help="Search text.")) -> None:
+    root = project_root()
+    data = load_project_index(root)
+    needle = text.strip().lower()
+    table = Table(title="Index Search")
+    table.add_column("Kind")
+    table.add_column("Title")
+    table.add_column("Path")
+
+    matches = 0
+    for chapter in data.get("chapters", []):
+        haystack = str(chapter.get("search_text", "")).lower()
+        if needle in haystack:
+            table.add_row("chapter", str(chapter.get("title", "")), str(chapter.get("path", "")))
+            matches += 1
+
+    for bucket_name in ("story_ideas", "characters", "research", "notes"):
+        for item in data.get(bucket_name, []):
+            haystack = f"{item.get('title', '')} {item.get('path', '')}".lower()
+            if needle in haystack:
+                table.add_row(bucket_name.rstrip("s"), str(item.get("title", "")), str(item.get("path", "")))
+                matches += 1
+
+    console.print(table)
+    console.print(f"Matches: {matches}")
+
+
+@snapshot_app.command("save")
+def snapshot_save(
+    label: str = typer.Argument(..., help="Snapshot label."),
+    mode: str = typer.Option("checkpoint", "--mode", help="Snapshot mode. Use checkpoint or git."),
+) -> None:
+    root = project_root()
+    path = create_snapshot(root, label, mode=mode)
+    console.print(f"Created snapshot at {path.relative_to(root)}")
+
+
+@snapshot_app.command("list")
+def snapshot_list() -> None:
+    root = project_root()
+    records = list_snapshots(root)
+    table = Table(title="Snapshots")
+    table.add_column("Label")
+    table.add_column("Mode")
+    table.add_column("Created")
+    table.add_column("Path")
+    for record in records:
+        table.add_row(
+            str(record.get("label", "")),
+            str(record.get("mode", "")),
+            str(record.get("created_at", "")),
+            str(record.get("path", "")),
+        )
+    console.print(table)
+    console.print(f"Snapshots: {len(records)}")
+
+
+@app.command("templates")
+def templates_list() -> None:
+    table = Table(title="Project Templates")
+    table.add_column("Template")
+    table.add_column("Compile Default")
+    for name, template in sorted(built_in_templates().items()):
+        table.add_row(name, str(template["compile"].get("default_template", "")))
+    console.print(table)
 
 
 @idea_app.command("list")

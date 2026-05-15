@@ -136,6 +136,15 @@
 * added model and CLI tests for story idea creation and listing
 * updated the README, sample project, completed upgrades log, future upgrades file, and assessment for the new idea workflow
 
+### Templates, snapshots, scenes, index, and TUI library views
+
+* added built in project templates for fiction, nonfiction, and technical writing through `openscribe init --template`
+* added `openscribe new scene` and scene parsing inside chapter files
+* added `openscribe index rebuild`, `openscribe index show`, and `openscribe index search`
+* added `openscribe snapshot save` and `openscribe snapshot list` for checkpoint and git based snapshots
+* expanded the TUI so it can browse characters, research, notes, story ideas, and elements
+* updated the sample project, README, assessment, completed upgrades log, and future upgrades file for the new workflow surface
+
 ## 2026-05-14
 
 ### Initial scaffold

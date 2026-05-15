@@ -26,6 +26,7 @@ This example includes:
 * one story idea note
 
 The sample project config also includes compile defaults you can edit to test template and export behavior.
+It also includes scene headings inside the sample chapters so scene level support has real data to inspect.
 
 ## How to inspect it
 
@@ -35,6 +36,8 @@ From the repo root:
 Set-Location .\examples\north-county
 py -3.11 -m openscribe outline
 py -3.11 -m openscribe report project
+py -3.11 -m openscribe index rebuild
+py -3.11 -m openscribe index search station
 py -3.11 -m openscribe find chapters --text station
 py -3.11 -m openscribe board note add "Sheriff rumor" --body "A deputy hints the sheriff knew about the ledger." --group plot
 py -3.11 -m openscribe board note list
@@ -42,6 +45,7 @@ py -3.11 -m openscribe idea list
 py -3.11 -m openscribe show idea "The Flood Ledger"
 py -3.11 -m openscribe element add character "Eli Harper" --notes "Primary point of view"
 py -3.11 -m openscribe element appears-in Eli
+py -3.11 -m openscribe snapshot save "sample-checkpoint"
 py -3.11 -m openscribe read
 py -3.11 -m openscribe status
 py -3.11 -m openscribe tui
@@ -54,5 +58,7 @@ The board commands store freeform planning notes under `.openscribe/boards/`.
 The element commands store element, alias, and relation data under `.openscribe/elements/`.
 
 The story idea commands store structured new book ideas under `notes/story-ideas/`.
+
+The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/`.
 
 You can also open the Markdown files directly in your editor and compare them with the command output.

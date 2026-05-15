@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openscribe.project import create_chapter, create_part, init_project
+from openscribe.elements import add_element
+from openscribe.project import create_chapter, create_part, create_story_idea, init_project
 from openscribe.tui import OpenScribeApp
 
 
@@ -66,3 +67,36 @@ def test_tui_chapter_summary_shows_first_class_metadata(tmp_path: Path) -> None:
     assert "Eli reaches town." in summary
     assert "Notes" in summary
     assert "Tighten the station scene." in summary
+
+
+def test_tui_project_sections_cover_library_content(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(root, "Arrival", part="Opening")
+    create_story_idea(root, "The Flood Ledger")
+    add_element(root, "character", "Eli Harper", notes="Primary point of view")
+
+    character_path = root / "characters" / "eli-harper.md"
+    character_path.write_text("# Eli Harper\n\nGuarded and observant.\n", encoding="utf-8")
+    research_path = root / "research" / "setting-notes.md"
+    research_path.write_text("# Setting Notes\n\nCounty roads and flood plains.\n", encoding="utf-8")
+    note_path = root / "notes" / "revision-notes.md"
+    note_path.write_text("# Revision Notes\n\nTighten the opening.\n", encoding="utf-8")
+
+    app = OpenScribeApp(root)
+    app.auxiliary_lookup = {}
+    summary = app._project_summary()
+
+    assert "Template: fiction" in summary
+    assert "Index current: False" in summary
+
+    class FakeSection:
+        def add_leaf(self, *args, **kwargs) -> None:
+            return None
+
+    class FakeNode:
+        def add(self, label: str, expand: bool = False) -> FakeSection:
+            return FakeSection()
+
+    app._add_auxiliary_section(FakeNode(), "Characters", "characters")
+    assert any(document.title == "Eli Harper" for document in app.auxiliary_lookup.values())

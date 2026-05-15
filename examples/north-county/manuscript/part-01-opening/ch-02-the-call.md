@@ -8,11 +8,15 @@ word_target: 2200
 notes: Push the threat harder in the second half of the scene.
 ---
 
+## Feed Store
+
 The pay phone outside the feed store still worked if you hit the side panel first.
 
 Eli dialed the number from memory.
 He expected voicemail.
 Instead, someone answered on the second ring and said his name before he spoke.
+
+## The Warning
 
 "You made good time," the voice said.
 

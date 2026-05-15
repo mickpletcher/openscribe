@@ -346,6 +346,45 @@ def test_story_idea_commands(tmp_path: Path, monkeypatch) -> None:
     assert "status: seed" in result.stdout
 
 
+def test_template_scene_index_and_snapshot_commands(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["templates"])
+    assert result.exit_code == 0
+    assert "fiction" in result.stdout
+    assert "technical" in result.stdout
+
+    assert runner.invoke(app, ["init", "North County", "--template", "technical"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+
+    result = runner.invoke(app, ["new", "scene", "Bus Stop", "--chapter", "Arrival", "--body", "Eli arrives in town."])
+    assert result.exit_code == 0
+
+    result = runner.invoke(app, ["show", "chapter", "Arrival"])
+    assert result.exit_code == 0
+    assert "scene_count: 1" in result.stdout
+    assert "Bus Stop" in result.stdout
+
+    result = runner.invoke(app, ["index", "rebuild"])
+    assert result.exit_code == 0
+    assert ".openscribe\\index\\project-index.yaml" in result.stdout
+
+    result = runner.invoke(app, ["index", "show"])
+    assert result.exit_code == 0
+    assert "chapter_count: 1" in result.stdout
+    assert "scene_count: 1" in result.stdout
+
+    result = runner.invoke(app, ["snapshot", "save", "before-rewrite"])
+    assert result.exit_code == 0
+    assert ".openscribe\\snapshots\\" in result.stdout
+
+    result = runner.invoke(app, ["snapshot", "list"])
+    assert result.exit_code == 0
+    assert "before" in result.stdout
+    assert "checkpoint" in result.stdout
+
+
 def test_find_chapters_filters_by_metadata_and_text(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 

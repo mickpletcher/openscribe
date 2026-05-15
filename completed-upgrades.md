@@ -19,3 +19,11 @@ Tracked record of roadmap items that shipped.
 ### Planning and idea capture
 
 * added structured story idea capture, listing, and inspection for future books under `notes/story-ideas/`
+
+### Structure and workflow depth
+
+* added snapshots with checkpoint archives and git based commit records
+* added scene level support inside chapter files
+* added a derived project index for faster search and reporting workflows
+* added character, notes, research, story idea, and element views inside the TUI
+* added built in project templates for fiction, nonfiction, and technical writing

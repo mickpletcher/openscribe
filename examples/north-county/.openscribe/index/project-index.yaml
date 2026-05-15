@@ -1,0 +1,134 @@
+title: North County
+template: fiction
+chapter_count: 2
+scene_count: 5
+word_count: 187
+story_idea_count: 1
+element_count: 2
+characters_count: 1
+research_count: 1
+notes_count: 1
+chapters:
+- title: Arrival
+  part: Opening
+  part_id: part-01-opening
+  status: draft
+  label: setup
+  pov: Eli
+  word_count: 110
+  scene_count: 3
+  path: manuscript\part-01-opening\ch-01-arrival.md
+  search_text: 'Arrival Eli reaches North County and realizes the town is already
+    watching him. Add more sensory detail around the station and the square. ## Bus
+    Stop
+
+
+    Eli stepped off the bus into wet summer heat and the smell of cut hay.
+
+
+    The station was only a pad of cracked concrete beside a grocery with dim windows
+    and a hand painted sign.
+
+    North County looked smaller than the map had promised.
+
+
+    ## Porch Watchers
+
+
+    Across the road, three men on a porch stopped talking when they saw him.
+
+    One lifted two fingers from a coffee cup.
+
+    The others just stared.
+
+
+    ## Willow Lane
+
+
+    Eli checked the paper in his pocket again even though he knew the address by heart.
+
+    Gray house.
+
+    Tin roof.
+
+    End of Willow Lane.
+
+
+    He started walking before he could decide to turn back.'
+  scenes:
+  - title: Bus Stop
+    slug: bus-stop
+  - title: Porch Watchers
+    slug: porch-watchers
+  - title: Willow Lane
+    slug: willow-lane
+- title: The Call
+  part: Opening
+  part_id: part-01-opening
+  status: draft
+  label: tension
+  pov: Eli
+  word_count: 77
+  scene_count: 2
+  path: manuscript\part-01-opening\ch-02-the-call.md
+  search_text: 'The Call A short phone call confirms that Eli is not in town by accident.
+    Push the threat harder in the second half of the scene. ## Feed Store
+
+
+    The pay phone outside the feed store still worked if you hit the side panel first.
+
+
+    Eli dialed the number from memory.
+
+    He expected voicemail.
+
+    Instead, someone answered on the second ring and said his name before he spoke.
+
+
+    ## The Warning
+
+
+    "You made good time," the voice said.
+
+
+    Eli looked over his shoulder at the empty street.
+
+    "Who is this?"
+
+
+    "The only person in this county trying to keep you alive."
+
+
+    The line went dead.'
+  scenes:
+  - title: Feed Store
+    slug: feed-store
+  - title: The Warning
+    slug: the-warning
+story_ideas:
+- title: The Flood Ledger
+  status: seed
+  genre: Southern Gothic
+  tone: Uneasy
+  path: notes\story-ideas\the-flood-ledger.md
+elements:
+- id: cha-eli-harper
+  type: character
+  name: Eli Harper
+  aliases:
+  - Eli
+  tags: []
+- id: set-north-county
+  type: setting
+  name: North County
+  aliases: []
+  tags: []
+characters:
+- title: Eli Harper
+  path: characters\eli-harper.md
+research:
+- title: Town notes
+  path: research\town-notes.md
+notes:
+- title: Revision notes
+  path: notes\revision-notes.md
