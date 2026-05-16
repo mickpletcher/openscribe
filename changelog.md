@@ -271,3 +271,8 @@
 * added explicit board note to chapter link commands plus TUI chapter and binder visibility for those links
 * added regression coverage for snapshot restore and diff, editor launch helpers, outliner filters, scene search, conference support, citation insertion, board chapter links, and TUI quick actions
 * updated `README.md`, the sample project guide, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
+
+### AI roadmap expansion
+
+* added planned AI commands to local `future-upgrades.md` for analysis, rewrite, brainstorm, metadata suggestion, outline, query, scene split, compile review, and conference pack workflows
+* updated `assessment.md` so the next priorities now include expanding the AI layer with workflow specific review and drafting support

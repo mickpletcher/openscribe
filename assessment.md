@@ -188,6 +188,19 @@ The next value is tighter connection between them and the manuscript:
 3. richer compare views and deeper binder filtering should continue
 4. stronger canvas controls beyond the current keyboard movement should land next
 
+### priority 5
+
+Deepen the AI layer with review and suggestion workflows.
+
+The provider layer is broader than the current command surface.
+The next value is not generic chat.
+It is workflow specific review and drafting support:
+
+1. chapter analysis for pacing, continuity, and point of view drift
+2. scoped rewrite suggestions that never overwrite manuscript files silently
+3. metadata, outline, and project query assistance on top of the current manuscript model
+4. compile review and conference material refinement once the earlier AI review path is stable
+
 ## bottom line
 
 The repo has crossed the important threshold.
