@@ -244,3 +244,16 @@
 * added bibliography aware research compile output controls for `docx`, `pdf`, `epub`, and continuous read assembly
 * added regression coverage for the new TUI views, board editing, element batch updates, relation removal, and research compile behavior
 * updated `README.md`, the sample project guide, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
+
+### Recovery, editor launch, scene search, and explicit board links
+
+* added `openscribe snapshot diff` and `openscribe snapshot restore` for checkpoint and git based snapshot workflows
+* added `openscribe open chapter`, `openscribe open part`, and `openscribe open search` to launch files and folders in the editor
+* added outliner filters by status, label, part, and point of view
+* added `openscribe find scenes` and `openscribe report scenes` for scene aware search and reporting across chapter sections
+* added TUI quick actions for chapter status cycling, board note promotion, and compile runs
+* expanded conference material generation with timed talk plans, poster revision logs, and submission status files
+* added `openscribe workflow cite` for source citation insertion into chapters and named scenes
+* added explicit board note to chapter link commands plus TUI chapter and binder visibility for those links
+* added regression coverage for snapshot restore and diff, editor launch helpers, outliner filters, scene search, conference support, citation insertion, board chapter links, and TUI quick actions
+* updated `README.md`, the sample project guide, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`

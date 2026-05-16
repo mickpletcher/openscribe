@@ -157,3 +157,22 @@ def test_tui_special_views_render_counts(tmp_path: Path) -> None:
     assert "Characters: 2" in pair_summary
     assert "Research: 2" in pair_summary
     assert "Draft target:" in project_summary
+
+
+def test_tui_quick_actions_update_status_and_board_links(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(root, "Arrival", part="Opening", status="draft")
+    note = add_note(root, "Station Secret", body="Hidden record.", group="plot")
+
+    app = OpenScribeApp(root)
+    chapter_key = app.chapters[0].path.as_posix()
+    app.current_node_data = chapter_key
+    app.action_cycle_chapter_status()
+    updated_summary = app._chapter_summary(root, app.chapters[0])
+    assert "Status: revised" in updated_summary
+
+    app.current_node_data = {"kind": "board-note", "note_id": note.note_id}
+    app.action_promote_selected_board_note()
+    board_summary = app._board_note_summary(next(item for item in list_notes(root) if item.note_id == note.note_id))
+    assert "ch-02-station-secret" in board_summary

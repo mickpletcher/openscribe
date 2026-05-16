@@ -4,7 +4,7 @@
 
 `openscribe` is now a real manuscript workflow tool.
 It is past the early scaffold stage.
-The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, board layout, element tracking, source tracking, continuous reading, TUI inspection, import, and export.
+The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, board layout, element tracking, source tracking, snapshots, editor launch, continuous reading, TUI inspection, import, and export.
 
 The product shape is clear now.
 Markdown and YAML remain the source of truth.
@@ -29,15 +29,16 @@ The manuscript path is real and usable:
 12. use nonfiction, screenplay, and research paper workflow helpers
 13. create source notes and citation tracking files for nonfiction or research work
 14. compile research drafts with bibliography and reference formatting controls
-15. create conference submission notes, slide drafts, and talk outlines
-16. read the manuscript as one continuous document
-17. reorder parts and chapters from the CLI
-18. inspect a richer outliner view with scene counts and part totals
-19. export to `docx`, `pdf`, and `epub` with print, ebook, submission, and research paper profiles
+15. insert source citations into chapters or named scenes from the CLI
+16. create conference submission notes, slide drafts, timed talk plans, poster revision logs, and talk outlines
+17. read the manuscript as one continuous document
+18. reorder parts and chapters from the CLI
+19. inspect a richer outliner view with scene counts, part totals, and metadata filters
+20. export to `docx`, `pdf`, and `epub` with print, ebook, submission, and research paper profiles
 
 The planning and tracking layer is also real:
 
-1. board notes can be added, grouped, linked, and promoted into chapters
+1. board notes can be added, grouped, linked, explicitly attached to chapters, and promoted into chapters
 2. board notes can be moved, auto laid out, rendered in a terminal board view, and repositioned inside the TUI
 3. elements can be tracked as characters, settings, and items
 4. aliases and relations are stored explicitly
@@ -45,6 +46,8 @@ The planning and tracking layer is also real:
 6. story ideas can be stored separately from the active manuscript
 7. the TUI can browse the board canvas, corkboard cards, source links, characters, research, notes, story ideas, and elements
 8. project goals, deadlines, and progress stats are visible in reports and the TUI
+9. snapshots can now be listed, diffed, and restored
+10. editor launch helpers can open chapters, parts, and search matches directly
 
 The quality baseline is better than it was at the start.
 There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.
@@ -80,7 +83,7 @@ There is still room to grow, but the project now has enough coverage to change t
 ### 1. the TUI is much stronger, but editing is still selective
 
 The TUI now does more than browse.
-It can move board notes, hide them, render corkboard cards, show source links, and show paired library views.
+It can move board notes, hide them, render corkboard cards, show source links, cycle chapter status, promote notes, and run compile.
 The CLI is still the broader control surface for metadata editing, relation authoring, and compile configuration.
 
 ### 2. compile formatting is broader, but still fairly shallow
@@ -93,7 +96,7 @@ The export intent is clearer now, and research compile settings now cover biblio
 
 The board model has improved.
 It now supports saved positions, automatic layout, a terminal board view, and TUI note movement.
-It still does not have denser canvas controls, drag gestures, or richer cross links back into manuscript metadata.
+It still does not have denser canvas controls, drag gestures, or richer visual grouping behavior.
 
 ### 4. import and template flows are practical, not yet deep
 
@@ -101,11 +104,11 @@ The repo can now import simple folder based manuscripts and reuse user templates
 That is a real workflow gain.
 It is still early compared with a mature importer or a broader template marketplace.
 
-### 5. snapshot restore is still missing
+### 5. snapshot safety is better, but still not complete
 
-The repo can now save snapshots.
-It cannot yet restore them through first class commands.
-That means the safety story is stronger than before, but still one sided.
+The repo can now save, diff, and restore snapshots.
+That is a meaningful improvement.
+It still needs more guided recovery flow and clearer restore previews.
 
 ### 6. element appearance tracking is still heuristic
 
@@ -145,17 +148,17 @@ That is enough to validate the product direction with actual use.
 
 ### priority 1
 
-Add snapshot restore and project recovery helpers.
+Deepen project recovery and chapter split workflows.
 
-Checkpoint creation is useful.
-Recovery needs the other half of the workflow.
+The recovery story is now real.
+The next step is safer restore previews, snapshot comparison summaries, and stronger restructuring helpers for large drafts.
 
 ### priority 2
 
 Deepen scene workflows.
 
-The repo has scene support and the outliner now exposes scene counts and titles.
-The next step is stronger scene reordering, scene metadata, scene aware search or reporting, and better split or merge helpers for large chapters.
+The repo has scene support, scene aware search, and scene reporting.
+The next step is stronger scene reordering, scene metadata, and better split or merge helpers for large chapters.
 
 ### priority 3
 
@@ -177,10 +180,10 @@ Deepen the board, element, and TUI integration.
 The board and element features exist now.
 The next value is tighter connection between them and the manuscript:
 
-1. explicit chapter links to related elements and board notes
-2. quick TUI actions for metadata edits, chapter promotion, and compile runs
-3. richer compare views and deeper binder filtering
-4. stronger canvas controls beyond the current keyboard movement
+1. chapter links to related elements, board notes, and source notes should deepen beyond the current basics
+2. richer metadata edits should move into the TUI
+3. richer compare views and deeper binder filtering should continue
+4. stronger canvas controls beyond the current keyboard movement should land next
 
 ## bottom line
 

@@ -8,7 +8,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Static, Tree
 
-from openscribe.board import auto_layout, list_notes, load_board, move_note_by_delta, render_board, set_note_hidden
+from openscribe.board import auto_layout, list_notes, load_board, move_note_by_delta, promote_note_to_chapter, render_board, set_note_hidden
+from openscribe.compile import compile_project
 from openscribe.elements import get_element, list_element_records
 from openscribe.index import index_is_current
 from openscribe.project import (
@@ -27,6 +28,7 @@ from openscribe.project import (
     load_project_config,
     manuscript_goal_stats,
     source_link_map,
+    update_chapter_metadata,
 )
 
 
@@ -84,6 +86,9 @@ class OpenScribeApp(App[None]):
         ("ctrl+down", "move_board_note(0,1)", "Board down"),
         ("v", "toggle_board_note_visibility", "Toggle board note"),
         ("b", "auto_layout_board", "Auto layout"),
+        ("s", "cycle_chapter_status", "Cycle status"),
+        ("p", "promote_selected_board_note", "Promote note"),
+        ("c", "compile_project_quick", "Compile"),
     ]
 
     def __init__(self, root: Path) -> None:
@@ -157,6 +162,42 @@ class OpenScribeApp(App[None]):
                 self._apply_selection(self.current_node_data)
             except Exception:
                 pass
+
+    def action_cycle_chapter_status(self) -> None:
+        if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
+            return
+        chapter = self.chapter_lookup[self.current_node_data]
+        status_order = ["draft", "revised", "done"]
+        try:
+            next_index = (status_order.index(chapter.status) + 1) % len(status_order)
+        except ValueError:
+            next_index = 0
+        update_chapter_metadata(self.root, chapter.slug, status=status_order[next_index])
+        self.chapters = list_chapters(self.root)
+        self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
+        try:
+            self._apply_selection(chapter.path.as_posix())
+        except Exception:
+            self.current_node_data = chapter.path.as_posix()
+
+    def action_promote_selected_board_note(self) -> None:
+        if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
+            return
+        chapter_path = promote_note_to_chapter(self.root, str(self.current_node_data["note_id"]))
+        self.chapters = list_chapters(self.root)
+        self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
+        try:
+            self._rebuild_tree()
+            self._apply_selection(chapter_path.as_posix())
+        except Exception:
+            self.current_node_data = chapter_path.as_posix()
+
+    def action_compile_project_quick(self) -> None:
+        output_path = compile_project(self.root)
+        preview = self.query_one("#preview", Static)
+        metadata = self.query_one("#meta", Static)
+        preview.update(f"Compiled manuscript to {output_path}")
+        metadata.update(self._project_summary())
 
     def _apply_selection(self, node_data: Any) -> None:
         self.current_node_data = node_data
@@ -249,6 +290,11 @@ class OpenScribeApp(App[None]):
                 source_branch = chapter_node.add("Sources", expand=False)
                 for source in linked_sources:
                     source_branch.add_leaf(source.title, data={"kind": "source", "path": source.path.as_posix()})
+            linked_notes = [note for note in list_notes(self.root) if chapter.slug in note.chapter_links]
+            if linked_notes:
+                note_branch = chapter_node.add("Board Notes", expand=False)
+                for note in linked_notes:
+                    note_branch.add_leaf(note.title, data={"kind": "board-note", "note_id": note.note_id})
 
         self._add_views_section(root_node)
         self._add_auxiliary_section(root_node, "Characters", "characters")
@@ -301,12 +347,16 @@ class OpenScribeApp(App[None]):
                 "Ctrl+Arrows  Move board note",
                 "v  Toggle board note",
                 "b  Auto layout board",
+                "s  Cycle chapter status",
+                "p  Promote selected board note",
+                "c  Compile project",
             ]
         )
 
     @staticmethod
     def _chapter_summary(root: Path, chapter: ChapterDocument) -> str:
         linked_sources = linked_sources_for_chapter(root, chapter)
+        linked_notes = [note.title for note in list_notes(root) if chapter.slug in note.chapter_links]
         return "\n".join(
             [
                 f"Title: {chapter.title}",
@@ -318,6 +368,7 @@ class OpenScribeApp(App[None]):
                 f"Target: {chapter.word_target or 0}",
                 f"Scenes: {chapter.scene_count}",
                 f"Sources: {', '.join(source.title for source in linked_sources) or 'n/a'}",
+                f"Board Notes: {', '.join(linked_notes) or 'n/a'}",
                 "",
                 "Synopsis",
                 chapter.synopsis or "n/a",
@@ -405,6 +456,7 @@ class OpenScribeApp(App[None]):
                 f"Title: {note.title}",
                 f"Group: {note.group or 'n/a'}",
                 f"Links: {', '.join(note.links) or 'n/a'}",
+                f"Chapters: {', '.join(note.chapter_links) or 'n/a'}",
                 f"Position: ({note.x}, {note.y})",
                 f"Hidden: {note.hidden}",
             ]

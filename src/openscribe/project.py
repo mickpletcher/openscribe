@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+import difflib
+import os
 from pathlib import Path
 import re
 import shutil
@@ -25,6 +28,16 @@ class SceneDocument:
     title: str
     body: str
     slug: str
+
+
+@dataclass(slots=True)
+class SceneMatch:
+    chapter: ChapterDocument | None
+    chapter_title: str
+    part: str
+    scene_title: str
+    scene_slug: str
+    scene_body: str
 
 
 @dataclass(slots=True)
@@ -584,6 +597,32 @@ def create_conference_materials(
                 "## Sections\n\n* Background\n* Methods\n* Results\n* Conclusion\n",
             )
         )
+    files.extend(
+        [
+            (
+                root / CONFERENCE_DIR / f"{slug}-submission-status.md",
+                "# Submission Status\n\n"
+                f"## Project\n\n{title}\n\n"
+                f"## Venue\n\n{venue or 'TBD'}\n\n"
+                "## Current State\n\nDrafting\n\n"
+                "## Deadlines\n\n* Abstract\n* Paper\n* Slides\n\n"
+                "## Notes\n\n* \n",
+            ),
+            (
+                root / PRESENTATIONS_DIR / f"{slug}-timed-talk-plan.md",
+                "# Timed Talk Plan\n\n"
+                f"## Session\n\n{title}\n\n"
+                "## Run Of Show\n\n"
+                "| Segment | Minutes | Goal |\n| --- | --- | --- |\n| Opening | 2 | Context |\n| Core result | 6 | Main finding |\n| Discussion | 3 | Implications |\n| Questions | 2 | Close |\n",
+            ),
+            (
+                root / CONFERENCE_DIR / f"{slug}-poster-revision-log.md",
+                "# Poster Revision Log\n\n"
+                f"## Poster\n\n{title}\n\n"
+                "| Revision | Date | Change | Owner |\n| --- | --- | --- | --- |\n",
+            ),
+        ]
+    )
 
     for path, content in files:
         if path.exists():
@@ -1055,6 +1094,35 @@ def find_chapters(
     return results
 
 
+def find_scenes(
+    root: Path,
+    *,
+    status: str | None = None,
+    label: str | None = None,
+    pov: str | None = None,
+    part: str | None = None,
+    text: str | None = None,
+) -> list[SceneMatch]:
+    results: list[SceneMatch] = []
+    scene_filter = text.strip().lower() if text else None
+    for chapter in find_chapters(root, status=status, label=label, pov=pov, part=part):
+        for scene in chapter.scenes:
+            haystacks = [scene.title, scene.body, chapter.title, chapter.synopsis, chapter.notes]
+            if scene_filter and not any(scene_filter in haystack.lower() for haystack in haystacks):
+                continue
+            results.append(
+                SceneMatch(
+                    chapter=chapter,
+                    chapter_title=chapter.title,
+                    part=chapter.part,
+                    scene_title=scene.title,
+                    scene_slug=scene.slug,
+                    scene_body=scene.body,
+                )
+            )
+    return results
+
+
 def chapter_report(root: Path) -> dict[str, Any]:
     chapters = list_chapters(root)
     config = load_project_config(root)
@@ -1064,6 +1132,7 @@ def chapter_report(root: Path) -> dict[str, Any]:
     by_pov: dict[str, int] = {}
     by_part: dict[str, int] = {}
     part_word_totals: dict[str, int] = {}
+    scene_title_counts: dict[str, int] = {}
 
     for chapter in chapters:
         _increment(by_status, chapter.status or "n/a")
@@ -1071,6 +1140,8 @@ def chapter_report(root: Path) -> dict[str, Any]:
         _increment(by_pov, chapter.pov or "n/a")
         _increment(by_part, chapter.part or "n/a")
         part_word_totals[chapter.part] = part_word_totals.get(chapter.part, 0) + chapter.word_count
+        for scene in chapter.scenes:
+            _increment(scene_title_counts, scene.title or "n/a")
 
     return {
         "chapter_count": len(chapters),
@@ -1081,6 +1152,7 @@ def chapter_report(root: Path) -> dict[str, Any]:
         "by_pov": by_pov,
         "by_part": by_part,
         "part_word_totals": part_word_totals,
+        "scene_title_counts": scene_title_counts,
         "goals": manuscript_goal_stats(chapters, goals),
     }
 
@@ -1125,6 +1197,92 @@ def linked_sources_for_chapter(root: Path, chapter: ChapterDocument) -> list[Sou
     return matches
 
 
+def insert_citation_reference(
+    root: Path,
+    chapter_ref: str,
+    source_ref: str,
+    *,
+    scene_ref: str | None = None,
+    citation_style: str = "APA",
+) -> Path:
+    chapter = find_chapter(root, chapter_ref)
+    source = find_source_note(root, source_ref)
+    text = chapter.path.read_text(encoding="utf-8")
+    metadata, body = parse_frontmatter(text)
+    citation_line = _citation_marker(source, citation_style)
+
+    if scene_ref:
+        updated_body = _insert_into_scene(body, scene_ref, citation_line)
+    else:
+        updated_body = body.rstrip() + ("\n\n" if body.strip() else "") + citation_line + "\n"
+
+    chapter.path.write_text(
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{updated_body.rstrip()}\n",
+        encoding="utf-8",
+    )
+    return chapter.path
+
+
+def find_source_note(root: Path, source_ref: str) -> SourceDocument:
+    normalized = source_ref.strip().lower()
+    for source in list_source_notes(root):
+        if source.slug.lower() == normalized or source.title.strip().lower() == normalized:
+            return source
+    raise FileNotFoundError(f"Source note '{source_ref}' was not found.")
+
+
+def resolve_editor_target(root: Path, kind: str, reference: str | None = None, *, text: str | None = None, index: int = 1) -> Path:
+    normalized_kind = kind.strip().lower()
+    if normalized_kind == "chapter":
+        if not reference:
+            raise FileNotFoundError("Chapter reference is required.")
+        return find_chapter(root, reference).path
+    if normalized_kind == "part":
+        if not reference:
+            raise FileNotFoundError("Part reference is required.")
+        return resolve_part_path(root, reference)
+    if normalized_kind == "search":
+        if not text:
+            raise FileNotFoundError("Search text is required.")
+        matches = find_chapters(root, text=text)
+        if not matches:
+            raise FileNotFoundError("No chapter matched the search text.")
+        bounded_index = max(1, min(index, len(matches)))
+        return matches[bounded_index - 1].path
+    raise FileNotFoundError(f"Unsupported editor target '{kind}'.")
+
+
+def open_in_editor(path: Path) -> None:
+    os.startfile(str(path))
+
+
+def scene_report(root: Path, *, text: str | None = None) -> dict[str, Any]:
+    matches = find_scenes(root, text=text)
+    by_chapter: dict[str, int] = {}
+    by_part: dict[str, int] = {}
+    for match in matches:
+        _increment(by_chapter, match.chapter_title)
+        _increment(by_part, match.part)
+    return {
+        "scene_matches": len(matches),
+        "by_chapter": by_chapter,
+        "by_part": by_part,
+        "matches": matches,
+    }
+
+
+def chapter_deadline_status(root: Path) -> dict[str, Any]:
+    config = load_project_config(root)
+    deadline_text = str(config.get("goals", {}).get("deadline", "") or "")
+    if not deadline_text:
+        return {"deadline": "", "days_remaining": None}
+    try:
+        deadline_date = date.fromisoformat(deadline_text)
+    except ValueError:
+        return {"deadline": deadline_text, "days_remaining": None}
+    return {"deadline": deadline_text, "days_remaining": (deadline_date - date.today()).days}
+
+
 def source_link_map(root: Path) -> dict[str, list[ChapterDocument]]:
     links: dict[str, list[ChapterDocument]] = {}
     chapters = list_chapters(root)
@@ -1132,6 +1290,36 @@ def source_link_map(root: Path) -> dict[str, list[ChapterDocument]]:
         matches = [chapter for chapter in chapters if source in linked_sources_for_chapter(root, chapter)]
         links[source.slug] = matches
     return links
+
+
+def _insert_into_scene(body: str, scene_ref: str, citation_line: str) -> str:
+    scenes = parse_scenes(body)
+    if not scenes:
+        raise FileNotFoundError("The chapter does not contain scene headings.")
+    normalized = scene_ref.strip().lower()
+    lines = body.splitlines()
+    heading_indexes = [(index, line[3:].strip()) for index, line in enumerate(lines) if line.startswith("## ")]
+    for idx, (_, title) in enumerate(heading_indexes):
+        if slugify(title) != normalized and title.strip().lower() != normalized:
+            continue
+        start = heading_indexes[idx][0] + 1
+        end = heading_indexes[idx + 1][0] if idx + 1 < len(heading_indexes) else len(lines)
+        scene_lines = lines[start:end]
+        while scene_lines and not scene_lines[-1].strip():
+            scene_lines.pop()
+        scene_lines.append("")
+        scene_lines.append(citation_line)
+        lines[start:end] = scene_lines
+        return "\n".join(lines).rstrip() + "\n"
+    raise FileNotFoundError(f"Scene '{scene_ref}' was not found.")
+
+
+def _citation_marker(source: SourceDocument, citation_style: str) -> str:
+    if citation_style.strip().upper() == "CHICAGO":
+        return f"> Citation: {source.author or 'Unknown'}. \"{source.title}.\" {source.year or 'n.d.'}"
+    if citation_style.strip().upper() == "MLA":
+        return f"> Citation: {source.author or 'Unknown'}. {source.title}. {source.year or 'n.d.'}"
+    return f"> Citation: {source.author or source.title} ({source.year or 'n.d.'})"
 
 
 def parse_scenes(body: str) -> list[SceneDocument]:

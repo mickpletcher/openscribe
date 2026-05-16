@@ -19,7 +19,7 @@ from openscribe.project import (
     list_story_ideas,
     save_project_template,
 )
-from openscribe.snapshots import create_snapshot
+from openscribe.snapshots import create_snapshot, diff_snapshot, restore_snapshot
 
 
 def test_init_project_creates_expected_structure(tmp_path: Path) -> None:
@@ -160,6 +160,24 @@ def test_create_git_snapshot_writes_commit_metadata(tmp_path: Path, monkeypatch)
     assert "commit: abc123" in metadata
     assert "dirty: true" in metadata
     assert any(command[:3] == ["git", "rev-parse", "HEAD"] for command in calls)
+
+
+def test_checkpoint_snapshot_diff_and_restore(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    chapter_path.write_text(chapter_path.read_text(encoding="utf-8") + "Original text.\n", encoding="utf-8")
+
+    snapshot_dir = create_snapshot(root, "before-change")
+
+    chapter_path.write_text(chapter_path.read_text(encoding="utf-8") + "Changed text.\n", encoding="utf-8")
+    diff_text = diff_snapshot(root, snapshot_dir.name)
+    assert "Changed text." in diff_text
+
+    restore_snapshot(root, snapshot_dir.name)
+    restored_text = chapter_path.read_text(encoding="utf-8")
+    assert "Original text." in restored_text
+    assert "Changed text." not in restored_text
 
 
 def test_save_project_template_and_reuse_it(tmp_path: Path) -> None:

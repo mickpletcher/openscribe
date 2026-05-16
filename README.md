@@ -58,22 +58,25 @@ This first build includes:
 * element, alias, relation, and appears in tracking
 * nonfiction section and screenplay scene workflow helpers
 * nonfiction source notes and citation tracking workflows
+* citation insertion helpers for chapter and scene sections
 * project goals, draft targets, and deadline tracking
 * research paper section scaffolding
-* conference material and presentation draft scaffolding
+* conference material, timed talk, poster revision, and submission status scaffolding
 * Word document export
 * PDF export
 * EPUB export
 * manuscript outline view
-* detailed outliner view with metadata, scenes, and word totals
+* detailed outliner view with metadata, scenes, word totals, and filters
 * manuscript status view
 * chapter and part reordering commands
 * compile profiles for print, ebook, submission, and research paper output
 * citation aware research compile settings with bibliography controls
 * wider Textual TUI views for manuscript, corkboard cards, source links, board canvas, characters, research, notes, story ideas, and elements
+* snapshot restore and diff helpers
+* editor launch helpers for chapters, parts, and search results
 * optional AI summary command for chapter review
 
-This build does not yet include editor launch commands, venue specific bibliography styles, or snapshot restore commands.
+This build does not yet include venue specific bibliography styles, scene reordering, or richer drag based board editing.
 
 ## Requirements
 
@@ -146,6 +149,7 @@ openscribe workflow research-paper --part "Paper" --include-appendix
 openscribe workflow source-note "River Ledger Study" --type article --author "J. Harper" --year 2024
 openscribe workflow citation-pack --style Chicago
 openscribe set compile-research --citation-style Chicago --include-bibliography --bibliography-title "Works Cited"
+openscribe workflow cite --chapter "Introduction" --source "River Ledger Study" --style Chicago
 openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
 openscribe compile --profile research-paper
 openscribe compile --profile research-paper --format pdf
@@ -971,6 +975,7 @@ What it does:
 * lets you move board notes with keyboard controls and save new positions immediately
 * lets you hide or reveal board notes while reviewing the canvas
 * includes a paired character and research view for cross checking support material
+* includes quick keys to cycle chapter status, promote the selected board note, and run compile
 
 The CLI is still broader for metadata editing and compile configuration.
 The TUI now includes board editing, corkboard review, source link browsing, and richer library views.
@@ -982,6 +987,9 @@ Current keys:
 * `Ctrl+Arrow keys` move the selected board note
 * `v` toggles the selected board note visibility
 * `b` applies board auto layout
+* `s` cycles the selected chapter status
+* `p` promotes the selected board note into a chapter
+* `c` runs compile with project defaults
 
 This is still a lightweight interface.
 It is strongest for navigation, review, and board positioning.
@@ -1164,12 +1172,30 @@ openscribe find chapters --part Opening
 openscribe find chapters --text station
 ```
 
+### `openscribe find scenes`
+
+Finds scenes by chapter filters and section text.
+
+```powershell
+openscribe find scenes --text station
+openscribe find scenes --part Opening --pov Eli
+```
+
 ### `openscribe report project`
 
 Shows project level chapter and word summaries.
 
 ```powershell
 openscribe report project
+```
+
+### `openscribe report scenes`
+
+Shows scene counts grouped by chapter and part.
+
+```powershell
+openscribe report scenes
+openscribe report scenes --text station
 ```
 
 ### `openscribe templates`
@@ -1230,6 +1256,22 @@ Lists saved snapshots.
 openscribe snapshot list
 ```
 
+### `openscribe snapshot diff`
+
+Shows the current diff against a saved snapshot.
+
+```powershell
+openscribe snapshot diff before-rewrite
+```
+
+### `openscribe snapshot restore`
+
+Restores files from a saved snapshot.
+
+```powershell
+openscribe snapshot restore before-rewrite
+```
+
 ### `openscribe workflow screenplay-scene`
 
 Adds an uppercased screenplay slugline scene inside a chapter.
@@ -1257,7 +1299,7 @@ openscribe workflow research-paper --part "Paper" --include-appendix
 
 ### `openscribe workflow conference-materials`
 
-Creates conference submission notes, talk outlines, slide drafts, and speaker notes.
+Creates conference submission notes, talk outlines, slide drafts, speaker notes, timed talk plans, poster revision logs, and submission status files.
 
 ```powershell
 openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
@@ -1279,6 +1321,15 @@ Creates the shared citation tracking files for nonfiction or research projects.
 ```powershell
 openscribe workflow citation-pack --style Chicago
 openscribe workflow citation-pack --style APA
+```
+
+### `openscribe workflow cite`
+
+Inserts a source citation marker into a chapter or a named scene.
+
+```powershell
+openscribe workflow cite --chapter "Introduction" --source "County Archive"
+openscribe workflow cite --chapter "Arrival" --scene "Station Watch" --source "County Archive" --style Chicago
 ```
 
 ### `openscribe set goals`
@@ -1322,6 +1373,22 @@ Lists board notes.
 
 ```powershell
 openscribe board note list
+```
+
+### `openscribe board chapter add`
+
+Adds an explicit link between a board note and a chapter.
+
+```powershell
+openscribe board chapter add note-001 "Arrival"
+```
+
+### `openscribe board chapter remove`
+
+Removes an explicit link between a board note and a chapter.
+
+```powershell
+openscribe board chapter remove note-001 "Arrival"
 ```
 
 ### `openscribe board note move`
@@ -1419,6 +1486,31 @@ Shows matching chapters for an element name or alias.
 
 ```powershell
 openscribe element appears-in Marcus
+```
+
+### `openscribe open chapter`
+
+Opens a chapter file in your editor.
+
+```powershell
+openscribe open chapter "Arrival"
+```
+
+### `openscribe open part`
+
+Opens a part folder in your editor.
+
+```powershell
+openscribe open part "Opening"
+```
+
+### `openscribe open search`
+
+Opens the first or indexed chapter search result in your editor.
+
+```powershell
+openscribe open search --text station
+openscribe open search --text station --index 2
 ```
 
 ### `openscribe element unrelate`
@@ -1524,22 +1616,20 @@ You can also record snapshots from inside `openscribe`:
 
 Right now:
 
-* the TUI can reposition board notes, but broader metadata editing is still CLI first
+* the TUI can reposition board notes and run a few quick actions, but broader metadata editing is still CLI first
 * word counts only reflect the chapter body text
 * part storage still uses numbered folder names on disk
 * chapter ordering is based on numbered filenames and folders
 * scene support is heading based and does not yet have separate scene metadata
 * compile currently exports to Word, PDF, and EPUB only
 * compile profiles are present, but formatting depth is still intentionally simple
-* bibliography output exists, but venue specific styles and in text citation insertion are still shallow
-* snapshots can be created but do not yet have first class restore commands
+* bibliography output and citation insertion exist, but venue specific styles are still shallow
 * element appears in tracking is derived from text matches and aliases
 
 ## Roadmap
 
 Planned next:
 
-* snapshot restore helpers
-* editor launch helpers
 * venue specific bibliography styles
+* deeper conference revision workflows
 * stronger scene metadata and scene reordering

@@ -22,6 +22,7 @@ class BoardNote:
     x: int
     y: int
     hidden: bool
+    chapter_links: list[str]
 
 
 def board_path(root: Path) -> Path:
@@ -56,6 +57,7 @@ def list_notes(root: Path) -> list[BoardNote]:
                 x=int(item.get("x", 0) or 0),
                 y=int(item.get("y", 0) or 0),
                 hidden=bool(item.get("hidden", False)),
+                chapter_links=[str(value) for value in item.get("chapter_links", [])],
             )
         )
     return notes
@@ -73,10 +75,11 @@ def add_note(root: Path, title: str, body: str = "", group: str = "", x: int = 0
         "x": x,
         "y": y,
         "hidden": False,
+        "chapter_links": [],
     }
     board.setdefault("notes", []).append(note)
     save_board(root, board)
-    return BoardNote(note_id=next_id, title=title, body=body, group=group, links=[], x=x, y=y, hidden=False)
+    return BoardNote(note_id=next_id, title=title, body=body, group=group, links=[], x=x, y=y, hidden=False, chapter_links=[])
 
 
 def add_link(root: Path, from_id: str, to_id: str) -> None:
@@ -118,6 +121,25 @@ def set_note_hidden(root: Path, note_id: str, hidden: bool) -> BoardNote:
     board = load_board(root)
     note = _require_note(board, note_id)
     note["hidden"] = hidden
+    save_board(root, board)
+    return _note_from_dict(note)
+
+
+def add_chapter_link(root: Path, note_id: str, chapter_ref: str) -> BoardNote:
+    board = load_board(root)
+    note = _require_note(board, note_id)
+    chapter_links = [str(value) for value in note.get("chapter_links", [])]
+    if chapter_ref not in chapter_links:
+        chapter_links.append(chapter_ref)
+    note["chapter_links"] = chapter_links
+    save_board(root, board)
+    return _note_from_dict(note)
+
+
+def remove_chapter_link(root: Path, note_id: str, chapter_ref: str) -> BoardNote:
+    board = load_board(root)
+    note = _require_note(board, note_id)
+    note["chapter_links"] = [str(value) for value in note.get("chapter_links", []) if str(value) != chapter_ref]
     save_board(root, board)
     return _note_from_dict(note)
 
@@ -185,6 +207,12 @@ def promote_note_to_chapter(root: Path, note_id: str, chapter_title: str | None 
             chapter_path.read_text(encoding="utf-8") + body + "\n",
             encoding="utf-8",
         )
+    chapter_links = [str(value) for value in note.get("chapter_links", [])]
+    chapter_slug = chapter_path.stem
+    if chapter_slug not in chapter_links:
+        chapter_links.append(chapter_slug)
+    note["chapter_links"] = chapter_links
+    save_board(root, board)
     return chapter_path
 
 
@@ -218,4 +246,5 @@ def _note_from_dict(item: dict[str, Any]) -> BoardNote:
         x=int(item.get("x", 0) or 0),
         y=int(item.get("y", 0) or 0),
         hidden=bool(item.get("hidden", False)),
+        chapter_links=[str(value) for value in item.get("chapter_links", [])],
     )

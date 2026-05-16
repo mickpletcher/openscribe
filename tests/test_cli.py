@@ -386,6 +386,18 @@ def test_template_scene_index_and_snapshot_commands(tmp_path: Path, monkeypatch)
     assert "before" in result.stdout
     assert "checkpoint" in result.stdout
 
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    chapter_path.write_text(chapter_path.read_text(encoding="utf-8") + "Changed later.\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["snapshot", "diff", "before-rewrite"])
+    assert result.exit_code == 0
+    assert "Changed later." in result.stdout
+
+    result = runner.invoke(app, ["snapshot", "restore", "before-rewrite"])
+    assert result.exit_code == 0
+    assert "Restored snapshot" in result.stdout
+    assert "Changed later." not in chapter_path.read_text(encoding="utf-8")
+
 
 def test_custom_template_import_and_workflow_commands(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
@@ -464,16 +476,24 @@ def test_research_paper_and_conference_workflows(tmp_path: Path, monkeypatch) ->
 
     result = runner.invoke(app, ["workflow", "conference-materials", "Grid Study 2026", "--venue", "EnergyConf"])
     assert result.exit_code == 0
-    assert "Created conference materials: 6" in result.stdout
+    assert "Created conference materials: 9" in result.stdout
     assert "grid-study-2026-slide-draft.md" in result.stdout
     assert "grid-study-2026-submission-checklist.md" in result.stdout
+    assert "grid-study-2026-timed-talk-plan.md" in result.stdout
+    assert "grid-study-2026-submission-status.md" in result.stdout
 
     slide_path = tmp_path / "notes" / "presentations" / "grid-study-2026-slide-draft.md"
     checklist_path = tmp_path / "research" / "conferences" / "grid-study-2026-submission-checklist.md"
+    timed_path = tmp_path / "notes" / "presentations" / "grid-study-2026-timed-talk-plan.md"
+    status_path = tmp_path / "research" / "conferences" / "grid-study-2026-submission-status.md"
     assert slide_path.exists()
     assert checklist_path.exists()
+    assert timed_path.exists()
+    assert status_path.exists()
     assert "Title Slide" in slide_path.read_text(encoding="utf-8")
     assert "EnergyConf" in checklist_path.read_text(encoding="utf-8")
+    assert "Run Of Show" in timed_path.read_text(encoding="utf-8")
+    assert "Current State" in status_path.read_text(encoding="utf-8")
 
 
 def test_nonfiction_source_and_citation_workflows(tmp_path: Path, monkeypatch) -> None:
@@ -618,6 +638,12 @@ def test_find_chapters_filters_by_metadata_and_text(tmp_path: Path, monkeypatch)
     assert "Departure" in result.stdout
     assert "Matches: 2" in result.stdout
 
+    assert runner.invoke(app, ["new", "scene", "Station Watch", "--chapter", "Arrival", "--body", "Scene line about the station bell."]).exit_code == 0
+    result = runner.invoke(app, ["find", "scenes", "--text", "station bell"])
+    assert result.exit_code == 0
+    assert "Station Watch" in result.stdout
+    assert "Arrival" in result.stdout
+
 
 def test_report_project_and_batch_update(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
@@ -655,6 +681,12 @@ def test_report_project_and_batch_update(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Matches: 2" in result.stdout
 
+    assert runner.invoke(app, ["new", "scene", "Open Road", "--chapter", "Arrival", "--body", "Eli starts the drive."]).exit_code == 0
+    result = runner.invoke(app, ["report", "scenes"])
+    assert result.exit_code == 0
+    assert "Scenes By Chapter" in result.stdout
+    assert "Arrival" in result.stdout
+
 
 def test_board_note_workflow_and_promote(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
@@ -685,6 +717,19 @@ def test_board_note_workflow_and_promote(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["find", "chapters", "--text", "hiding records"])
     assert result.exit_code == 0
     assert "Station Secret" in result.stdout
+
+    result = runner.invoke(app, ["board", "chapter", "add", "note-002", "Station Secret"])
+    assert result.exit_code == 0
+    assert "Linked note-002 to chapter Station Secret" in result.stdout
+
+    result = runner.invoke(app, ["board", "note", "list"])
+    assert result.exit_code == 0
+    board_text = (tmp_path / ".openscribe" / "boards" / "default.yaml").read_text(encoding="utf-8")
+    assert "ch-01-station-secret" in board_text
+
+    result = runner.invoke(app, ["board", "chapter", "remove", "note-002", "Station Secret"])
+    assert result.exit_code == 0
+    assert "Removed chapter link" in result.stdout
 
 
 def test_element_workflow_and_appears_in(tmp_path: Path, monkeypatch) -> None:
@@ -915,3 +960,45 @@ def test_research_compile_settings_add_bibliography(tmp_path: Path, monkeypatch)
     assert report_result.exit_code == 0
     assert "Draft target: 5000" in report_result.stdout
     assert "Deadline: 2026-07-01" in report_result.stdout
+
+    cite_result = runner.invoke(app, ["workflow", "cite", "--chapter", "Introduction", "--source", "County Archive", "--style", "Chicago"])
+    assert cite_result.exit_code == 0
+    chapter_text = chapter_path.read_text(encoding="utf-8")
+    assert "Citation:" in chapter_text
+    assert "Stewart County" in chapter_text
+
+
+def test_open_helpers_use_editor_targets(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    opened: list[str] = []
+    monkeypatch.setattr("openscribe.project.os.startfile", lambda path: opened.append(path))
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+
+    result = runner.invoke(app, ["open", "chapter", "Arrival"])
+    assert result.exit_code == 0
+    assert any(path.endswith("ch-01-arrival.md") for path in opened)
+
+    result = runner.invoke(app, ["open", "part", "Opening"])
+    assert result.exit_code == 0
+    assert any(path.endswith("part-01-opening") for path in opened)
+
+    result = runner.invoke(app, ["open", "search", "--text", "Arrival"])
+    assert result.exit_code == 0
+    assert len(opened) == 3
+
+
+def test_outliner_filters_and_tui_quick_actions(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening", "--status", "draft", "--label", "setup", "--pov", "Eli"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Departure", "--part", "Opening", "--status", "revised", "--label", "finale", "--pov", "Nora"]).exit_code == 0
+
+    result = runner.invoke(app, ["outliner", "--status", "revised"])
+    assert result.exit_code == 0
+    assert "Departure" in result.stdout
+    assert "Arrival" not in result.stdout

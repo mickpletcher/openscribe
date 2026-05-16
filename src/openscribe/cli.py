@@ -11,7 +11,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
-from openscribe.board import add_link, add_note, auto_layout, list_notes, move_note, promote_note_to_chapter, render_board, set_group
+from openscribe.board import add_chapter_link, add_link, add_note, auto_layout, list_notes, move_note, promote_note_to_chapter, remove_chapter_link, render_board, set_group
 from openscribe.compile import CompileError, PROFILE_PRESETS, assemble_manuscript_text, compile_project
 from openscribe.elements import add_alias, add_element, add_relation, appears_in, batch_update_elements, get_element, list_element_records, remove_relation, update_element
 from openscribe.index import index_is_current, load_project_index, rebuild_project_index
@@ -21,6 +21,7 @@ from openscribe.project import (
     batch_update_chapters,
     built_in_templates,
     chapter_report,
+    chapter_deadline_status,
     create_conference_materials,
     create_chapter,
     create_nonfiction_section,
@@ -31,7 +32,9 @@ from openscribe.project import (
     ensure_citation_tracking_files,
     find_chapter,
     find_chapters,
+    find_scenes,
     find_story_idea,
+    find_source_note,
     import_folder_project,
     init_project_from_template,
     list_source_notes,
@@ -39,17 +42,21 @@ from openscribe.project import (
     list_story_ideas,
     load_part_metadata,
     load_project_config,
+    open_in_editor,
     project_root,
     reorder_chapter,
     reorder_part,
+    resolve_editor_target,
     save_project_template,
+    scene_report,
     template_library_path,
+    insert_citation_reference,
     update_chapter_metadata,
     update_goals,
     update_part_title,
     update_research_compile_settings,
 )
-from openscribe.snapshots import create_snapshot, list_snapshots
+from openscribe.snapshots import create_snapshot, diff_snapshot, list_snapshots, restore_snapshot
 from openscribe.tui import OpenScribeApp
 
 app = typer.Typer(help="CLI and TUI writing environment for long form projects.")
@@ -62,6 +69,7 @@ report_app = typer.Typer(help="Project reports.")
 board_app = typer.Typer(help="Board mode workflows.")
 board_note_app = typer.Typer(help="Board note workflows.")
 board_link_app = typer.Typer(help="Board link workflows.")
+board_chapter_app = typer.Typer(help="Board note to chapter link workflows.")
 board_group_app = typer.Typer(help="Board grouping workflows.")
 board_layout_app = typer.Typer(help="Board layout workflows.")
 element_app = typer.Typer(help="Element and relation workflows.")
@@ -73,6 +81,7 @@ template_app = typer.Typer(help="Project template workflows.")
 import_app = typer.Typer(help="Import workflows.")
 workflow_app = typer.Typer(help="Format specific workflow helpers.")
 move_app = typer.Typer(help="Reordering workflows.")
+open_app = typer.Typer(help="Open project files in your editor.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
 app.add_typer(set_app, name="set")
@@ -88,8 +97,10 @@ app.add_typer(template_app, name="template")
 app.add_typer(import_app, name="import")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(move_app, name="move")
+app.add_typer(open_app, name="open")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
+board_app.add_typer(board_chapter_app, name="chapter")
 board_app.add_typer(board_group_app, name="group")
 board_app.add_typer(board_layout_app, name="layout")
 element_app.add_typer(element_alias_app, name="alias")
@@ -204,9 +215,14 @@ def outline() -> None:
 
 
 @app.command()
-def outliner() -> None:
+def outliner(
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status."),
+    label: Optional[str] = typer.Option(None, "--label", help="Filter by label."),
+    pov: Optional[str] = typer.Option(None, "--pov", help="Filter by point of view."),
+    part: Optional[str] = typer.Option(None, "--part", help="Filter by part title or slug."),
+) -> None:
     root = project_root()
-    chapters = list_chapters(root)
+    chapters = find_chapters(root, status=status, label=label, pov=pov, part=part)
     config = load_project_config(root)
     console.print(f"Project: {config.get('title', 'Untitled Project')}")
     current_part_id = None
@@ -482,6 +498,27 @@ def find_chapter_matches(
     console.print(f"Matches: {len(matches)}")
 
 
+@find_app.command("scenes")
+def find_scene_matches(
+    status: Optional[str] = typer.Option(None, "--status", help="Filter chapter status."),
+    label: Optional[str] = typer.Option(None, "--label", help="Filter chapter label."),
+    pov: Optional[str] = typer.Option(None, "--pov", help="Filter chapter point of view."),
+    part: Optional[str] = typer.Option(None, "--part", help="Filter by part title or slug."),
+    text: Optional[str] = typer.Option(None, "--text", help="Search scene title, scene body, and chapter context."),
+) -> None:
+    root = project_root()
+    matches = find_scenes(root, status=status, label=label, pov=pov, part=part, text=text)
+    table = Table(title="Scene Matches")
+    table.add_column("Part")
+    table.add_column("Chapter")
+    table.add_column("Scene")
+    table.add_column("Preview")
+    for match in matches:
+        table.add_row(match.part, match.chapter_title, match.scene_title, " ".join(match.scene_body.split())[:60])
+    console.print(table)
+    console.print(f"Matches: {len(matches)}")
+
+
 @report_app.command("project")
 def report_project() -> None:
     root = project_root()
@@ -493,6 +530,9 @@ def report_project() -> None:
     console.print(f"Draft target: {summary['goals']['draft_word_target']}")
     console.print(f"Session target: {summary['goals']['session_word_target']}")
     console.print(f"Deadline: {summary['goals']['deadline'] or 'n/a'}")
+    deadline_status = chapter_deadline_status(root)
+    if deadline_status["days_remaining"] is not None:
+        console.print(f"Days remaining: {deadline_status['days_remaining']}")
     console.print(f"Progress: {summary['goals']['progress_percent']}%")
 
     _print_counter_table("By Status", summary["by_status"])
@@ -500,6 +540,18 @@ def report_project() -> None:
     _print_counter_table("By POV", summary["by_pov"])
     _print_counter_table("By Part", summary["by_part"])
     _print_counter_table("Part Word Totals", summary["part_word_totals"], value_header="Words")
+    _print_counter_table("Scene Titles", summary["scene_title_counts"])
+
+
+@report_app.command("scenes")
+def report_scenes(
+    text: Optional[str] = typer.Option(None, "--text", help="Optional scene text filter."),
+) -> None:
+    root = project_root()
+    summary = scene_report(root, text=text)
+    console.print(f"Scene matches: {summary['scene_matches']}")
+    _print_counter_table("Scenes By Chapter", summary["by_chapter"])
+    _print_counter_table("Scenes By Part", summary["by_part"])
 
 
 @index_app.command("rebuild")
@@ -572,6 +624,19 @@ def snapshot_list() -> None:
         )
     console.print(table)
     console.print(f"Snapshots: {len(records)}")
+
+
+@snapshot_app.command("restore")
+def snapshot_restore(snapshot_ref: str = typer.Argument(..., help="Snapshot folder name or partial match.")) -> None:
+    root = project_root()
+    path = restore_snapshot(root, snapshot_ref)
+    console.print(f"Restored snapshot {path.relative_to(root)}")
+
+
+@snapshot_app.command("diff")
+def snapshot_diff(snapshot_ref: str = typer.Argument(..., help="Snapshot folder name or partial match.")) -> None:
+    root = project_root()
+    console.print(diff_snapshot(root, snapshot_ref))
 
 
 @app.command("templates")
@@ -688,6 +753,18 @@ def workflow_citation_pack(
         console.print(f"Tracked sources: {len(existing_sources)}")
 
 
+@workflow_app.command("cite")
+def workflow_cite(
+    chapter: str = typer.Option(..., "--chapter", help="Chapter title or slug."),
+    source: str = typer.Option(..., "--source", help="Source title or slug."),
+    scene: Optional[str] = typer.Option(None, "--scene", help="Optional scene title or slug."),
+    style: str = typer.Option("APA", "--style", help="Citation style text."),
+) -> None:
+    root = project_root()
+    path = insert_citation_reference(root, chapter, source, scene_ref=scene, citation_style=style)
+    console.print(f"Inserted citation into {path.relative_to(root)}")
+
+
 @import_app.command("folder")
 def import_folder(
     source_path: Path = typer.Argument(..., help="Existing folder based manuscript path."),
@@ -771,11 +848,12 @@ def board_note_list(group: Optional[str] = typer.Option(None, "--group", help="F
     table.add_column("Title")
     table.add_column("Group")
     table.add_column("Links")
+    table.add_column("Chapters")
     table.add_column("Body")
     for note in notes:
         if group and note.group.strip().lower() != group.strip().lower():
             continue
-        table.add_row(note.note_id, note.title, note.group or "", ", ".join(note.links), note.body or "")
+        table.add_row(note.note_id, note.title, note.group or "", ", ".join(note.links), ", ".join(note.chapter_links), note.body or "")
     console.print(table)
 
 
@@ -798,6 +876,28 @@ def board_link_add(
     root = project_root()
     add_link(root, from_id, to_id)
     console.print(f"Linked {from_id} to {to_id}")
+
+
+@board_chapter_app.command("add")
+def board_chapter_link_add(
+    note_id: str = typer.Argument(..., help="Board note id."),
+    chapter: str = typer.Argument(..., help="Chapter title or slug."),
+) -> None:
+    root = project_root()
+    chapter_doc = find_chapter(root, chapter)
+    note = add_chapter_link(root, note_id, chapter_doc.slug)
+    console.print(f"Linked {note.note_id} to chapter {chapter_doc.title}")
+
+
+@board_chapter_app.command("remove")
+def board_chapter_link_remove(
+    note_id: str = typer.Argument(..., help="Board note id."),
+    chapter: str = typer.Argument(..., help="Chapter title or slug."),
+) -> None:
+    root = project_root()
+    chapter_doc = find_chapter(root, chapter)
+    note = remove_chapter_link(root, note_id, chapter_doc.slug)
+    console.print(f"Removed chapter link from {note.note_id}")
 
 
 @board_group_app.command("set")
@@ -966,6 +1066,33 @@ def element_appears_in(element_ref: str = typer.Argument(..., help="Element id o
         table.add_row(chapter.part, chapter.title, str(chapter.path.relative_to(root)))
     console.print(table)
     console.print(f"Matches: {len(matches)}")
+
+
+@open_app.command("chapter")
+def open_chapter(chapter: str = typer.Argument(..., help="Chapter title or slug.")) -> None:
+    root = project_root()
+    path = resolve_editor_target(root, "chapter", chapter)
+    open_in_editor(path)
+    console.print(f"Opened {path.relative_to(root)}")
+
+
+@open_app.command("part")
+def open_part(part: str = typer.Argument(..., help="Part title or slug.")) -> None:
+    root = project_root()
+    path = resolve_editor_target(root, "part", part)
+    open_in_editor(path)
+    console.print(f"Opened {path.relative_to(root)}")
+
+
+@open_app.command("search")
+def open_search(
+    text: str = typer.Option(..., "--text", help="Search text."),
+    index: int = typer.Option(1, "--index", help="1 based match index."),
+) -> None:
+    root = project_root()
+    path = resolve_editor_target(root, "search", text=text, index=index)
+    open_in_editor(path)
+    console.print(f"Opened {path.relative_to(root)}")
 
 
 @ai_app.command("summarize")

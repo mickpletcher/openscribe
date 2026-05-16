@@ -59,3 +59,13 @@ Tracked record of roadmap items that shipped.
 * added corkboard style synopsis cards plus richer TUI filtering, previews, and library pair views
 * added project goals and progress stats for targets and deadlines in reports and the TUI
 * added batch element updates, relation removal commands, and citation aware research compile settings with bibliography controls
+
+### Snapshot restore, editor launch, scene search, and conference support
+
+* added snapshot restore and snapshot diff helpers for checkpoint and git based project snapshots
+* added editor launch helpers for chapters, parts, and chapter search results
+* added outliner filters plus scene aware search and reporting across chapter sections
+* added TUI quick actions for status changes, board note promotion, and compile runs
+* added richer conference output support for timed talks, poster revision logs, and submission status tracking
+* added citation insertion helpers for chapters and named scenes
+* added explicit board note to chapter link commands and views

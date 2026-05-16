@@ -40,15 +40,19 @@ py -3.11 -m openscribe report project
 py -3.11 -m openscribe index rebuild
 py -3.11 -m openscribe index search station
 py -3.11 -m openscribe find chapters --text station
+py -3.11 -m openscribe find scenes --text station
 py -3.11 -m openscribe outliner
+py -3.11 -m openscribe outliner --status draft
 py -3.11 -m openscribe move chapter "Town Hall" --position 1
 py -3.11 -m openscribe compile --profile submission
 py -3.11 -m openscribe workflow source-note "County Archive" --type archive --author "Stewart County" --year 1987
 py -3.11 -m openscribe workflow citation-pack --style Chicago
+py -3.11 -m openscribe workflow cite --chapter "Arrival" --scene "Bus Stop" --source "County Archive" --style Chicago
 py -3.11 -m openscribe set compile-research --citation-style Chicago --include-bibliography --bibliography-title "Works Cited"
 py -3.11 -m openscribe set goals --draft-word-target 85000 --session-word-target 1200 --deadline 2026-09-01
 py -3.11 -m openscribe board note add "Sheriff rumor" --body "A deputy hints the sheriff knew about the ledger." --group plot
 py -3.11 -m openscribe board note list
+py -3.11 -m openscribe board chapter add note-001 "Arrival"
 py -3.11 -m openscribe board layout auto
 py -3.11 -m openscribe board view
 py -3.11 -m openscribe idea list
@@ -56,6 +60,8 @@ py -3.11 -m openscribe show idea "The Flood Ledger"
 py -3.11 -m openscribe element add character "Eli Harper" --notes "Primary point of view"
 py -3.11 -m openscribe element appears-in Eli
 py -3.11 -m openscribe snapshot save "sample-checkpoint"
+py -3.11 -m openscribe snapshot diff sample-checkpoint
+py -3.11 -m openscribe open chapter "Arrival"
 py -3.11 -m openscribe template save "north-county-custom"
 py -3.11 -m openscribe read
 py -3.11 -m openscribe status
@@ -70,12 +76,13 @@ The board commands store freeform planning notes under `.openscribe/boards/`.
 The element commands store element, alias, and relation data under `.openscribe/elements/`.
 
 The source note and citation workflows store nonfiction research support files under `research/sources/` and `research/`.
+Citation insertion can target the whole chapter or a named scene section.
 
 The goal and deadline settings live in `.openscribe/project.yaml` and show up in `report project` and the TUI.
 
 The story idea commands store structured new book ideas under `notes/story-ideas/`.
 
-The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/`.
+The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/` and can now diff or restore them.
 
 The template commands store saved user templates under `.openscribe/templates/`.
 
