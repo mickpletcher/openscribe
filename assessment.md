@@ -201,6 +201,20 @@ It is workflow specific review and drafting support:
 3. metadata, outline, and project query assistance on top of the current manuscript model
 4. compile review and conference material refinement once the earlier AI review path is stable
 
+### priority 6
+
+Explore Word integration only after the current desktop workflow stays stable.
+
+The right product path is an Office add in, not old COM or VBA work.
+But that should be treated as a desktop first front end on top of OpenScribe, not as the new source of truth.
+
+The important constraints are:
+
+1. keep Markdown and project files as the canonical store
+2. use a task pane for real workflows instead of command only actions
+3. expect a local bridge for desktop use instead of direct repo access from the add in sandbox
+4. treat full cross platform support as a later step unless project access moves to a shared backend
+
 ## bottom line
 
 The repo has crossed the important threshold.

@@ -276,3 +276,8 @@
 
 * added planned AI commands to local `future-upgrades.md` for analysis, rewrite, brainstorm, metadata suggestion, outline, query, scene split, compile review, and conference pack workflows
 * updated `assessment.md` so the next priorities now include expanding the AI layer with workflow specific review and drafting support
+
+### Word add in roadmap note
+
+* added a Microsoft Word add in track to local `future-upgrades.md` as a later platform expansion
+* updated `assessment.md` to frame Word integration as an Office add in with a task pane and desktop first local bridge constraints
