@@ -162,17 +162,26 @@ def test_tui_special_views_render_counts(tmp_path: Path) -> None:
 def test_tui_quick_actions_update_status_and_board_links(tmp_path: Path) -> None:
     root = init_project(tmp_path, "North County")
     create_part(root, "Opening")
-    create_chapter(root, "Arrival", part="Opening", status="draft")
+    create_chapter(root, "Arrival", part="Opening", status="draft", label="default", word_target=1000)
+    create_chapter(root, "Departure", part="Opening", pov="Nora")
     note = add_note(root, "Station Secret", body="Hidden record.", group="plot")
 
     app = OpenScribeApp(root)
     chapter_key = app.chapters[0].path.as_posix()
     app.current_node_data = chapter_key
     app.action_cycle_chapter_status()
+    app.action_cycle_chapter_label()
+    app.action_cycle_chapter_pov()
+    app.action_increase_chapter_target()
+    app.action_decrease_chapter_target()
     updated_summary = app._chapter_summary(root, app.chapters[0])
     assert "Status: revised" in updated_summary
+    assert "Label: setup" in updated_summary
+    assert "POV: Nora" in updated_summary
+    assert "Target: 1000" in updated_summary
+    assert "Quick Actions" in updated_summary
 
     app.current_node_data = {"kind": "board-note", "note_id": note.note_id}
     app.action_promote_selected_board_note()
     board_summary = app._board_note_summary(next(item for item in list_notes(root) if item.note_id == note.note_id))
-    assert "ch-02-station-secret" in board_summary
+    assert "ch-03-station-secret" in board_summary

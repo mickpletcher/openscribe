@@ -48,6 +48,7 @@ py -3.11 -m openscribe compile --profile submission
 py -3.11 -m openscribe workflow source-note "County Archive" --type archive --author "Stewart County" --year 1987
 py -3.11 -m openscribe workflow citation-pack --style Chicago
 py -3.11 -m openscribe workflow cite --chapter "Arrival" --scene "Bus Stop" --source "County Archive" --style Chicago
+py -3.11 -m openscribe workflow conference-schedule-import .\energyconf-schedule.csv --venue "EnergyConf"
 py -3.11 -m openscribe set compile-research --citation-style Chicago --include-bibliography --bibliography-title "Works Cited"
 py -3.11 -m openscribe set goals --draft-word-target 85000 --session-word-target 1200 --deadline 2026-09-01
 py -3.11 -m openscribe board note add "Sheriff rumor" --body "A deputy hints the sheriff knew about the ledger." --group plot
@@ -69,7 +70,7 @@ py -3.11 -m openscribe tui
 ```
 
 Inside the TUI you can now use the search box to filter chapters, sources, board notes, and library content.
-You can inspect part metadata, open the board canvas section, review corkboard cards, browse source links, and use keyboard board note movement with saved positions.
+You can inspect part metadata, open the board canvas section, review corkboard cards, browse source links, use keyboard board note movement with saved positions, and cycle selected chapter metadata from the keyboard.
 
 The board commands store freeform planning notes under `.openscribe/boards/`.
 
@@ -77,6 +78,7 @@ The element commands store element, alias, and relation data under `.openscribe/
 
 The source note and citation workflows store nonfiction research support files under `research/sources/` and `research/`.
 Citation insertion can target the whole chapter or a named scene section.
+Conference schedule import can generate session overview and checklist files from a schedule export.
 
 The goal and deadline settings live in `.openscribe/project.yaml` and show up in `report project` and the TUI.
 

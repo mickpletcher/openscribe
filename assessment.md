@@ -48,6 +48,8 @@ The planning and tracking layer is also real:
 8. project goals, deadlines, and progress stats are visible in reports and the TUI
 9. snapshots can now be listed, diffed, and restored
 10. editor launch helpers can open chapters, parts, and search matches directly
+11. the TUI can now cycle chapter label, point of view, and word target in addition to status
+12. conference schedule files can now be imported into session schedule and checklist documents
 
 The quality baseline is better than it was at the start.
 There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.
@@ -80,11 +82,11 @@ There is still room to grow, but the project now has enough coverage to change t
 
 ## current issues
 
-### 1. the TUI is much stronger, but editing is still selective
+### 1. the TUI is much stronger, but freeform editing is still selective
 
 The TUI now does more than browse.
-It can move board notes, hide them, render corkboard cards, show source links, cycle chapter status, promote notes, and run compile.
-The CLI is still the broader control surface for metadata editing, relation authoring, and compile configuration.
+It can move board notes, hide them, render corkboard cards, show source links, cycle chapter status, label, and point of view, adjust word targets, promote notes, and run compile.
+The CLI is still the broader control surface for freeform metadata editing, relation authoring, and compile configuration.
 
 ### 2. compile formatting is broader, but still fairly shallow
 
@@ -182,7 +184,7 @@ The board and element features exist now.
 The next value is tighter connection between them and the manuscript:
 
 1. chapter links to related elements, board notes, and source notes should deepen beyond the current basics
-2. richer metadata edits should move into the TUI
+2. synopsis and notes editing should move into the TUI next
 3. richer compare views and deeper binder filtering should continue
 4. stronger canvas controls beyond the current keyboard movement should land next
 

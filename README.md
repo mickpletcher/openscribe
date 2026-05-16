@@ -73,8 +73,10 @@ This first build includes:
 * compile profiles for print, ebook, submission, and research paper output
 * citation aware research compile settings with bibliography controls
 * wider Textual TUI views for manuscript, corkboard cards, source links, board canvas, characters, research, notes, story ideas, and elements
+* richer TUI chapter metadata quick actions for status, label, point of view, and word target
 * snapshot restore and diff helpers
 * editor launch helpers for chapters, parts, and search results
+* conference schedule import and session checklist automation
 * optional AI summary command for chapter review
 
 This build does not yet include venue specific bibliography styles, scene reordering, or richer drag based board editing.
@@ -980,7 +982,9 @@ What it does:
 * lets you move board notes with keyboard controls and save new positions immediately
 * lets you hide or reveal board notes while reviewing the canvas
 * includes a paired character and research view for cross checking support material
-* includes quick keys to cycle chapter status, promote the selected board note, and run compile
+* includes quick keys to cycle chapter status, label, and point of view
+* includes quick keys to raise or lower chapter word targets
+* includes quick keys to promote the selected board note and run compile
 
 The CLI is still broader for metadata editing and compile configuration.
 The TUI now includes board editing, corkboard review, source link browsing, and richer library views.
@@ -993,6 +997,10 @@ Current keys:
 * `v` toggles the selected board note visibility
 * `b` applies board auto layout
 * `s` cycles the selected chapter status
+* `l` cycles the selected chapter label
+* `o` cycles the selected chapter point of view
+* `w` raises the selected chapter word target by `250`
+* `W` lowers the selected chapter word target by `250`
 * `p` promotes the selected board note into a chapter
 * `c` runs compile with project defaults
 
@@ -1311,6 +1319,16 @@ openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
 openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf" --no-poster
 ```
 
+### `openscribe workflow conference-schedule-import`
+
+Imports a conference schedule from `csv`, `tsv`, `json`, `yaml`, or `yml`.
+It creates a schedule overview, a session checklist, and per session notes with ready to use review checklists.
+
+```powershell
+openscribe workflow conference-schedule-import .\energyconf-schedule.csv --venue "EnergyConf"
+openscribe workflow conference-schedule-import .\energyconf-schedule.json --venue "EnergyConf" --no-create-checklists
+```
+
 ### `openscribe workflow source-note`
 
 Creates a structured nonfiction or research source note.
@@ -1621,7 +1639,7 @@ You can also record snapshots from inside `openscribe`:
 
 Right now:
 
-* the TUI can reposition board notes and run a few quick actions, but broader metadata editing is still CLI first
+* the TUI can now handle several chapter metadata quick actions, but full freeform metadata editing is still CLI first
 * word counts only reflect the chapter body text
 * part storage still uses numbered folder names on disk
 * chapter ordering is based on numbered filenames and folders
@@ -1636,5 +1654,5 @@ Right now:
 Planned next:
 
 * venue specific bibliography styles
-* deeper conference revision workflows
+* deeper conference revision workflows and schedule transforms
 * stronger scene metadata and scene reordering

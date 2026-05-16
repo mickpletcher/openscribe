@@ -109,6 +109,15 @@ The TUI can show:
 * board canvas notes
 * character, research, notes, story idea, and element views
 
+Useful TUI keys:
+
+* `s` cycles chapter status
+* `l` cycles chapter label
+* `o` cycles chapter point of view
+* `w` raises the chapter word target by `250`
+* `W` lowers the chapter word target by `250`
+* `c` runs compile
+
 ## Export the manuscript
 
 Default export:
@@ -180,6 +189,7 @@ Set-Location .\grid-study
 openscribe workflow research-paper --part "Paper"
 openscribe workflow source-note "River Ledger Study" --type article --author "J. Harper" --year 2024
 openscribe workflow citation-pack --style Chicago
+openscribe workflow conference-schedule-import .\energyconf-schedule.csv --venue "EnergyConf"
 openscribe compile --profile research-paper
 ```
 

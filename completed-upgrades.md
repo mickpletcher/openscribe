@@ -69,3 +69,9 @@ Tracked record of roadmap items that shipped.
 * added richer conference output support for timed talks, poster revision logs, and submission status tracking
 * added citation insertion helpers for chapters and named scenes
 * added explicit board note to chapter link commands and views
+
+### TUI metadata quick actions and conference schedule import
+
+* added richer TUI quick actions for chapter label, point of view, and word target updates
+* added conference schedule import for `csv`, `tsv`, `json`, and `yaml`
+* added automated session schedule and checklist file generation from imported conference data

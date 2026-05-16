@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import date
 import difflib
+import json
 import os
 from pathlib import Path
 import re
@@ -19,6 +21,7 @@ INDEX_DIR = ".openscribe/index"
 SNAPSHOTS_DIR = ".openscribe/snapshots"
 TEMPLATES_DIR = ".openscribe/templates"
 CONFERENCE_DIR = "research/conferences"
+CONFERENCE_SESSIONS_DIR = "research/conferences/sessions"
 PRESENTATIONS_DIR = "notes/presentations"
 SOURCES_DIR = "research/sources"
 
@@ -633,6 +636,102 @@ def create_conference_materials(
     return created_paths
 
 
+def import_conference_schedule(
+    root: Path,
+    schedule_path: Path,
+    *,
+    venue: str = "",
+    create_checklists: bool = True,
+) -> list[Path]:
+    if not schedule_path.exists():
+        raise FileNotFoundError(f"Schedule file '{schedule_path}' was not found.")
+
+    sessions = _load_schedule_rows(schedule_path)
+    if not sessions:
+        raise ValueError("Conference schedule file did not contain any sessions.")
+
+    venue_name = venue.strip() or schedule_path.stem.replace("-", " ").replace("_", " ").title()
+    venue_slug = slugify(venue_name)
+    created_paths: list[Path] = []
+    session_lines = [
+        "# Conference Schedule",
+        "",
+        f"## Venue",
+        "",
+        venue_name,
+        "",
+        "| Session | Day | Time | Room | Format | Presenter | Status |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    checklist_lines = [
+        "# Session Checklist",
+        "",
+        f"## Venue",
+        "",
+        venue_name,
+        "",
+        "| Session | Slides | Notes | Timing | Poster | Status |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+
+    for index, session in enumerate(sessions, start=1):
+        title = session.get("title", f"Session {index}")
+        day = session.get("day", "")
+        time = session.get("time", "")
+        room = session.get("room", "")
+        format_name = session.get("format", "")
+        presenter = session.get("presenter", "")
+        status = session.get("status", "planned")
+        notes = session.get("notes", "")
+        session_slug = slugify(title)
+        session_lines.append(
+            f"| {title} | {day or 'TBD'} | {time or 'TBD'} | {room or 'TBD'} | {format_name or 'TBD'} | {presenter or 'TBD'} | {status} |"
+        )
+        checklist_lines.append(
+            f"| {title} | [ ] | [ ] | [ ] | {'[ ]' if create_checklists else 'n/a'} | {status} |"
+        )
+
+        session_path = root / CONFERENCE_SESSIONS_DIR / f"{venue_slug}-{index:02d}-{session_slug}.md"
+        if not session_path.exists():
+            session_path.parent.mkdir(parents=True, exist_ok=True)
+            session_path.write_text(
+                "# Conference Session\n\n"
+                f"## Title\n\n{title}\n\n"
+                f"## Venue\n\n{venue_name}\n\n"
+                f"## Day\n\n{day or 'TBD'}\n\n"
+                f"## Time\n\n{time or 'TBD'}\n\n"
+                f"## Room\n\n{room or 'TBD'}\n\n"
+                f"## Format\n\n{format_name or 'TBD'}\n\n"
+                f"## Presenter\n\n{presenter or 'TBD'}\n\n"
+                f"## Status\n\n{status}\n\n"
+                "## Session Checklist\n\n"
+                "* [ ] Slide deck checked\n"
+                "* [ ] Speaker notes checked\n"
+                "* [ ] Timed run completed\n"
+                "* [ ] Handout or poster checked\n"
+                "* [ ] Submission portal reviewed\n\n"
+                "## Notes\n\n"
+                f"{notes.strip() or '* '}\n",
+                encoding="utf-8",
+            )
+            created_paths.append(session_path)
+
+    overview_path = root / CONFERENCE_DIR / f"{venue_slug}-session-schedule.md"
+    if not overview_path.exists():
+        overview_path.parent.mkdir(parents=True, exist_ok=True)
+        overview_path.write_text("\n".join(session_lines) + "\n", encoding="utf-8")
+        created_paths.append(overview_path)
+
+    if create_checklists:
+        checklist_path = root / CONFERENCE_DIR / f"{venue_slug}-session-checklist.md"
+        if not checklist_path.exists():
+            checklist_path.parent.mkdir(parents=True, exist_ok=True)
+            checklist_path.write_text("\n".join(checklist_lines) + "\n", encoding="utf-8")
+            created_paths.append(checklist_path)
+
+    return created_paths
+
+
 def create_source_note(
     root: Path,
     title: str,
@@ -853,6 +952,34 @@ def update_chapter_metadata(
     return chapter.path
 
 
+def cycle_chapter_label(root: Path, chapter_ref: str, labels: list[str] | None = None) -> Path:
+    chapter = find_chapter(root, chapter_ref)
+    label_order = labels or _default_label_order(root)
+    try:
+        next_index = (label_order.index(chapter.label) + 1) % len(label_order)
+    except ValueError:
+        next_index = 0
+    return update_chapter_metadata(root, chapter_ref, label=label_order[next_index])
+
+
+def cycle_chapter_pov(root: Path, chapter_ref: str) -> Path:
+    chapter = find_chapter(root, chapter_ref)
+    pov_order = [""] + [value for value in _known_povs(root) if value]
+    if chapter.pov and chapter.pov not in pov_order:
+        pov_order.append(chapter.pov)
+    try:
+        next_index = (pov_order.index(chapter.pov) + 1) % len(pov_order)
+    except ValueError:
+        next_index = 0
+    return update_chapter_metadata(root, chapter_ref, pov=pov_order[next_index])
+
+
+def adjust_chapter_word_target(root: Path, chapter_ref: str, delta: int) -> Path:
+    chapter = find_chapter(root, chapter_ref)
+    next_target = max(0, int(chapter.word_target or 0) + delta)
+    return update_chapter_metadata(root, chapter_ref, word_target=next_target)
+
+
 def batch_update_chapters(
     root: Path,
     *,
@@ -893,6 +1020,61 @@ def batch_update_chapters(
             )
         )
     return updated_paths
+
+
+def _default_label_order(root: Path) -> list[str]:
+    baseline = ["default", "setup", "scene", "action", "research"]
+    labels = []
+    for value in baseline + sorted({chapter.label for chapter in list_chapters(root) if chapter.label}):
+        if value not in labels:
+            labels.append(value)
+    return labels
+
+
+def _known_povs(root: Path) -> list[str]:
+    values: list[str] = []
+    for chapter in list_chapters(root):
+        if chapter.pov and chapter.pov not in values:
+            values.append(chapter.pov)
+    return values
+
+
+def _load_schedule_rows(schedule_path: Path) -> list[dict[str, str]]:
+    suffix = schedule_path.suffix.lower()
+    if suffix in {".csv", ".tsv"}:
+        delimiter = "\t" if suffix == ".tsv" else ","
+        with schedule_path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter=delimiter)
+            return [_normalize_schedule_row(row) for row in reader if row]
+    if suffix == ".json":
+        data = json.loads(schedule_path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            data = data.get("sessions", [])
+        if not isinstance(data, list):
+            raise ValueError("Conference schedule JSON must contain a list or a top level 'sessions' list.")
+        return [_normalize_schedule_row(dict(item)) for item in data if isinstance(item, dict)]
+    if suffix in {".yaml", ".yml"}:
+        data = yaml.safe_load(schedule_path.read_text(encoding="utf-8")) or []
+        if isinstance(data, dict):
+            data = data.get("sessions", [])
+        if not isinstance(data, list):
+            raise ValueError("Conference schedule YAML must contain a list or a top level 'sessions' list.")
+        return [_normalize_schedule_row(dict(item)) for item in data if isinstance(item, dict)]
+    raise ValueError("Conference schedule import supports .csv, .tsv, .json, .yaml, and .yml files.")
+
+
+def _normalize_schedule_row(row: dict[str, Any]) -> dict[str, str]:
+    normalized = {slugify(str(key)).replace("-", "_"): str(value).strip() for key, value in row.items() if key is not None}
+    return {
+        "title": normalized.get("title") or normalized.get("session") or normalized.get("name") or "",
+        "day": normalized.get("day") or normalized.get("date") or "",
+        "time": normalized.get("time") or normalized.get("slot") or "",
+        "room": normalized.get("room") or normalized.get("location") or "",
+        "format": normalized.get("format") or normalized.get("type") or "",
+        "presenter": normalized.get("presenter") or normalized.get("speaker") or normalized.get("author") or "",
+        "status": normalized.get("status") or "planned",
+        "notes": normalized.get("notes") or normalized.get("summary") or "",
+    }
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:

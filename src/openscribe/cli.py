@@ -55,6 +55,7 @@ from openscribe.project import (
     update_goals,
     update_part_title,
     update_research_compile_settings,
+    import_conference_schedule,
 )
 from openscribe.snapshots import create_snapshot, diff_snapshot, list_snapshots, restore_snapshot
 from openscribe.tui import OpenScribeApp
@@ -713,6 +714,22 @@ def workflow_conference_materials(
     root = project_root()
     paths = create_conference_materials(root, title, venue=venue, include_poster=include_poster)
     console.print(f"Created conference materials: {len(paths)}")
+    for path in paths:
+        console.print(str(path.relative_to(root)))
+
+
+@workflow_app.command("conference-schedule-import")
+def workflow_conference_schedule_import(
+    schedule_path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, resolve_path=True, help="Conference schedule file. Use csv, tsv, json, yaml, or yml."),
+    venue: str = typer.Option("", "--venue", help="Conference or venue name override."),
+    create_checklists: bool = typer.Option(True, "--create-checklists/--no-create-checklists", help="Create session checklist files."),
+) -> None:
+    root = project_root()
+    try:
+        paths = import_conference_schedule(root, schedule_path, venue=venue, create_checklists=create_checklists)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(f"Imported conference schedule: {len(paths)}")
     for path in paths:
         console.print(str(path.relative_to(root)))
 

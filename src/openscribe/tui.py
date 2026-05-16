@@ -16,7 +16,10 @@ from openscribe.project import (
     AuxiliaryDocument,
     ChapterDocument,
     SourceDocument,
+    adjust_chapter_word_target,
     chapter_report,
+    cycle_chapter_label,
+    cycle_chapter_pov,
     find_chapters,
     find_story_idea,
     linked_sources_for_chapter,
@@ -87,6 +90,10 @@ class OpenScribeApp(App[None]):
         ("v", "toggle_board_note_visibility", "Toggle board note"),
         ("b", "auto_layout_board", "Auto layout"),
         ("s", "cycle_chapter_status", "Cycle status"),
+        ("l", "cycle_chapter_label", "Cycle label"),
+        ("o", "cycle_chapter_pov", "Cycle POV"),
+        ("w", "increase_chapter_target", "Increase target"),
+        ("W", "decrease_chapter_target", "Decrease target"),
         ("p", "promote_selected_board_note", "Promote note"),
         ("c", "compile_project_quick", "Compile"),
     ]
@@ -173,12 +180,27 @@ class OpenScribeApp(App[None]):
         except ValueError:
             next_index = 0
         update_chapter_metadata(self.root, chapter.slug, status=status_order[next_index])
-        self.chapters = list_chapters(self.root)
-        self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
-        try:
-            self._apply_selection(chapter.path.as_posix())
-        except Exception:
-            self.current_node_data = chapter.path.as_posix()
+        self._refresh_chapter_selection(chapter.path.as_posix())
+
+    def action_cycle_chapter_label(self) -> None:
+        if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
+            return
+        chapter = self.chapter_lookup[self.current_node_data]
+        cycle_chapter_label(self.root, chapter.slug)
+        self._refresh_chapter_selection(chapter.path.as_posix())
+
+    def action_cycle_chapter_pov(self) -> None:
+        if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
+            return
+        chapter = self.chapter_lookup[self.current_node_data]
+        cycle_chapter_pov(self.root, chapter.slug)
+        self._refresh_chapter_selection(chapter.path.as_posix())
+
+    def action_increase_chapter_target(self) -> None:
+        self._adjust_selected_chapter_target(250)
+
+    def action_decrease_chapter_target(self) -> None:
+        self._adjust_selected_chapter_target(-250)
 
     def action_promote_selected_board_note(self) -> None:
         if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
@@ -198,6 +220,22 @@ class OpenScribeApp(App[None]):
         metadata = self.query_one("#meta", Static)
         preview.update(f"Compiled manuscript to {output_path}")
         metadata.update(self._project_summary())
+
+    def _adjust_selected_chapter_target(self, delta: int) -> None:
+        if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
+            return
+        chapter = self.chapter_lookup[self.current_node_data]
+        adjust_chapter_word_target(self.root, chapter.slug, delta)
+        self._refresh_chapter_selection(chapter.path.as_posix())
+
+    def _refresh_chapter_selection(self, chapter_key: str) -> None:
+        self.chapters = list_chapters(self.root)
+        self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
+        try:
+            self._rebuild_tree()
+            self._apply_selection(chapter_key)
+        except Exception:
+            self.current_node_data = chapter_key
 
     def _apply_selection(self, node_data: Any) -> None:
         self.current_node_data = node_data
@@ -348,6 +386,10 @@ class OpenScribeApp(App[None]):
                 "v  Toggle board note",
                 "b  Auto layout board",
                 "s  Cycle chapter status",
+                "l  Cycle chapter label",
+                "o  Cycle chapter POV",
+                "w  Increase target by 250",
+                "W  Decrease target by 250",
                 "p  Promote selected board note",
                 "c  Compile project",
             ]
@@ -378,6 +420,9 @@ class OpenScribeApp(App[None]):
                 "",
                 "Scene Titles",
                 ", ".join(scene.title for scene in chapter.scenes) or "n/a",
+                "",
+                "Quick Actions",
+                "s status  l label  o POV  w target+250  W target-250",
             ]
         )
 

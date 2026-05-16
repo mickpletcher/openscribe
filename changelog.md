@@ -2,6 +2,14 @@
 
 ## 2026-05-15
 
+### TUI metadata quick actions and conference schedule import
+
+* added richer TUI quick actions for chapter label, point of view, and word target updates
+* added `openscribe workflow conference-schedule-import` for `csv`, `tsv`, `json`, and `yaml` conference schedule files
+* added automated session schedule and session checklist document generation from imported conference data
+* added regression coverage for the new TUI quick actions and conference schedule import workflow
+* updated `README.md`, `getting-started.md`, the sample project guide, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
+
 ### Getting started guide
 
 * added root `getting-started.md` as the fastest beginner setup path for install, first project creation, TUI use, and export

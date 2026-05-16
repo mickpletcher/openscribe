@@ -495,6 +495,40 @@ def test_research_paper_and_conference_workflows(tmp_path: Path, monkeypatch) ->
     assert "Run Of Show" in timed_path.read_text(encoding="utf-8")
     assert "Current State" in status_path.read_text(encoding="utf-8")
 
+    schedule_path = tmp_path / "energyconf-schedule.csv"
+    schedule_path.write_text(
+        "Title,Day,Time,Room,Format,Presenter,Status,Notes\n"
+        "Microgrid Timing,Day 1,09:00,Hall A,Talk,Eli Harper,accepted,Need a shorter opening.\n"
+        "Poster Review,Day 2,14:00,Hall B,Poster,Nora Bell,planned,Confirm print size.\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "conference-schedule-import",
+            str(schedule_path),
+            "--venue",
+            "EnergyConf",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Imported conference schedule: 4" in result.stdout
+    assert "energyconf-session-schedule.md" in result.stdout
+    assert "energyconf-session-checklist.md" in result.stdout
+    assert "energyconf-01-microgrid-timing.md" in result.stdout
+
+    schedule_output = tmp_path / "research" / "conferences" / "energyconf-session-schedule.md"
+    session_checklist_path = tmp_path / "research" / "conferences" / "energyconf-session-checklist.md"
+    session_note_path = tmp_path / "research" / "conferences" / "sessions" / "energyconf-01-microgrid-timing.md"
+    assert schedule_output.exists()
+    assert session_checklist_path.exists()
+    assert session_note_path.exists()
+    assert "Microgrid Timing" in schedule_output.read_text(encoding="utf-8")
+    assert "Poster Review" in session_checklist_path.read_text(encoding="utf-8")
+    assert "Session Checklist" in session_note_path.read_text(encoding="utf-8")
+
 
 def test_nonfiction_source_and_citation_workflows(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
