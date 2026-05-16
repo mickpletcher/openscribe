@@ -2,6 +2,12 @@
 
 ## 2026-05-15
 
+### Getting started guide
+
+* added root `getting-started.md` as the fastest beginner setup path for install, first project creation, TUI use, and export
+* linked `getting-started.md` from `README.md`
+* updated `assessment.md` so the guide is treated as part of the repo source of truth documentation set
+
 ### Assessment and quality
 
 * added `assessment.md` with a current project review, risks, and next priority recommendations

@@ -4,6 +4,7 @@ Open source CLI and TUI writing environment for long form projects
 
 ## Project docs
 
+See [getting-started.md](./getting-started.md) for the fastest beginner setup path.
 See [changelog.md](./changelog.md) for the repo change history.
 See [completed-upgrades.md](./completed-upgrades.md) for shipped roadmap work.
 See [assessment.md](./assessment.md) for the current project assessment.
@@ -91,6 +92,8 @@ You do not need any AI provider, API key, or AI SDK setup to use the normal proj
 
 Clone the repo, create a virtual environment, activate it, then install in editable mode.
 
+If you want the shortest setup path first, use [getting-started.md](./getting-started.md).
+
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -113,6 +116,8 @@ py -3.11 -m openscribe --help
 
 This is the normal setup path.
 It does not require AI.
+
+If you are brand new to the repo, [getting-started.md](./getting-started.md) is the better first read.
 
 ```powershell
 py -3.11 -m openscribe --help

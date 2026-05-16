@@ -123,7 +123,8 @@ The repo now has several source of truth files:
 1. `assessment.md`
 2. `changelog.md`
 3. `completed-upgrades.md`
-4. local `future-upgrades.md`
+4. `getting-started.md`
+5. local `future-upgrades.md`
 
 That is the right structure.
 It only works if those files stay synchronized every time the repo changes.
