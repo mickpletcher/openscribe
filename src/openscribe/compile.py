@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-from openscribe.project import ChapterDocument, list_chapters, load_project_config, slugify
+from openscribe.project import ChapterDocument, list_chapters, list_source_notes, load_project_config, slugify
 
 
 class CompileError(RuntimeError):
@@ -30,6 +30,10 @@ class CompileOptions:
     include_part_headings: bool
     chapter_heading_style: str
     backend_name: str
+    citation_style: str
+    include_bibliography: bool
+    include_reference_heading: bool
+    bibliography_title: str
 
 
 TEMPLATE_PRESETS = {
@@ -108,6 +112,7 @@ def compile_project(
 
     if _can_use_pandoc(options):
         _compile_project_with_pandoc(
+            root,
             project_title,
             str(config.get("author", "")).strip(),
             chapters,
@@ -118,6 +123,7 @@ def compile_project(
 
     if options.format_name == "docx":
         _compile_project_to_docx(
+            root,
             project_title,
             str(config.get("author", "")).strip(),
             chapters,
@@ -127,6 +133,7 @@ def compile_project(
         return target_path
     if options.format_name == "pdf":
         _compile_project_to_pdf(
+            root,
             project_title,
             str(config.get("author", "")).strip(),
             chapters,
@@ -136,6 +143,7 @@ def compile_project(
         return target_path
     if options.format_name == "epub":
         _compile_project_to_epub(
+            root,
             project_title,
             str(config.get("author", "")).strip(),
             chapters,
@@ -174,6 +182,10 @@ def assemble_manuscript_text(root: Path, template_name: str | None = None) -> st
         chapter_sections = [chapter_heading, chapter.body.strip()]
         sections.append("\n\n".join([part for part in chapter_sections if part]))
 
+    bibliography_sections = _bibliography_sections(root, options)
+    if bibliography_sections:
+        sections.extend(bibliography_sections)
+
     return "\n\n".join(section for section in sections if section.strip())
 
 
@@ -209,6 +221,7 @@ def _resolve_compile_options(
     output_path: Path | None,
 ) -> CompileOptions:
     compile_config = config.get("compile", {})
+    research_compile = compile_config.get("research", {})
     resolved_profile = (profile_name or str(compile_config.get("default_profile", "") or "")).strip().lower()
     if resolved_profile and resolved_profile not in PROFILE_PRESETS:
         supported_profiles = ", ".join(sorted(PROFILE_PRESETS))
@@ -266,6 +279,10 @@ def _resolve_compile_options(
         ),
         chapter_heading_style=chapter_heading_style,
         backend_name=str(compile_config.get("backend", "auto") or "auto").strip().lower(),
+        citation_style=str(research_compile.get("citation_style", "APA") or "APA").strip(),
+        include_bibliography=bool(research_compile.get("include_bibliography", False)),
+        include_reference_heading=bool(research_compile.get("include_reference_heading", True)),
+        bibliography_title=str(research_compile.get("bibliography_title", "References") or "References").strip(),
     )
 
 
@@ -289,6 +306,7 @@ def _can_use_pandoc(options: CompileOptions) -> bool:
 
 
 def _compile_project_with_pandoc(
+    root: Path,
     project_title: str,
     author: str,
     chapters: list[ChapterDocument],
@@ -301,7 +319,7 @@ def _compile_project_with_pandoc(
             "Pandoc was requested but is not installed or not available on PATH."
         )
 
-    manuscript_text = _pandoc_markdown(project_title, author, chapters, options)
+    manuscript_text = _pandoc_markdown(root, project_title, author, chapters, options)
     with tempfile.TemporaryDirectory(prefix="openscribe-pandoc-") as temp_dir:
         temp_path = Path(temp_dir)
         source_path = temp_path / "manuscript.md"
@@ -330,6 +348,7 @@ def _compile_project_with_pandoc(
 
 
 def _pandoc_markdown(
+    root: Path,
     project_title: str,
     author: str,
     chapters: list[ChapterDocument],
@@ -362,10 +381,17 @@ def _pandoc_markdown(
             lines.append(block)
             lines.append("")
 
+    bibliography_sections = _bibliography_sections(root, options)
+    if bibliography_sections:
+        for section in bibliography_sections:
+            lines.append(section)
+            lines.append("")
+
     return "\n".join(lines).strip() + "\n"
 
 
 def _compile_project_to_docx(
+    root: Path,
     project_title: str,
     author: str,
     chapters: list[ChapterDocument],
@@ -393,10 +419,12 @@ def _compile_project_to_docx(
         for block in _paragraphs(chapter.body):
             document.add_paragraph(block)
 
+    _append_bibliography_to_docx(document, root, options)
     document.save(target_path)
 
 
 def _compile_project_to_pdf(
+    root: Path,
     project_title: str,
     author: str,
     chapters: list[ChapterDocument],
@@ -464,10 +492,26 @@ def _compile_project_to_pdf(
                 y -= line_height
             y -= line_height
 
+    bibliography_lines = _bibliography_render_lines(root, options)
+    if bibliography_lines:
+        pdf.setFont("Times-Bold", 14)
+        ensure_space(2)
+        pdf.drawString(left_margin, y, options.bibliography_title)
+        y -= line_height * 2
+        pdf.setFont("Times-Roman", 12)
+        for entry in bibliography_lines:
+            wrapped_lines = _wrap_pdf_text(entry, right_margin - left_margin, "Times-Roman", 12)
+            ensure_space(len(wrapped_lines) + 1)
+            for line in wrapped_lines:
+                pdf.drawString(left_margin, y, line)
+                y -= line_height
+            y -= line_height
+
     pdf.save()
 
 
 def _compile_project_to_epub(
+    root: Path,
     project_title: str,
     author: str,
     chapters: list[ChapterDocument],
@@ -509,6 +553,17 @@ def _compile_project_to_epub(
         )
         book.add_item(chapter_item)
         epub_items.append(chapter_item)
+
+    bibliography_html = _epub_bibliography_page(root, options)
+    if bibliography_html:
+        bibliography_page = epub.EpubHtml(
+            title=options.bibliography_title,
+            file_name="references.xhtml",
+            lang="en",
+        )
+        bibliography_page.content = bibliography_html
+        book.add_item(bibliography_page)
+        epub_items.append(bibliography_page)
 
     if title_page is not None:
         book.toc = tuple([title_page, *epub_items])
@@ -559,6 +614,57 @@ def _epub_page(title: str, subtitle: str, body_html: str) -> str:
 def _epub_body(text: str) -> str:
     blocks = [f"<p>{escape(block)}</p>" for block in _paragraphs(text)]
     return "".join(blocks)
+
+
+def _bibliography_sections(root: Path, options: CompileOptions) -> list[str]:
+    entries = _bibliography_render_lines(root, options)
+    if not entries:
+        return []
+    if options.include_reference_heading:
+        return [options.bibliography_title, "\n".join(entries)]
+    return ["\n".join(entries)]
+
+
+def _bibliography_render_lines(root: Path, options: CompileOptions) -> list[str]:
+    if not options.include_bibliography:
+        return []
+    entries = [_source_entry(source, options.citation_style) for source in list_source_notes(root)]
+    return [entry for entry in entries if entry.strip()]
+
+
+def _append_bibliography_to_docx(document: Document, root: Path, options: CompileOptions) -> None:
+    entries = _bibliography_render_lines(root, options)
+    if not entries:
+        return
+    if options.include_reference_heading:
+        document.add_page_break()
+        document.add_heading(options.bibliography_title, level=1)
+    for entry in entries:
+        document.add_paragraph(entry)
+
+
+def _epub_bibliography_page(root: Path, options: CompileOptions) -> str:
+    entries = _bibliography_render_lines(root, options)
+    if not entries:
+        return ""
+    body = "".join(f"<p>{escape(entry)}</p>" for entry in entries)
+    return _epub_page(options.bibliography_title, "", body)
+
+
+def _source_entry(source, citation_style: str) -> str:
+    author = source.author.strip()
+    year = source.year.strip()
+    url = source.url.strip()
+    title = source.title.strip()
+    style = citation_style.strip().upper()
+    if style == "MLA":
+        parts = [f"{author}." if author else "", f"{title}.", year, url]
+        return " ".join(part for part in parts if part).strip()
+    if style == "CHICAGO":
+        parts = [author, f"\"{title}.\"" if title else "", year, url]
+        return ". ".join(part.strip().rstrip(".") for part in parts if part).strip() + "."
+    parts = [f"{author} ({year})." if author and year else author or f"({year})." if year else "", title + ".", url]
+    return " ".join(part for part in parts if part).strip()
 
 
 def _chapter_heading(title: str, chapter_number: int, options: CompileOptions) -> str:

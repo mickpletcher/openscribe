@@ -46,3 +46,16 @@ Tracked record of roadmap items that shipped.
 * added compile support for research papers with an academic template and a `research-paper` profile
 * added research project templates and paper section scaffolding helpers
 * added conference material and presentation draft workflows for abstracts, slide drafts, talk outlines, speaker notes, and poster outlines
+
+### Nonfiction source tracking and board canvas
+
+* added nonfiction source note creation and citation tracking pack workflows
+* added board canvas preview and board note inspection inside the TUI
+
+### TUI board editing, progress goals, source links, and research compile controls
+
+* added board note movement and visibility editing inside the TUI with saved positions
+* added source to chapter link views in the binder and chapter metadata panels
+* added corkboard style synopsis cards plus richer TUI filtering, previews, and library pair views
+* added project goals and progress stats for targets and deadlines in reports and the TUI
+* added batch element updates, relation removal commands, and citation aware research compile settings with bibliography controls

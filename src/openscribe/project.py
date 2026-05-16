@@ -17,6 +17,7 @@ SNAPSHOTS_DIR = ".openscribe/snapshots"
 TEMPLATES_DIR = ".openscribe/templates"
 CONFERENCE_DIR = "research/conferences"
 PRESENTATIONS_DIR = "notes/presentations"
+SOURCES_DIR = "research/sources"
 
 
 @dataclass(slots=True)
@@ -32,6 +33,18 @@ class AuxiliaryDocument:
     title: str
     body: str
     category: str
+    slug: str
+
+
+@dataclass(slots=True)
+class SourceDocument:
+    path: Path
+    title: str
+    source_type: str
+    author: str
+    year: str
+    url: str
+    body: str
     slug: str
 
 
@@ -131,6 +144,17 @@ def init_project_from_template(
                 "include_title_page": bool(template["compile"].get("include_title_page", True)),
                 "include_part_headings": bool(template["compile"].get("include_part_headings", True)),
                 "chapter_heading_style": str(template["compile"].get("chapter_heading_style", "title-only")),
+                "research": {
+                    "citation_style": "APA",
+                    "include_bibliography": False,
+                    "include_reference_heading": True,
+                    "bibliography_title": "References",
+                },
+            },
+            "goals": {
+                "draft_word_target": 0,
+                "session_word_target": 0,
+                "deadline": "",
             },
             "ai": {
                 "enabled": False,
@@ -169,6 +193,8 @@ def built_in_templates() -> dict[str, dict[str, Any]]:
             },
             "files": {
                 "research/source-log.md": "# Source Log\n\n## References\n\n* \n",
+                "research/citation-log.md": "# Citation Log\n\n| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
+                "research/bibliography-notes.md": "# Bibliography Notes\n\n## Style\n\nChicago, APA, MLA, or house style.\n",
                 "notes/argument-map.md": "# Argument Map\n\n## Core Claim\n\n\n## Supporting Points\n\n* \n",
             },
         },
@@ -210,6 +236,8 @@ def built_in_templates() -> dict[str, dict[str, Any]]:
             "files": {
                 "research/source-log.md": "# Source Log\n\n## References\n\n* \n",
                 "research/literature-review.md": "# Literature Review\n\n## Key Sources\n\n* \n",
+                "research/citation-log.md": "# Citation Log\n\n| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
+                "research/bibliography-notes.md": "# Bibliography Notes\n\n## Style\n\nAPA, IEEE, ACM, or venue style.\n",
                 "notes/research-questions.md": "# Research Questions\n\n## Primary Question\n\n\n## Secondary Questions\n\n* \n",
                 "notes/presentations/slide-draft.md": "# Slide Draft\n\n## Opening\n\n* \n",
             },
@@ -265,7 +293,32 @@ def load_project_config(root: Path) -> dict[str, Any]:
     config_path = root / PROJECT_DIR / PROJECT_FILE
     if not config_path.exists():
         raise FileNotFoundError(f"Missing project config at {config_path}")
-    return yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    compile_config = config.setdefault("compile", {})
+    compile_config.setdefault("default_format", "docx")
+    compile_config.setdefault("backend", "auto")
+    compile_config.setdefault("default_profile", "")
+    compile_config.setdefault("default_template", "novel")
+    compile_config.setdefault("output_filename", "")
+    compile_config.setdefault("include_title_page", True)
+    compile_config.setdefault("include_part_headings", True)
+    compile_config.setdefault("chapter_heading_style", "title-only")
+    research_compile = compile_config.setdefault("research", {})
+    research_compile.setdefault("citation_style", "APA")
+    research_compile.setdefault("include_bibliography", False)
+    research_compile.setdefault("include_reference_heading", True)
+    research_compile.setdefault("bibliography_title", "References")
+    goals = config.setdefault("goals", {})
+    goals.setdefault("draft_word_target", 0)
+    goals.setdefault("session_word_target", 0)
+    goals.setdefault("deadline", "")
+    return config
+
+
+def save_project_config(root: Path, config: dict[str, Any]) -> Path:
+    config_path = root / PROJECT_DIR / PROJECT_FILE
+    write_yaml(config_path, config)
+    return config_path
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
@@ -541,6 +594,77 @@ def create_conference_materials(
     return created_paths
 
 
+def create_source_note(
+    root: Path,
+    title: str,
+    *,
+    source_type: str = "article",
+    author: str = "",
+    year: str = "",
+    url: str = "",
+    notes: str = "",
+) -> Path:
+    sources_dir = root / SOURCES_DIR
+    sources_dir.mkdir(parents=True, exist_ok=True)
+    slug = slugify(title)
+    source_path = sources_dir / f"{slug}.md"
+    suffix = 2
+    while source_path.exists():
+        source_path = sources_dir / f"{slug}-{suffix}.md"
+        suffix += 1
+
+    frontmatter = {
+        "title": title,
+        "type": source_type,
+        "author": author,
+        "year": year,
+        "url": url,
+    }
+    body = (
+        "## Summary\n\n\n"
+        "## Key Quotes\n\n* \n\n"
+        "## Relevance\n\n\n"
+        "## Notes\n\n"
+        f"{notes.strip()}"
+    ).rstrip()
+    source_path.write_text(
+        f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n{body}\n",
+        encoding="utf-8",
+    )
+    return source_path
+
+
+def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Path]:
+    files = [
+        (
+            root / "research" / "citation-log.md",
+            "# Citation Log\n\n"
+            f"## Style\n\n{style}\n\n"
+            "| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
+        ),
+        (
+            root / "research" / "bibliography-notes.md",
+            "# Bibliography Notes\n\n"
+            f"## Style\n\n{style}\n\n"
+            "## Rules\n\n* Track in text citations\n* Track bibliography edge cases\n",
+        ),
+        (
+            root / "research" / "source-usage-map.md",
+            "# Source Usage Map\n\n"
+            "## Sections\n\n"
+            "* Introduction\n* Methods\n* Results\n* Discussion\n",
+        ),
+    ]
+    created_paths: list[Path] = []
+    for path, content in files:
+        if path.exists():
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        created_paths.append(path)
+    return created_paths
+
+
 def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:
     chapter = find_chapter(root, chapter_ref)
     text = chapter.path.read_text(encoding="utf-8")
@@ -565,6 +689,46 @@ def update_part_title(root: Path, part: str, title: str) -> Path:
     part_path = resolve_part_path(root, part)
     write_yaml(part_path / PART_FILE, {"title": title})
     return part_path
+
+
+def update_goals(
+    root: Path,
+    *,
+    draft_word_target: int | None = None,
+    session_word_target: int | None = None,
+    deadline: str | None = None,
+) -> Path:
+    config = load_project_config(root)
+    goals = config.setdefault("goals", {})
+    if draft_word_target is not None:
+        goals["draft_word_target"] = draft_word_target
+    if session_word_target is not None:
+        goals["session_word_target"] = session_word_target
+    if deadline is not None:
+        goals["deadline"] = deadline
+    return save_project_config(root, config)
+
+
+def update_research_compile_settings(
+    root: Path,
+    *,
+    citation_style: str | None = None,
+    include_bibliography: bool | None = None,
+    include_reference_heading: bool | None = None,
+    bibliography_title: str | None = None,
+) -> Path:
+    config = load_project_config(root)
+    compile_config = config.setdefault("compile", {})
+    research = compile_config.setdefault("research", {})
+    if citation_style is not None:
+        research["citation_style"] = citation_style
+    if include_bibliography is not None:
+        research["include_bibliography"] = include_bibliography
+    if include_reference_heading is not None:
+        research["include_reference_heading"] = include_reference_heading
+    if bibliography_title is not None:
+        research["bibliography_title"] = bibliography_title
+    return save_project_config(root, config)
 
 
 def reorder_part(root: Path, part: str, position: int) -> list[Path]:
@@ -764,6 +928,29 @@ def list_auxiliary_documents(root: Path, category: str) -> list[AuxiliaryDocumen
     return documents
 
 
+def list_source_notes(root: Path) -> list[SourceDocument]:
+    source_dir = root / SOURCES_DIR
+    if not source_dir.exists():
+        return []
+
+    results: list[SourceDocument] = []
+    for path in sorted(source_dir.glob("*.md")):
+        metadata, body = parse_frontmatter(path.read_text(encoding="utf-8"))
+        results.append(
+            SourceDocument(
+                path=path,
+                title=str(metadata.get("title", path.stem.replace("-", " ").title())),
+                source_type=str(metadata.get("type", "source")),
+                author=str(metadata.get("author", "")),
+                year=str(metadata.get("year", "")),
+                url=str(metadata.get("url", "")),
+                body=body,
+                slug=path.stem,
+            )
+        )
+    return results
+
+
 def list_chapters(root: Path) -> list[ChapterDocument]:
     manuscript = root / "manuscript"
     chapters: list[ChapterDocument] = []
@@ -870,6 +1057,8 @@ def find_chapters(
 
 def chapter_report(root: Path) -> dict[str, Any]:
     chapters = list_chapters(root)
+    config = load_project_config(root)
+    goals = config.get("goals", {})
     by_status: dict[str, int] = {}
     by_label: dict[str, int] = {}
     by_pov: dict[str, int] = {}
@@ -892,7 +1081,57 @@ def chapter_report(root: Path) -> dict[str, Any]:
         "by_pov": by_pov,
         "by_part": by_part,
         "part_word_totals": part_word_totals,
+        "goals": manuscript_goal_stats(chapters, goals),
     }
+
+
+def manuscript_goal_stats(chapters: list[ChapterDocument], goals: dict[str, Any]) -> dict[str, Any]:
+    total_words = sum(chapter.word_count for chapter in chapters)
+    total_target = sum(chapter.word_target for chapter in chapters)
+    draft_word_target = int(goals.get("draft_word_target", 0) or 0)
+    session_word_target = int(goals.get("session_word_target", 0) or 0)
+    deadline = str(goals.get("deadline", "") or "")
+    progress_target = draft_word_target or total_target
+    progress_percent = round((total_words / progress_target) * 100, 1) if progress_target else 0.0
+    return {
+        "draft_word_target": draft_word_target,
+        "session_word_target": session_word_target,
+        "deadline": deadline,
+        "chapter_word_target_total": total_target,
+        "progress_target": progress_target,
+        "progress_percent": progress_percent,
+        "words_remaining": max(progress_target - total_words, 0) if progress_target else 0,
+    }
+
+
+def linked_sources_for_chapter(root: Path, chapter: ChapterDocument) -> list[SourceDocument]:
+    source_notes = list_source_notes(root)
+    haystacks = [
+        chapter.title.lower(),
+        chapter.synopsis.lower(),
+        chapter.notes.lower(),
+        chapter.body.lower(),
+    ]
+    matches: list[SourceDocument] = []
+    for source in source_notes:
+        terms = {
+            source.slug.replace("-", " ").lower(),
+            source.title.lower(),
+        }
+        if source.author:
+            terms.add(source.author.lower())
+        if any(term.strip() and any(term in haystack for haystack in haystacks) for term in terms):
+            matches.append(source)
+    return matches
+
+
+def source_link_map(root: Path) -> dict[str, list[ChapterDocument]]:
+    links: dict[str, list[ChapterDocument]] = {}
+    chapters = list_chapters(root)
+    for source in list_source_notes(root):
+        matches = [chapter for chapter in chapters if source in linked_sources_for_chapter(root, chapter)]
+        links[source.slug] = matches
+    return links
 
 
 def parse_scenes(body: str) -> list[SceneDocument]:

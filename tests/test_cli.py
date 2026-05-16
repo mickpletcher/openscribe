@@ -476,6 +476,51 @@ def test_research_paper_and_conference_workflows(tmp_path: Path, monkeypatch) ->
     assert "EnergyConf" in checklist_path.read_text(encoding="utf-8")
 
 
+def test_nonfiction_source_and_citation_workflows(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "County History", "--template", "nonfiction"]).exit_code == 0
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "source-note",
+            "River Ledger Study",
+            "--type",
+            "article",
+            "--author",
+            "J. Harper",
+            "--year",
+            "2024",
+            "--url",
+            "https://example.com/ledger",
+            "--notes",
+            "Supports the flood records argument.",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "research\\sources\\river-ledger-study.md" in result.stdout
+
+    result = runner.invoke(app, ["workflow", "citation-pack", "--style", "Chicago"])
+    assert result.exit_code == 0
+    assert "Created citation tracking files:" in result.stdout
+    assert "research\\source-usage-map.md" in result.stdout
+
+    source_path = tmp_path / "research" / "sources" / "river-ledger-study.md"
+    citation_log_path = tmp_path / "research" / "citation-log.md"
+    bibliography_path = tmp_path / "research" / "bibliography-notes.md"
+    assert source_path.exists()
+    assert citation_log_path.exists()
+    assert bibliography_path.exists()
+    source_text = source_path.read_text(encoding="utf-8")
+    assert "title: River Ledger Study" in source_text
+    assert "author: J. Harper" in source_text
+    assert "Supports the flood records argument." in source_text
+    assert "| Section | Source | Use | Notes |" in citation_log_path.read_text(encoding="utf-8")
+    assert "## Style" in bibliography_path.read_text(encoding="utf-8")
+
+
 def test_board_visual_commands(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -675,6 +720,29 @@ def test_element_workflow_and_appears_in(tmp_path: Path, monkeypatch) -> None:
     assert "Matches: 1" in result.stdout
 
 
+def test_element_batch_updates_and_relation_removal(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["element", "add", "character", "Eli Harper", "--tags", "lead"]).exit_code == 0
+    assert runner.invoke(app, ["element", "add", "setting", "North Station", "--tags", "place"]).exit_code == 0
+    assert runner.invoke(app, ["element", "relate", "cha-eli-harper", "set-north-station", "--type", "visits"]).exit_code == 0
+
+    result = runner.invoke(app, ["element", "set-many", "--match-type", "character", "--add-tags", "viewpoint", "--notes", "Lead investigator"])
+    assert result.exit_code == 0
+    assert "Updated elements: 1" in result.stdout
+
+    result = runner.invoke(app, ["element", "unrelate", "cha-eli-harper", "set-north-station", "--type", "visits"])
+    assert result.exit_code == 0
+    assert "Removed relation" in result.stdout
+
+    result = runner.invoke(app, ["element", "show", "cha-eli-harper"])
+    assert result.exit_code == 0
+    assert "viewpoint" in result.stdout
+    assert "Lead investigator" in result.stdout
+    assert "visits" not in result.stdout
+
+
 def test_multi_part_read_and_export_regression(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -818,3 +886,32 @@ def test_compile_profiles_apply_expected_defaults(tmp_path: Path, monkeypatch) -
     assert ebook_result.exit_code == 0
     ebook_output = tmp_path / "build" / "north-county-ebook.epub"
     assert ebook_output.exists()
+
+
+def test_research_compile_settings_add_bibliography(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(compile_module.shutil, "which", lambda name: None)
+
+    assert runner.invoke(app, ["init", "County Paper", "--template", "research"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Paper"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Introduction", "--part", "Paper"]).exit_code == 0
+    assert runner.invoke(app, ["workflow", "source-note", "County Archive", "--author", "Stewart County", "--year", "1987", "--url", "https://example.com/archive"]).exit_code == 0
+    assert runner.invoke(app, ["set", "compile-research", "--citation-style", "Chicago", "--include-bibliography", "--bibliography-title", "Works Cited"]).exit_code == 0
+    assert runner.invoke(app, ["set", "goals", "--draft-word-target", "5000", "--session-word-target", "750", "--deadline", "2026-07-01"]).exit_code == 0
+
+    chapter_path = tmp_path / "manuscript" / "part-01-paper" / "ch-01-introduction.md"
+    chapter_path.write_text(chapter_path.read_text(encoding="utf-8") + "County Archive supports the opening claim.\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["compile", "--profile", "research-paper"])
+    assert result.exit_code == 0
+
+    output_path = tmp_path / "build" / "county-paper-research-paper.docx"
+    document = Document(output_path)
+    paragraph_text = [paragraph.text for paragraph in document.paragraphs if paragraph.text]
+    assert "Works Cited" in paragraph_text
+    assert any("County Archive" in paragraph for paragraph in paragraph_text)
+
+    report_result = runner.invoke(app, ["report", "project"])
+    assert report_result.exit_code == 0
+    assert "Draft target: 5000" in report_result.stdout
+    assert "Deadline: 2026-07-01" in report_result.stdout

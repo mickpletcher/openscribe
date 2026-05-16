@@ -4,7 +4,7 @@
 
 `openscribe` is now a real manuscript workflow tool.
 It is past the early scaffold stage.
-The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, board layout, element tracking, import, continuous reading, and export.
+The repo supports project setup, manuscript structure, metadata editing, search, reporting, planning notes, board layout, element tracking, source tracking, continuous reading, TUI inspection, import, and export.
 
 The product shape is clear now.
 Markdown and YAML remain the source of truth.
@@ -27,21 +27,24 @@ The manuscript path is real and usable:
 10. save and reuse user defined project templates
 11. import an existing folder based manuscript into a new project
 12. use nonfiction, screenplay, and research paper workflow helpers
-13. create conference submission notes, slide drafts, and talk outlines
-14. read the manuscript as one continuous document
-15. reorder parts and chapters from the CLI
-16. inspect a richer outliner view with scene counts and part totals
-17. export to `docx`, `pdf`, and `epub` with print, ebook, submission, and research paper profiles
+13. create source notes and citation tracking files for nonfiction or research work
+14. compile research drafts with bibliography and reference formatting controls
+15. create conference submission notes, slide drafts, and talk outlines
+16. read the manuscript as one continuous document
+17. reorder parts and chapters from the CLI
+18. inspect a richer outliner view with scene counts and part totals
+19. export to `docx`, `pdf`, and `epub` with print, ebook, submission, and research paper profiles
 
 The planning and tracking layer is also real:
 
 1. board notes can be added, grouped, linked, and promoted into chapters
-2. board notes can be moved, auto laid out, and rendered in a terminal board view
+2. board notes can be moved, auto laid out, rendered in a terminal board view, and repositioned inside the TUI
 3. elements can be tracked as characters, settings, and items
 4. aliases and relations are stored explicitly
 5. chapter appearance lookup works across chapter text and metadata
 6. story ideas can be stored separately from the active manuscript
-7. the TUI can browse characters, research, notes, story ideas, and elements
+7. the TUI can browse the board canvas, corkboard cards, source links, characters, research, notes, story ideas, and elements
+8. project goals, deadlines, and progress stats are visible in reports and the TUI
 
 The quality baseline is better than it was at the start.
 There is now regression coverage across compile, read, metadata, query, board, element, and TUI behaviors.
@@ -74,23 +77,23 @@ There is still room to grow, but the project now has enough coverage to change t
 
 ## current issues
 
-### 1. the TUI still lags behind the CLI
+### 1. the TUI is much stronger, but editing is still selective
 
-The CLI is now the real control surface.
-The TUI is useful, but it is still mostly inspection and navigation.
-Board workflows, reports, element editing, and metadata updates are still command first.
+The TUI now does more than browse.
+It can move board notes, hide them, render corkboard cards, show source links, and show paired library views.
+The CLI is still the broader control surface for metadata editing, relation authoring, and compile configuration.
 
 ### 2. compile formatting is broader, but still fairly shallow
 
 Pandoc support improves the backend story, but the formatting model is still small.
 The current templates and profiles are useful, not rich.
-The export intent is clearer now, but the formatting depth is still limited.
+The export intent is clearer now, and research compile settings now cover bibliography output, but the formatting depth is still limited.
 
 ### 3. board mode is more useful now, but still early
 
 The board model has improved.
-It now supports saved positions, automatic layout, and a terminal board view.
-It still does not have a dedicated TUI canvas or richer interaction model.
+It now supports saved positions, automatic layout, a terminal board view, and TUI note movement.
+It still does not have denser canvas controls, drag gestures, or richer cross links back into manuscript metadata.
 
 ### 4. import and template flows are practical, not yet deep
 
@@ -165,7 +168,7 @@ The repo now separates export intent with:
 3. submission
 4. research paper
 
-The next step is richer profile level formatting, citation handling, and bibliography aware outputs.
+The next step is richer profile level formatting, venue specific bibliography styles, and stronger citation insertion helpers.
 
 ### priority 4
 
@@ -174,10 +177,10 @@ Deepen the board, element, and TUI integration.
 The board and element features exist now.
 The next value is tighter connection between them and the manuscript:
 
-1. chapter links to related elements
-2. chapter links to board notes
-3. board canvas behavior inside the TUI
-4. quick TUI actions for metadata edits, chapter promotion, and compile runs
+1. explicit chapter links to related elements and board notes
+2. quick TUI actions for metadata edits, chapter promotion, and compile runs
+3. richer compare views and deeper binder filtering
+4. stronger canvas controls beyond the current keyboard movement
 
 ## bottom line
 

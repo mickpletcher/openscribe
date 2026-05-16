@@ -13,7 +13,7 @@ from rich.tree import Tree
 from openscribe.ai import AIConfigurationError, load_ai_settings, summarize_text
 from openscribe.board import add_link, add_note, auto_layout, list_notes, move_note, promote_note_to_chapter, render_board, set_group
 from openscribe.compile import CompileError, PROFILE_PRESETS, assemble_manuscript_text, compile_project
-from openscribe.elements import add_alias, add_element, add_relation, appears_in, get_element, list_element_records
+from openscribe.elements import add_alias, add_element, add_relation, appears_in, batch_update_elements, get_element, list_element_records, remove_relation, update_element
 from openscribe.index import index_is_current, load_project_index, rebuild_project_index
 from openscribe.project import (
     add_scene,
@@ -25,13 +25,16 @@ from openscribe.project import (
     create_chapter,
     create_nonfiction_section,
     create_part,
+    create_source_note,
     create_research_paper_structure,
     create_story_idea,
+    ensure_citation_tracking_files,
     find_chapter,
     find_chapters,
     find_story_idea,
     import_folder_project,
     init_project_from_template,
+    list_source_notes,
     list_chapters,
     list_story_ideas,
     load_part_metadata,
@@ -42,7 +45,9 @@ from openscribe.project import (
     save_project_template,
     template_library_path,
     update_chapter_metadata,
+    update_goals,
     update_part_title,
+    update_research_compile_settings,
 )
 from openscribe.snapshots import create_snapshot, list_snapshots
 from openscribe.tui import OpenScribeApp
@@ -334,6 +339,40 @@ def set_chapter(
     console.print(f"Updated chapter {chapter_path.relative_to(root)}")
 
 
+@set_app.command("goals")
+def set_goals(
+    draft_word_target: Optional[int] = typer.Option(None, "--draft-word-target", help="Project draft word target."),
+    session_word_target: Optional[int] = typer.Option(None, "--session-word-target", help="Session writing target."),
+    deadline: Optional[str] = typer.Option(None, "--deadline", help="Project deadline text."),
+) -> None:
+    root = project_root()
+    config_path = update_goals(
+        root,
+        draft_word_target=draft_word_target,
+        session_word_target=session_word_target,
+        deadline=deadline,
+    )
+    console.print(f"Updated project goals at {config_path.relative_to(root)}")
+
+
+@set_app.command("compile-research")
+def set_compile_research(
+    citation_style: Optional[str] = typer.Option(None, "--citation-style", help="Citation style such as APA, MLA, or Chicago."),
+    include_bibliography: Optional[bool] = typer.Option(None, "--include-bibliography/--no-include-bibliography", help="Toggle bibliography output."),
+    include_reference_heading: Optional[bool] = typer.Option(None, "--include-reference-heading/--no-include-reference-heading", help="Toggle the bibliography heading."),
+    bibliography_title: Optional[str] = typer.Option(None, "--bibliography-title", help="Bibliography section title."),
+) -> None:
+    root = project_root()
+    config_path = update_research_compile_settings(
+        root,
+        citation_style=citation_style,
+        include_bibliography=include_bibliography,
+        include_reference_heading=include_reference_heading,
+        bibliography_title=bibliography_title,
+    )
+    console.print(f"Updated research compile settings at {config_path.relative_to(root)}")
+
+
 @set_app.command("chapters")
 def set_chapters(
     match_status: Optional[str] = typer.Option(None, "--match-status", help="Match status."),
@@ -451,6 +490,10 @@ def report_project() -> None:
     console.print(f"Scenes: {summary['scene_count']}")
     console.print(f"Words: {summary['word_count']}")
     console.print(f"Index current: {index_is_current(root)}")
+    console.print(f"Draft target: {summary['goals']['draft_word_target']}")
+    console.print(f"Session target: {summary['goals']['session_word_target']}")
+    console.print(f"Deadline: {summary['goals']['deadline'] or 'n/a'}")
+    console.print(f"Progress: {summary['goals']['progress_percent']}%")
 
     _print_counter_table("By Status", summary["by_status"])
     _print_counter_table("By Label", summary["by_label"])
@@ -607,6 +650,42 @@ def workflow_conference_materials(
     console.print(f"Created conference materials: {len(paths)}")
     for path in paths:
         console.print(str(path.relative_to(root)))
+
+
+@workflow_app.command("source-note")
+def workflow_source_note(
+    title: str = typer.Argument(..., help="Source title."),
+    source_type: str = typer.Option("article", "--type", help="Source type, for example article, book, web, or interview."),
+    author: str = typer.Option("", "--author", help="Source author."),
+    year: str = typer.Option("", "--year", help="Source year."),
+    url: str = typer.Option("", "--url", help="Source URL."),
+    notes: str = typer.Option("", "--notes", help="Initial notes."),
+) -> None:
+    root = project_root()
+    path = create_source_note(
+        root,
+        title,
+        source_type=source_type,
+        author=author,
+        year=year,
+        url=url,
+        notes=notes,
+    )
+    console.print(f"Created source note {path.relative_to(root)}")
+
+
+@workflow_app.command("citation-pack")
+def workflow_citation_pack(
+    style: str = typer.Option("APA", "--style", help="Citation style, for example APA, MLA, Chicago, or IEEE."),
+) -> None:
+    root = project_root()
+    paths = ensure_citation_tracking_files(root, style=style)
+    console.print(f"Created citation tracking files: {len(paths)}")
+    for path in paths:
+        console.print(str(path.relative_to(root)))
+    existing_sources = list_source_notes(root)
+    if existing_sources:
+        console.print(f"Tracked sources: {len(existing_sources)}")
 
 
 @import_app.command("folder")
@@ -810,6 +889,39 @@ def element_show(element_ref: str = typer.Argument(..., help="Element id or name
     console.print(Panel(_yaml_dump(data), title="Element", border_style="cyan"))
 
 
+@element_app.command("set")
+def element_set(
+    element_ref: str = typer.Argument(..., help="Element id or name."),
+    name: Optional[str] = typer.Option(None, "--name", help="New element name."),
+    notes: Optional[str] = typer.Option(None, "--notes", help="New element notes."),
+    tags: Optional[str] = typer.Option(None, "--tags", help="Comma separated tags."),
+) -> None:
+    root = project_root()
+    tag_values = None if tags is None else [value.strip() for value in tags.split(",") if value.strip()]
+    record = update_element(root, element_ref, name=name, notes=notes, tags=tag_values)
+    console.print(f"Updated element {record.element_id}")
+
+
+@element_app.command("set-many")
+def element_set_many(
+    match_type: Optional[str] = typer.Option(None, "--match-type", help="Match element type."),
+    match_tag: Optional[str] = typer.Option(None, "--match-tag", help="Match an existing tag."),
+    match_text: Optional[str] = typer.Option(None, "--match-text", help="Match text in name, aliases, tags, or notes."),
+    notes: Optional[str] = typer.Option(None, "--notes", help="Replacement notes."),
+    add_tags: Optional[str] = typer.Option(None, "--add-tags", help="Comma separated tags to add."),
+) -> None:
+    root = project_root()
+    updated = batch_update_elements(
+        root,
+        match_type=match_type,
+        match_tag=match_tag,
+        match_text=match_text,
+        notes=notes,
+        add_tags=[value.strip() for value in add_tags.split(",") if value.strip()] if add_tags else None,
+    )
+    console.print(f"Updated elements: {len(updated)}")
+
+
 @element_alias_app.command("add")
 def element_alias_add(
     element_ref: str = typer.Argument(..., help="Element id or name."),
@@ -829,6 +941,17 @@ def element_relate(
     root = project_root()
     record = add_relation(root, source, target, relation_type)
     console.print(f"Added relation for {record.element_id}")
+
+
+@element_app.command("unrelate")
+def element_unrelate(
+    source: str = typer.Argument(..., help="Source element id or name."),
+    target: str = typer.Argument(..., help="Target element id or name."),
+    relation_type: Optional[str] = typer.Option(None, "--type", help="Optional relation type to remove."),
+) -> None:
+    root = project_root()
+    record = remove_relation(root, source, target, relation_type)
+    console.print(f"Removed relation for {record.element_id}")
 
 
 @element_app.command("appears-in")

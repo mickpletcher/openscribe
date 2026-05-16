@@ -57,6 +57,8 @@ This first build includes:
 * planning board notes, layout, visual board view, and promotion
 * element, alias, relation, and appears in tracking
 * nonfiction section and screenplay scene workflow helpers
+* nonfiction source notes and citation tracking workflows
+* project goals, draft targets, and deadline tracking
 * research paper section scaffolding
 * conference material and presentation draft scaffolding
 * Word document export
@@ -67,10 +69,11 @@ This first build includes:
 * manuscript status view
 * chapter and part reordering commands
 * compile profiles for print, ebook, submission, and research paper output
-* wider Textual TUI views for manuscript, characters, research, notes, story ideas, and elements
+* citation aware research compile settings with bibliography controls
+* wider Textual TUI views for manuscript, corkboard cards, source links, board canvas, characters, research, notes, story ideas, and elements
 * optional AI summary command for chapter review
 
-This build does not yet include editor launch commands, richer research citation tracking, or snapshot restore commands.
+This build does not yet include editor launch commands, venue specific bibliography styles, or snapshot restore commands.
 
 ## Requirements
 
@@ -140,12 +143,15 @@ If you are using `openscribe` for papers or conference work:
 ```powershell
 openscribe init "Grid Study" --template research
 openscribe workflow research-paper --part "Paper" --include-appendix
+openscribe workflow source-note "River Ledger Study" --type article --author "J. Harper" --year 2024
+openscribe workflow citation-pack --style Chicago
+openscribe set compile-research --citation-style Chicago --include-bibliography --bibliography-title "Works Cited"
 openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
 openscribe compile --profile research-paper
 openscribe compile --profile research-paper --format pdf
 ```
 
-Use this when you want a section based paper draft plus presentation support files.
+Use this when you want a section based paper draft, source tracking files, and presentation support files.
 
 ## AI setup
 
@@ -637,7 +643,7 @@ You can use this for things like `action`, `research`, `needs-work`, or `final-p
 `synopsis`
 
 A short summary of the chapter.
-This is useful for outline review and later corkboard style views.
+This is useful for outline review and the current corkboard style TUI views.
 
 `pov`
 
@@ -955,24 +961,30 @@ The current TUI has three areas:
 What it does:
 
 * reads the part and chapter structure from `manuscript/`
-* reads character, research, notes, story idea, and element content into the same browser
-* includes a search box for filtering chapters by title, synopsis, notes, and body text
+* reads board canvas, corkboard cards, source links, character, research, notes, story idea, and element content into the same browser
+* includes a search box for filtering chapters, sources, board notes, and library content
 * lets you select a chapter from the binder tree
 * lets you select a part node to inspect part metadata
 * shows the chapter body in the preview pane
-* shows chapter status, label, synopsis, point of view, notes, and word target in the right panel
-* shows part metadata, story idea metadata, element metadata, and project compile defaults in the right panel
+* shows chapter status, label, synopsis, point of view, notes, word target, and linked sources in the right panel
+* shows part metadata, story idea metadata, element metadata, source note metadata, progress goals, and compile defaults in the right panel
+* lets you move board notes with keyboard controls and save new positions immediately
+* lets you hide or reveal board notes while reviewing the canvas
+* includes a paired character and research view for cross checking support material
 
-The board still lives in CLI commands.
-The TUI does not yet render the board canvas directly.
+The CLI is still broader for metadata editing and compile configuration.
+The TUI now includes board editing, corkboard review, source link browsing, and richer library views.
 
-Current key:
+Current keys:
 
 * `q` quits the app
 * `Ctrl+F` focuses the search box
+* `Ctrl+Arrow keys` move the selected board note
+* `v` toggles the selected board note visibility
+* `b` applies board auto layout
 
-This is a read focused interface right now.
-It is meant for navigation and review, not inline editing yet.
+This is still a lightweight interface.
+It is strongest for navigation, review, and board positioning.
 
 ## Command reference
 
@@ -1252,6 +1264,40 @@ openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf"
 openscribe workflow conference-materials "Grid Study 2026" --venue "EnergyConf" --no-poster
 ```
 
+### `openscribe workflow source-note`
+
+Creates a structured nonfiction or research source note.
+
+```powershell
+openscribe workflow source-note "River Ledger Study" --type article --author "J. Harper" --year 2024 --url "https://example.com/ledger"
+```
+
+### `openscribe workflow citation-pack`
+
+Creates the shared citation tracking files for nonfiction or research projects.
+
+```powershell
+openscribe workflow citation-pack --style Chicago
+openscribe workflow citation-pack --style APA
+```
+
+### `openscribe set goals`
+
+Updates project level draft targets and deadlines.
+
+```powershell
+openscribe set goals --draft-word-target 90000 --session-word-target 1200 --deadline 2026-08-01
+```
+
+### `openscribe set compile-research`
+
+Updates bibliography and citation related compile settings.
+
+```powershell
+openscribe set compile-research --citation-style Chicago --include-bibliography --bibliography-title "Works Cited"
+openscribe set compile-research --citation-style APA --no-include-reference-heading
+```
+
 ### `openscribe set chapters`
 
 Updates multiple chapters at once.
@@ -1350,12 +1396,37 @@ Shows an element record.
 openscribe element show cha-marcus-vale
 ```
 
+### `openscribe element set`
+
+Updates one element record.
+
+```powershell
+openscribe element set cha-marcus-vale --notes "Lead investigator" --tags lead,viewpoint
+```
+
+### `openscribe element set-many`
+
+Updates multiple element records at once.
+
+```powershell
+openscribe element set-many --match-type character --add-tags viewpoint
+openscribe element set-many --match-tag lead --notes "Needs arc review."
+```
+
 ### `openscribe element appears-in`
 
 Shows matching chapters for an element name or alias.
 
 ```powershell
 openscribe element appears-in Marcus
+```
+
+### `openscribe element unrelate`
+
+Removes a stored relation.
+
+```powershell
+openscribe element unrelate cha-marcus-vale set-north-station --type visits
 ```
 
 ### `openscribe read`
@@ -1453,16 +1524,15 @@ You can also record snapshots from inside `openscribe`:
 
 Right now:
 
-* the TUI is for browsing, not editing
+* the TUI can reposition board notes, but broader metadata editing is still CLI first
 * word counts only reflect the chapter body text
 * part storage still uses numbered folder names on disk
 * chapter ordering is based on numbered filenames and folders
 * scene support is heading based and does not yet have separate scene metadata
 * compile currently exports to Word, PDF, and EPUB only
 * compile profiles are present, but formatting depth is still intentionally simple
-* research paper support is scaffold first and does not yet manage citations or bibliography formatting
+* bibliography output exists, but venue specific styles and in text citation insertion are still shallow
 * snapshots can be created but do not yet have first class restore commands
-* board visuals currently live in CLI commands instead of the TUI
 * element appears in tracking is derived from text matches and aliases
 
 ## Roadmap
@@ -1471,5 +1541,5 @@ Planned next:
 
 * snapshot restore helpers
 * editor launch helpers
-* richer research citation and bibliography workflows
+* venue specific bibliography styles
 * stronger scene metadata and scene reordering

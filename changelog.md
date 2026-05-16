@@ -222,3 +222,25 @@
 * moved snapshot restore and diff helpers up to the top roadmap tier
 * added roadmap items for scene aware search and reporting, TUI quick actions, and chapter split or merge helpers
 * refreshed `assessment.md` so the next priorities match the revised roadmap
+
+### Nonfiction source tracking and TUI board canvas
+
+* added `openscribe workflow source-note` for structured nonfiction or research source notes
+* added `openscribe workflow citation-pack` for shared citation tracking files
+* updated nonfiction and research templates to include citation log and bibliography note scaffolds
+* added board canvas preview and board note inspection inside the TUI binder
+* added regression coverage for the new source tracking workflows and board canvas summaries
+* updated `README.md`, the sample project guide, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`
+
+### TUI board editing, source links, goal stats, and research compile controls
+
+* added TUI board note movement with keyboard controls and saved position updates
+* added TUI board note visibility toggles, richer canvas summaries, and stronger board preview metadata
+* added source to chapter link views in the binder and chapter metadata panels
+* added corkboard style synopsis cards and a paired character plus research library view in the TUI
+* added project goal tracking for draft targets, session targets, deadlines, and progress reporting
+* added `openscribe set goals` and `openscribe set compile-research` to manage progress and bibliography settings
+* added batch element updates and relation removal commands under `openscribe element`
+* added bibliography aware research compile output controls for `docx`, `pdf`, `epub`, and continuous read assembly
+* added regression coverage for the new TUI views, board editing, element batch updates, relation removal, and research compile behavior
+* updated `README.md`, the sample project guide, `assessment.md`, `completed-upgrades.md`, and local `future-upgrades.md`

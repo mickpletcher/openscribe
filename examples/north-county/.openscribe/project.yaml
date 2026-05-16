@@ -11,6 +11,15 @@ compile:
   include_title_page: true
   include_part_headings: true
   chapter_heading_style: title-only
+  research:
+    citation_style: Chicago
+    include_bibliography: true
+    include_reference_heading: true
+    bibliography_title: Works Cited
+goals:
+  draft_word_target: 85000
+  session_word_target: 1200
+  deadline: '2026-09-01'
 ai:
   enabled: false
   provider: openai

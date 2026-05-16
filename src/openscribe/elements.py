@@ -107,6 +107,88 @@ def add_relation(root: Path, from_ref: str, to_ref: str, relation_type: str) -> 
     return _record_from_dict(source)
 
 
+def update_element(
+    root: Path,
+    element_ref: str,
+    *,
+    name: str | None = None,
+    notes: str | None = None,
+    tags: list[str] | None = None,
+) -> ElementRecord:
+    data = load_elements(root)
+    item = _require_element(data, element_ref)
+    if name is not None:
+        item["name"] = name
+    if notes is not None:
+        item["notes"] = notes
+    if tags is not None:
+        item["tags"] = tags
+    save_elements(root, data)
+    return _record_from_dict(item)
+
+
+def batch_update_elements(
+    root: Path,
+    *,
+    match_type: str | None = None,
+    match_tag: str | None = None,
+    match_text: str | None = None,
+    notes: str | None = None,
+    add_tags: list[str] | None = None,
+) -> list[ElementRecord]:
+    data = load_elements(root)
+    updated: list[ElementRecord] = []
+    tag_filter = (match_tag or "").strip().lower()
+    text_filter = (match_text or "").strip().lower()
+    type_filter = (match_type or "").strip().lower()
+    for item in data.get("elements", []):
+        if type_filter and str(item.get("type", "")).strip().lower() != type_filter:
+            continue
+        tags = [str(value) for value in item.get("tags", [])]
+        if tag_filter and tag_filter not in {value.strip().lower() for value in tags}:
+            continue
+        if text_filter:
+            haystack = " ".join(
+                [
+                    str(item.get("name", "")),
+                    str(item.get("notes", "")),
+                    " ".join(str(value) for value in item.get("aliases", [])),
+                    " ".join(tags),
+                ]
+            ).lower()
+            if text_filter not in haystack:
+                continue
+        if notes is not None:
+            item["notes"] = notes
+        if add_tags:
+            merged = tags[:]
+            for tag in add_tags:
+                if tag not in merged:
+                    merged.append(tag)
+            item["tags"] = merged
+        updated.append(_record_from_dict(item))
+    save_elements(root, data)
+    return updated
+
+
+def remove_relation(root: Path, from_ref: str, to_ref: str, relation_type: str | None = None) -> ElementRecord:
+    data = load_elements(root)
+    source = _require_element(data, from_ref)
+    target = _require_element(data, to_ref)
+    filtered = []
+    for item in source.get("relations", []):
+        current_target = str(item.get("target", ""))
+        current_type = str(item.get("type", ""))
+        if current_target != str(target.get("id", "")):
+            filtered.append({"target": current_target, "type": current_type})
+            continue
+        if relation_type and current_type != relation_type:
+            filtered.append({"target": current_target, "type": current_type})
+    source["relations"] = filtered
+    save_elements(root, data)
+    return _record_from_dict(source)
+
+
 def appears_in(root: Path, element_ref: str) -> list[ChapterDocument]:
     element = get_element(root, element_ref)
     search_terms = [element.name, *element.aliases]

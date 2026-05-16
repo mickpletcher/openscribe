@@ -21,6 +21,7 @@ class BoardNote:
     links: list[str]
     x: int
     y: int
+    hidden: bool
 
 
 def board_path(root: Path) -> Path:
@@ -54,6 +55,7 @@ def list_notes(root: Path) -> list[BoardNote]:
                 links=[str(link) for link in item.get("links", [])],
                 x=int(item.get("x", 0) or 0),
                 y=int(item.get("y", 0) or 0),
+                hidden=bool(item.get("hidden", False)),
             )
         )
     return notes
@@ -70,10 +72,11 @@ def add_note(root: Path, title: str, body: str = "", group: str = "", x: int = 0
         "links": [],
         "x": x,
         "y": y,
+        "hidden": False,
     }
     board.setdefault("notes", []).append(note)
     save_board(root, board)
-    return BoardNote(note_id=next_id, title=title, body=body, group=group, links=[], x=x, y=y)
+    return BoardNote(note_id=next_id, title=title, body=body, group=group, links=[], x=x, y=y, hidden=False)
 
 
 def add_link(root: Path, from_id: str, to_id: str) -> None:
@@ -100,6 +103,23 @@ def move_note(root: Path, note_id: str, x: int, y: int) -> None:
     note["x"] = x
     note["y"] = y
     save_board(root, board)
+
+
+def move_note_by_delta(root: Path, note_id: str, dx: int, dy: int) -> BoardNote:
+    board = load_board(root)
+    note = _require_note(board, note_id)
+    note["x"] = int(note.get("x", 0) or 0) + dx
+    note["y"] = int(note.get("y", 0) or 0) + dy
+    save_board(root, board)
+    return _note_from_dict(note)
+
+
+def set_note_hidden(root: Path, note_id: str, hidden: bool) -> BoardNote:
+    board = load_board(root)
+    note = _require_note(board, note_id)
+    note["hidden"] = hidden
+    save_board(root, board)
+    return _note_from_dict(note)
 
 
 def auto_layout(root: Path, column_width: int = 22) -> None:
@@ -130,6 +150,8 @@ def render_board(root: Path, width: int = 72, height: int = 18) -> str:
     canvas = [[" " for _ in range(width)] for _ in range(height)]
 
     for note in notes:
+        if note.hidden:
+            continue
         x = max(0, min(width - 8, note.x))
         y = max(0, min(height - 1, note.y))
         label = f"[{note.note_id}]"
@@ -184,3 +206,16 @@ def _require_note(board: dict[str, Any], note_id: str) -> dict[str, Any]:
         if str(item.get("id", "")) == note_id:
             return item
     raise FileNotFoundError(f"Board note '{note_id}' was not found.")
+
+
+def _note_from_dict(item: dict[str, Any]) -> BoardNote:
+    return BoardNote(
+        note_id=str(item.get("id", "")),
+        title=str(item.get("title", "")),
+        body=str(item.get("body", "")),
+        group=str(item.get("group", "")),
+        links=[str(link) for link in item.get("links", [])],
+        x=int(item.get("x", 0) or 0),
+        y=int(item.get("y", 0) or 0),
+        hidden=bool(item.get("hidden", False)),
+    )
