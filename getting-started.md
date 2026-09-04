@@ -170,7 +170,12 @@ Save a checkpoint:
 ```powershell
 openscribe snapshot save "first-pass"
 openscribe snapshot list
+openscribe snapshot restore "first-pass"
+openscribe snapshot restore "first-pass" --apply
 ```
+
+The first restore command is only a preview. `--apply` creates an automatic
+backup before changing managed project files.
 
 Create a board note:
 

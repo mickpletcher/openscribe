@@ -54,6 +54,18 @@ To enable AI:
 ## Cloud providers
 
 These options use hosted APIs and usually require an account plus an API key.
+The complete selected chapter body is sent to the configured provider. Review
+that provider's current data handling and retention terms before use.
+
+Hosted requests require explicit approval on every command:
+
+```powershell
+openscribe ai summarize "The Beginning" --allow-data-transfer
+```
+
+Without `--allow-data-transfer`, the command stops before loading a provider
+SDK or making a network request. The CLI reports the hosted provider, model,
+and character count before an approved request.
 
 ### OpenAI
 
@@ -196,8 +208,10 @@ $env:OPENAI_COMPATIBLE_LOCAL_API_KEY="your_internal_token"
 Once the project config and environment variables are set:
 
 ```powershell
-openscribe ai summarize "The Beginning"
+openscribe ai summarize "The Beginning" --allow-data-transfer
 ```
+
+Omit `--allow-data-transfer` when using `openai-compatible-local`.
 
 ## Troubleshooting
 

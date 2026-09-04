@@ -62,6 +62,9 @@ py -3.11 -m openscribe element add character "Eli Harper" --notes "Primary point
 py -3.11 -m openscribe element appears-in Eli
 py -3.11 -m openscribe snapshot save "sample-checkpoint"
 py -3.11 -m openscribe snapshot diff sample-checkpoint
+py -3.11 -m openscribe snapshot restore sample-checkpoint
+py -3.11 -m openscribe snapshot restore sample-checkpoint --apply
+py -3.11 -m openscribe proofread chapter "Arrival"
 py -3.11 -m openscribe open chapter "Arrival"
 py -3.11 -m openscribe template save "north-county-custom"
 py -3.11 -m openscribe read
@@ -84,9 +87,12 @@ The goal and deadline settings live in `.openscribe/project.yaml` and show up in
 
 The story idea commands store structured new book ideas under `notes/story-ideas/`.
 
-The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/` and can now diff or restore them.
+The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/`.
+Restore previews by default. `--apply` creates an automatic backup, restores the exact managed state, and removes managed files that were not in the snapshot.
 
 The template commands store saved user templates under `.openscribe/templates/`.
+
+The proofreading command requires a running LanguageTool server and `proofreading.enabled: true` in `.openscribe/project.yaml`. It reports suggestions without editing the chapter.
 
 The move commands renumber parts and chapters so manuscript order stays stable on disk.
 

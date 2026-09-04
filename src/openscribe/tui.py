@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from rich.syntax import Syntax
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Static, Tree
 
-from openscribe.board import auto_layout, list_notes, load_board, move_note_by_delta, promote_note_to_chapter, render_board, set_note_hidden
+from openscribe.board import (
+    auto_layout,
+    list_notes,
+    load_board,
+    move_note_by_delta,
+    promote_note_to_chapter,
+    render_board,
+    set_note_hidden,
+)
 from openscribe.compile import compile_project
 from openscribe.elements import get_element, list_element_records
 from openscribe.index import index_is_current
@@ -17,7 +26,6 @@ from openscribe.project import (
     ChapterDocument,
     SourceDocument,
     adjust_chapter_word_target,
-    chapter_report,
     cycle_chapter_label,
     cycle_chapter_pov,
     find_chapters,
@@ -80,23 +88,42 @@ class OpenScribeApp(App[None]):
     }
     """
 
-    BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("ctrl+f", "focus_search", "Search"),
-        ("ctrl+left", "move_board_note(-2,0)", "Board left"),
-        ("ctrl+right", "move_board_note(2,0)", "Board right"),
-        ("ctrl+up", "move_board_note(0,-1)", "Board up"),
-        ("ctrl+down", "move_board_note(0,1)", "Board down"),
-        ("v", "toggle_board_note_visibility", "Toggle board note"),
-        ("b", "auto_layout_board", "Auto layout"),
-        ("s", "cycle_chapter_status", "Cycle status"),
-        ("l", "cycle_chapter_label", "Cycle label"),
-        ("o", "cycle_chapter_pov", "Cycle POV"),
-        ("w", "increase_chapter_target", "Increase target"),
-        ("W", "decrease_chapter_target", "Decrease target"),
-        ("p", "promote_selected_board_note", "Promote note"),
-        ("c", "compile_project_quick", "Compile"),
+    BINDINGS: ClassVar[list[Binding]] = [
+        Binding("q", "quit", "Quit", priority=True),
+        Binding("ctrl+f", "focus_search", "Search", priority=True),
+        Binding("ctrl+left", "move_board_note(-2,0)", "Board left", priority=True),
+        Binding("ctrl+right", "move_board_note(2,0)", "Board right", priority=True),
+        Binding("ctrl+up", "move_board_note(0,-1)", "Board up", priority=True),
+        Binding("ctrl+down", "move_board_note(0,1)", "Board down", priority=True),
+        Binding("v", "toggle_board_note_visibility", "Toggle board note", priority=True),
+        Binding("b", "auto_layout_board", "Auto layout", priority=True),
+        Binding("s", "cycle_chapter_status", "Cycle status", priority=True),
+        Binding("l", "cycle_chapter_label", "Cycle label", priority=True),
+        Binding("o", "cycle_chapter_pov", "Cycle POV", priority=True),
+        Binding("w", "increase_chapter_target", "Increase target", priority=True),
+        Binding(
+            "shift+w",
+            "decrease_chapter_target",
+            "Decrease target",
+            priority=True,
+        ),
+        Binding("p", "promote_selected_board_note", "Promote note", priority=True),
+        Binding("c", "compile_project_quick", "Compile", priority=True),
     ]
+
+    MUTATING_ACTIONS: ClassVar[set[str]] = {
+        "auto_layout_board",
+        "compile_project_quick",
+        "cycle_chapter_label",
+        "cycle_chapter_pov",
+        "cycle_chapter_status",
+        "decrease_chapter_target",
+        "increase_chapter_target",
+        "move_board_note",
+        "promote_selected_board_note",
+        "quit",
+        "toggle_board_note_visibility",
+    }
 
     def __init__(self, root: Path) -> None:
         super().__init__()
@@ -110,6 +137,7 @@ class OpenScribeApp(App[None]):
         self.auxiliary_lookup: dict[str, AuxiliaryDocument] = {}
         self.source_lookup: dict[str, SourceDocument] = {}
         self.current_node_data: Any = None
+        self.last_error = ""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -138,37 +166,47 @@ class OpenScribeApp(App[None]):
     def action_focus_search(self) -> None:
         self.query_one("#search-box", Input).focus()
 
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if isinstance(self.focused, Input) and action in self.MUTATING_ACTIONS:
+            return None
+        return True
+
     def action_move_board_note(self, dx: int, dy: int) -> None:
         if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
             return
-        note = move_note_by_delta(self.root, str(self.current_node_data["note_id"]), dx, dy)
         try:
+            note = move_note_by_delta(self.root, str(self.current_node_data["note_id"]), dx, dy)
             self._rebuild_tree()
             self._apply_selection({"kind": "board-note", "note_id": note.note_id})
-        except Exception:
-            self.current_node_data = {"kind": "board-note", "note_id": note.note_id}
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_toggle_board_note_visibility(self) -> None:
         if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
             return
-        note = next((item for item in list_notes(self.root) if item.note_id == str(self.current_node_data["note_id"])), None)
+        note = next(
+            (item for item in list_notes(self.root) if item.note_id == str(self.current_node_data["note_id"])), None
+        )
         if note is None:
             return
-        updated = set_note_hidden(self.root, note.note_id, not note.hidden)
         try:
+            updated = set_note_hidden(self.root, note.note_id, not note.hidden)
             self._rebuild_tree()
             self._apply_selection({"kind": "board-note", "note_id": updated.note_id})
-        except Exception:
-            self.current_node_data = {"kind": "board-note", "note_id": updated.note_id}
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_auto_layout_board(self) -> None:
-        auto_layout(self.root)
-        if isinstance(self.current_node_data, dict) and self.current_node_data.get("kind") in {"board-canvas", "board-note"}:
-            try:
+        try:
+            auto_layout(self.root)
+            if isinstance(self.current_node_data, dict) and self.current_node_data.get("kind") in {
+                "board-canvas",
+                "board-note",
+            }:
                 self._rebuild_tree()
                 self._apply_selection(self.current_node_data)
-            except Exception:
-                pass
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_cycle_chapter_status(self) -> None:
         if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
@@ -179,22 +217,31 @@ class OpenScribeApp(App[None]):
             next_index = (status_order.index(chapter.status) + 1) % len(status_order)
         except ValueError:
             next_index = 0
-        update_chapter_metadata(self.root, chapter.slug, status=status_order[next_index])
-        self._refresh_chapter_selection(chapter.path.as_posix())
+        try:
+            update_chapter_metadata(self.root, chapter.slug, status=status_order[next_index])
+            self._refresh_chapter_selection(chapter.path.as_posix())
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_cycle_chapter_label(self) -> None:
         if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
             return
         chapter = self.chapter_lookup[self.current_node_data]
-        cycle_chapter_label(self.root, chapter.slug)
-        self._refresh_chapter_selection(chapter.path.as_posix())
+        try:
+            cycle_chapter_label(self.root, chapter.slug)
+            self._refresh_chapter_selection(chapter.path.as_posix())
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_cycle_chapter_pov(self) -> None:
         if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
             return
         chapter = self.chapter_lookup[self.current_node_data]
-        cycle_chapter_pov(self.root, chapter.slug)
-        self._refresh_chapter_selection(chapter.path.as_posix())
+        try:
+            cycle_chapter_pov(self.root, chapter.slug)
+            self._refresh_chapter_selection(chapter.path.as_posix())
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_increase_chapter_target(self) -> None:
         self._adjust_selected_chapter_target(250)
@@ -205,37 +252,48 @@ class OpenScribeApp(App[None]):
     def action_promote_selected_board_note(self) -> None:
         if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
             return
-        chapter_path = promote_note_to_chapter(self.root, str(self.current_node_data["note_id"]))
-        self.chapters = list_chapters(self.root)
-        self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
         try:
+            chapter_path = promote_note_to_chapter(self.root, str(self.current_node_data["note_id"]))
+            self.chapters = list_chapters(self.root)
+            self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
             self._rebuild_tree()
             self._apply_selection(chapter_path.as_posix())
-        except Exception:
-            self.current_node_data = chapter_path.as_posix()
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_compile_project_quick(self) -> None:
-        output_path = compile_project(self.root)
-        preview = self.query_one("#preview", Static)
-        metadata = self.query_one("#meta", Static)
-        preview.update(f"Compiled manuscript to {output_path}")
-        metadata.update(self._project_summary())
+        try:
+            output_path = compile_project(self.root)
+            preview = self.query_one("#preview", Static)
+            metadata = self.query_one("#meta", Static)
+            preview.update(f"Compiled manuscript to {output_path}")
+            metadata.update(self._project_summary())
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def _adjust_selected_chapter_target(self, delta: int) -> None:
         if not isinstance(self.current_node_data, str) or self.current_node_data not in self.chapter_lookup:
             return
         chapter = self.chapter_lookup[self.current_node_data]
-        adjust_chapter_word_target(self.root, chapter.slug, delta)
-        self._refresh_chapter_selection(chapter.path.as_posix())
+        try:
+            adjust_chapter_word_target(self.root, chapter.slug, delta)
+            self._refresh_chapter_selection(chapter.path.as_posix())
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def _refresh_chapter_selection(self, chapter_key: str) -> None:
         self.chapters = list_chapters(self.root)
         self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
-        try:
-            self._rebuild_tree()
-            self._apply_selection(chapter_key)
-        except Exception:
-            self.current_node_data = chapter_key
+        self._rebuild_tree()
+        self._apply_selection(chapter_key)
+
+    def _show_error(self, error: BaseException) -> None:
+        self.last_error = f"{type(error).__name__}: {error}"
+        self.query_one("#preview", Static).update(f"Action failed\n\n{self.last_error}")
+        self.query_one("#meta", Static).update(
+            "Review the project files before retrying. The operation may have partially completed."
+        )
+        self.notify(self.last_error, title="Action failed", severity="error")
 
     def _apply_selection(self, node_data: Any) -> None:
         self.current_node_data = node_data
@@ -257,7 +315,9 @@ class OpenScribeApp(App[None]):
             return
 
         if isinstance(node_data, dict) and node_data.get("kind") == "board-canvas":
-            preview.update(Syntax(render_board(self.root, width=72, height=18), "text", word_wrap=False, line_numbers=False))
+            preview.update(
+                Syntax(render_board(self.root, width=72, height=18), "text", word_wrap=False, line_numbers=False)
+            )
             metadata.update(self._board_canvas_summary())
             return
 
@@ -265,13 +325,17 @@ class OpenScribeApp(App[None]):
             note = next((item for item in list_notes(self.root) if item.note_id == str(node_data["note_id"])), None)
             if note is None:
                 return
-            preview.update(Syntax(note.body.strip() or "[Empty board note]", "markdown", word_wrap=True, line_numbers=False))
+            preview.update(
+                Syntax(note.body.strip() or "[Empty board note]", "markdown", word_wrap=True, line_numbers=False)
+            )
             metadata.update(self._board_note_summary(note))
             return
 
         if isinstance(node_data, dict) and node_data.get("kind") == "story-idea":
             idea = find_story_idea(self.root, str(node_data["idea_ref"]))
-            preview.update(Syntax(idea.body.strip() or "[Empty story idea]", "markdown", word_wrap=True, line_numbers=False))
+            preview.update(
+                Syntax(idea.body.strip() or "[Empty story idea]", "markdown", word_wrap=True, line_numbers=False)
+            )
             metadata.update(self._story_idea_summary(idea))
             return
 
@@ -279,7 +343,9 @@ class OpenScribeApp(App[None]):
             document = self.auxiliary_lookup.get(str(node_data["path"]))
             if document is None:
                 return
-            preview.update(Syntax(document.body.strip() or "[Empty document]", "markdown", word_wrap=True, line_numbers=False))
+            preview.update(
+                Syntax(document.body.strip() or "[Empty document]", "markdown", word_wrap=True, line_numbers=False)
+            )
             metadata.update(self._auxiliary_summary(document))
             return
 
@@ -287,7 +353,9 @@ class OpenScribeApp(App[None]):
             source = self.source_lookup.get(str(node_data["path"]))
             if source is None:
                 return
-            preview.update(Syntax(source.body.strip() or "[Empty source note]", "markdown", word_wrap=True, line_numbers=False))
+            preview.update(
+                Syntax(source.body.strip() or "[Empty source note]", "markdown", word_wrap=True, line_numbers=False)
+            )
             metadata.update(self._source_summary(source))
             return
 
@@ -304,7 +372,9 @@ class OpenScribeApp(App[None]):
         if node_data not in self.chapter_lookup:
             return
         chapter = self.chapter_lookup[node_data]
-        preview.update(Syntax(chapter.body.strip() or "[Empty chapter]", "markdown", word_wrap=True, line_numbers=False))
+        preview.update(
+            Syntax(chapter.body.strip() or "[Empty chapter]", "markdown", word_wrap=True, line_numbers=False)
+        )
         metadata.update(self._chapter_summary(self.root, chapter))
 
     def _rebuild_tree(self) -> None:
@@ -320,7 +390,9 @@ class OpenScribeApp(App[None]):
         for chapter in self._visible_chapters():
             part_node = parts.get(chapter.part_id)
             if part_node is None:
-                part_node = manuscript_root.add(chapter.part, expand=True, data={"kind": "part", "part_id": chapter.part_id})
+                part_node = manuscript_root.add(
+                    chapter.part, expand=True, data={"kind": "part", "part_id": chapter.part_id}
+                )
                 parts[chapter.part_id] = part_node
             chapter_node = part_node.add(chapter.title, data=chapter.path.as_posix())
             linked_sources = linked_sources_for_chapter(self.root, chapter)
@@ -328,7 +400,7 @@ class OpenScribeApp(App[None]):
                 source_branch = chapter_node.add("Sources", expand=False)
                 for source in linked_sources:
                     source_branch.add_leaf(source.title, data={"kind": "source", "path": source.path.as_posix()})
-            linked_notes = [note for note in list_notes(self.root) if chapter.slug in note.chapter_links]
+            linked_notes = [note for note in list_notes(self.root) if chapter.chapter_id in note.chapter_links]
             if linked_notes:
                 note_branch = chapter_node.add("Board Notes", expand=False)
                 for note in linked_notes:
@@ -398,10 +470,11 @@ class OpenScribeApp(App[None]):
     @staticmethod
     def _chapter_summary(root: Path, chapter: ChapterDocument) -> str:
         linked_sources = linked_sources_for_chapter(root, chapter)
-        linked_notes = [note.title for note in list_notes(root) if chapter.slug in note.chapter_links]
+        linked_notes = [note.title for note in list_notes(root) if chapter.chapter_id in note.chapter_links]
         return "\n".join(
             [
                 f"Title: {chapter.title}",
+                f"ID: {chapter.chapter_id}",
                 f"Part: {chapter.part}",
                 f"Status: {chapter.status}",
                 f"Label: {chapter.label}",
@@ -574,8 +647,20 @@ class OpenScribeApp(App[None]):
     def _search_summary(self) -> str:
         if not self.search_query:
             return f"Filter is empty. Showing all chapters: {len(self.chapters)}"
-        source_matches = len([source for source in list_source_notes(self.root) if self.search_query.lower() in f'{source.title} {source.author} {source.body}'.lower()])
-        note_matches = len([note for note in list_notes(self.root) if self.search_query.lower() in f'{note.title} {note.body} {note.group}'.lower()])
+        source_matches = len(
+            [
+                source
+                for source in list_source_notes(self.root)
+                if self.search_query.lower() in f"{source.title} {source.author} {source.body}".lower()
+            ]
+        )
+        note_matches = len(
+            [
+                note
+                for note in list_notes(self.root)
+                if self.search_query.lower() in f"{note.title} {note.body} {note.group}".lower()
+            ]
+        )
         chapter_matches = len(find_chapters(self.root, text=self.search_query))
         return f"Filter: {self.search_query} | Chapters: {chapter_matches} | Sources: {source_matches} | Board: {note_matches}"
 
@@ -593,7 +678,10 @@ class OpenScribeApp(App[None]):
         ideas = list_story_ideas(self.root)
         section = root_node.add("Story Ideas", expand=False)
         for idea in ideas:
-            if self.search_query and self.search_query.lower() not in f"{idea.title} {idea.premise} {idea.body}".lower():
+            if (
+                self.search_query
+                and self.search_query.lower() not in f"{idea.title} {idea.premise} {idea.body}".lower()
+            ):
                 continue
             section.add_leaf(idea.title, data={"kind": "story-idea", "idea_ref": idea.slug})
 
@@ -601,7 +689,10 @@ class OpenScribeApp(App[None]):
         section = root_node.add("Source Links", expand=False)
         link_map = source_link_map(self.root)
         for source in list_source_notes(self.root):
-            if self.search_query and self.search_query.lower() not in f"{source.title} {source.author} {source.body}".lower():
+            if (
+                self.search_query
+                and self.search_query.lower() not in f"{source.title} {source.author} {source.body}".lower()
+            ):
                 continue
             path_key = source.path.as_posix()
             self.source_lookup[path_key] = source

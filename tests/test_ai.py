@@ -5,7 +5,12 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from openscribe.ai import AIConfigurationError, AISettings, summarize_text
+from openscribe.ai import (
+    AIConfigurationError,
+    AISettings,
+    requires_data_transfer_consent,
+    summarize_text,
+)
 
 
 class _FakeOpenAIClient:
@@ -13,25 +18,19 @@ class _FakeOpenAIClient:
 
     def __init__(self, *args, **kwargs) -> None:
         type(self).last_kwargs = kwargs
-        self.responses = SimpleNamespace(
-            create=lambda **call_kwargs: SimpleNamespace(output_text="openai summary")
-        )
+        self.responses = SimpleNamespace(create=lambda **call_kwargs: SimpleNamespace(output_text="openai summary"))
 
 
 class _FakeAnthropicClient:
     def __init__(self, *args, **kwargs) -> None:
         self.messages = SimpleNamespace(
-            create=lambda **call_kwargs: SimpleNamespace(
-                content=[SimpleNamespace(text="anthropic summary")]
-            )
+            create=lambda **call_kwargs: SimpleNamespace(content=[SimpleNamespace(text="anthropic summary")])
         )
 
 
 class _FakeGeminiClient:
     def __init__(self, *args, **kwargs) -> None:
-        self.models = SimpleNamespace(
-            generate_content=lambda **call_kwargs: SimpleNamespace(text="gemini summary")
-        )
+        self.models = SimpleNamespace(generate_content=lambda **call_kwargs: SimpleNamespace(text="gemini summary"))
 
     def close(self) -> None:
         return None
@@ -116,7 +115,12 @@ def test_summarize_text_routes_supported_providers(
         monkeypatch.setitem(sys.modules, "google", google_module)
 
     settings = AISettings(enabled=True, provider=provider, model="test-model")
-    result = summarize_text("Sample text", settings, "chapter")
+    result = summarize_text(
+        "Sample text",
+        settings,
+        "chapter",
+        allow_data_transfer=provider != "openai-compatible-local",
+    )
 
     assert result == expected
     if provider == "openai-compatible-local":
@@ -141,4 +145,27 @@ def test_summarize_text_requires_sdk_when_missing(monkeypatch) -> None:
 
     settings = AISettings(enabled=True, provider="anthropic", model="test-model")
     with pytest.raises(AIConfigurationError, match="not installed"):
-        summarize_text("Sample text", settings, "chapter")
+        summarize_text(
+            "Sample text",
+            settings,
+            "chapter",
+            allow_data_transfer=True,
+        )
+
+
+def test_hosted_provider_requires_explicit_data_transfer_consent() -> None:
+    settings = AISettings(enabled=True, provider="openai", model="test-model")
+
+    assert requires_data_transfer_consent(settings)
+    with pytest.raises(AIConfigurationError, match="complete chapter text"):
+        summarize_text("Private manuscript", settings, "chapter")
+
+
+def test_local_provider_does_not_require_data_transfer_consent() -> None:
+    settings = AISettings(
+        enabled=True,
+        provider="openai-compatible-local",
+        model="test-model",
+    )
+
+    assert not requires_data_transfer_consent(settings)

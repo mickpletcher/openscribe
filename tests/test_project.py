@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openscribe.board import add_note, render_board
-from openscribe.index import rebuild_project_index
+import pytest
+import yaml
+
+from openscribe.board import add_chapter_link, add_note, list_notes, render_board
+from openscribe.index import index_is_current, rebuild_project_index
 from openscribe.project import (
     add_scene,
     add_screenplay_scene,
@@ -17,9 +20,19 @@ from openscribe.project import (
     list_auxiliary_documents,
     list_chapters,
     list_story_ideas,
+    parse_frontmatter,
+    reorder_chapter,
     save_project_template,
+    update_chapter_metadata,
 )
-from openscribe.snapshots import create_snapshot, diff_snapshot, restore_snapshot
+from openscribe.schema import SchemaValidationError
+from openscribe.snapshots import (
+    create_snapshot,
+    diff_snapshot,
+    list_snapshots,
+    preview_snapshot_restore,
+    restore_snapshot,
+)
 
 
 def test_init_project_creates_expected_structure(tmp_path: Path) -> None:
@@ -32,6 +45,13 @@ def test_init_project_creates_expected_structure(tmp_path: Path) -> None:
     assert (root / "research").is_dir()
     assert (root / "characters").is_dir()
     assert (root / "notes").is_dir()
+    config = yaml.safe_load((root / ".openscribe" / "project.yaml").read_text(encoding="utf-8"))
+    assert config["proofreading"] == {
+        "enabled": False,
+        "endpoint": "http://127.0.0.1:8081/v2/check",
+        "language": "en-US",
+        "timeout_seconds": 30,
+    }
 
 
 def test_create_chapter_parses_metadata_and_body(tmp_path: Path) -> None:
@@ -50,8 +70,7 @@ def test_create_chapter_parses_metadata_and_body(tmp_path: Path) -> None:
         notes="Tighten the second paragraph.",
     )
     chapter_path.write_text(
-        chapter_path.read_text(encoding="utf-8")
-        + "Eli stepped off the bus into wet summer heat.\n",
+        chapter_path.read_text(encoding="utf-8") + "Eli stepped off the bus into wet summer heat.\n",
         encoding="utf-8",
     )
 
@@ -62,6 +81,7 @@ def test_create_chapter_parses_metadata_and_body(tmp_path: Path) -> None:
     chapter = chapters[0]
     assert chapter.part == "Opening"
     assert chapter.part_id == "part-01-opening"
+    assert chapter.chapter_id.startswith("chapter-")
     assert chapter.title == "Arrival"
     assert chapter.status == "draft"
     assert chapter.label == "scene"
@@ -70,6 +90,48 @@ def test_create_chapter_parses_metadata_and_body(tmp_path: Path) -> None:
     assert chapter.synopsis == "Eli arrives in town."
     assert chapter.notes == "Tighten the second paragraph."
     assert chapter.word_count == 9
+
+
+def test_chapter_metadata_updates_preserve_unknown_fields_and_id(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    metadata, body = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+    chapter_id = metadata["chapter_id"]
+    metadata["custom_field"] = {"owner": "writer", "locked": True}
+    chapter_path.write_text(
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+        encoding="utf-8",
+    )
+
+    update_chapter_metadata(root, "Arrival", status="revised")
+
+    updated, _ = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+    assert updated["chapter_id"] == chapter_id
+    assert updated["custom_field"] == {"owner": "writer", "locked": True}
+
+
+def test_board_chapter_links_migrate_to_stable_ids_and_survive_reorder(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(root, "Arrival", part="Opening")
+    second_path = create_chapter(root, "Departure", part="Opening")
+    chapter_id = next(chapter.chapter_id for chapter in list_chapters(root) if chapter.title == "Departure")
+    note = add_note(root, "Ending")
+
+    board_path = root / ".openscribe" / "boards" / "default.yaml"
+    board = yaml.safe_load(board_path.read_text(encoding="utf-8"))
+    board["notes"][0]["chapter_links"] = [second_path.stem]
+    board_path.write_text(yaml.safe_dump(board, sort_keys=False), encoding="utf-8")
+
+    assert list_notes(root)[0].chapter_links == [chapter_id]
+    reorder_chapter(root, "Departure", 1)
+    reordered = next(chapter for chapter in list_chapters(root) if chapter.title == "Departure")
+    assert reordered.chapter_id == chapter_id
+    assert list_notes(root)[0].chapter_links == [chapter_id]
+
+    add_chapter_link(root, note.note_id, chapter_id)
+    assert list_notes(root)[0].chapter_links == [chapter_id]
 
 
 def test_create_story_idea_creates_structured_note(tmp_path: Path) -> None:
@@ -106,6 +168,42 @@ def test_template_init_applies_template_defaults(tmp_path: Path) -> None:
     assert (root / "notes" / "implementation-notes.md").exists()
 
 
+def test_template_paths_cannot_escape_project(tmp_path: Path) -> None:
+    template_path = tmp_path / "unsafe-template.yaml"
+    template_path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "unsafe",
+                "compile": {},
+                "files": {"../escaped.txt": "outside project"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SchemaValidationError, match="Unsafe template path"):
+        init_project_from_template(tmp_path / "target", "Unsafe", template_file=template_path)
+
+    assert not (tmp_path / "target").exists()
+    assert not (tmp_path / "escaped.txt").exists()
+
+
+def test_invalid_chapter_schema_has_a_clear_error(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    metadata, body = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+    metadata["word_target"] = "many"
+    chapter_path.write_text(
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SchemaValidationError, match="word_target must be an integer"):
+        list_chapters(root)
+
+
 def test_scene_support_and_index_rebuild(tmp_path: Path) -> None:
     root = init_project(tmp_path, "North County")
     create_part(root, "Opening")
@@ -123,6 +221,25 @@ def test_scene_support_and_index_rebuild(tmp_path: Path) -> None:
     index_text = index_path.read_text(encoding="utf-8")
     assert "scene_count: 2" in index_text
     assert "story_idea_count: 1" in index_text
+
+
+def test_index_manifest_detects_changes_additions_and_deletions(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    first_path = create_chapter(root, "Arrival", part="Opening")
+    rebuild_project_index(root)
+    assert index_is_current(root)
+
+    first_path.write_text(first_path.read_text(encoding="utf-8") + "Changed.\n", encoding="utf-8")
+    assert not index_is_current(root)
+
+    rebuild_project_index(root)
+    second_path = create_chapter(root, "Departure", part="Opening")
+    assert not index_is_current(root)
+
+    rebuild_project_index(root)
+    second_path.unlink()
+    assert not index_is_current(root)
 
 
 def test_list_auxiliary_documents_reads_titles(tmp_path: Path) -> None:
@@ -167,17 +284,66 @@ def test_checkpoint_snapshot_diff_and_restore(tmp_path: Path) -> None:
     create_part(root, "Opening")
     chapter_path = create_chapter(root, "Arrival", part="Opening")
     chapter_path.write_text(chapter_path.read_text(encoding="utf-8") + "Original text.\n", encoding="utf-8")
+    template_path = root / ".openscribe" / "templates" / "custom.yaml"
+    template_path.write_text("name: original\n", encoding="utf-8")
 
     snapshot_dir = create_snapshot(root, "before-change")
 
     chapter_path.write_text(chapter_path.read_text(encoding="utf-8") + "Changed text.\n", encoding="utf-8")
+    added_path = create_chapter(root, "Added Later", part="Opening")
+    template_path.write_text("name: changed\n", encoding="utf-8")
     diff_text = diff_snapshot(root, snapshot_dir.name)
     assert "Changed text." in diff_text
 
-    restore_snapshot(root, snapshot_dir.name)
+    preview = preview_snapshot_restore(root, snapshot_dir.name)
+    assert str(added_path.relative_to(root)).replace("\\", "/") in preview.deleted
+    assert str(template_path.relative_to(root)).replace("\\", "/") in preview.modified
+
+    result = restore_snapshot(root, snapshot_dir.name)
     restored_text = chapter_path.read_text(encoding="utf-8")
     assert "Original text." in restored_text
     assert "Changed text." not in restored_text
+    assert not added_path.exists()
+    assert template_path.read_text(encoding="utf-8") == "name: original\n"
+    assert result.backup_path.exists()
+
+
+def test_snapshot_restore_rolls_back_when_staged_replacement_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Snapshot text.\n",
+        encoding="utf-8",
+    )
+    snapshot_dir = create_snapshot(root, "before-change")
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Current text.\n",
+        encoding="utf-8",
+    )
+
+    original_replace = Path.replace
+    failed = False
+
+    def fail_first_manuscript_install(path: Path, target: Path) -> Path:
+        nonlocal failed
+        if not failed and path.name == "manuscript" and path.parent.name == "stage":
+            failed = True
+            raise OSError("injected replacement failure")
+        return original_replace(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail_first_manuscript_install)
+
+    with pytest.raises(RuntimeError, match="automatic backup was restored"):
+        restore_snapshot(root, snapshot_dir.name)
+
+    current_text = chapter_path.read_text(encoding="utf-8")
+    assert "Snapshot text." in current_text
+    assert "Current text." in current_text
+    assert any(str(record["label"]).startswith("automatic backup before restoring") for record in list_snapshots(root))
 
 
 def test_save_project_template_and_reuse_it(tmp_path: Path) -> None:

@@ -8,8 +8,20 @@ element_count: 2
 characters_count: 1
 research_count: 1
 notes_count: 1
+source_manifest:
+  .openscribe/boards/default.yaml: 63030fcc898032a922b2f35265fcaa4535405d5b6109d2f95b8d757e95c1b5c9
+  .openscribe/elements/elements.yaml: 067cf79ca63aede985743080c2d870e17794c047480dcf6d3879e69256d68636
+  .openscribe/project.yaml: 7e8e72e8ac7c526424765404118cec508440e70016dff62f206f93f57b945b0b
+  characters/eli-harper.md: 73bf20d6a4e78c6c1f35bb909282f0c11db6bce75fc8a0fc25e4544c4e9bbe5c
+  manuscript/part-01-opening/ch-01-arrival.md: 631c4c67b5dcbb1d3a8ebac7e3e23440a5313ebd75b93ad58692176af2f75ea8
+  manuscript/part-01-opening/ch-02-the-call.md: 557d7885e92ce5648ee30f26ac6a33a8b219e477206d1812329fd41f96f31f2e
+  manuscript/part-01-opening/part.yaml: 9d039629fc26d3a22b5dbc3d192ee5015cba9bd518c065000051847c7af9f741
+  notes/revision-notes.md: e5e8ccf5c1439592ad91f605db616f5b0e3798cb007cb6146ea35072fb0238c5
+  notes/story-ideas/the-flood-ledger.md: b447b2dc8f73a194470ed5895f36d3af3f96a134c09eb9658a188c1a5cd252a8
+  research/town-notes.md: 942e15327ba6151c1cc12d1602a68eae9ad9674556e289bc3cff4d56997e75e6
 chapters:
-- title: Arrival
+- chapter_id: chapter-11111111111111111111111111111111
+  title: Arrival
   part: Opening
   part_id: part-01-opening
   status: draft
@@ -62,7 +74,8 @@ chapters:
     slug: porch-watchers
   - title: Willow Lane
     slug: willow-lane
-- title: The Call
+- chapter_id: chapter-22222222222222222222222222222222
+  title: The Call
   part: Opening
   part_id: part-01-opening
   status: draft

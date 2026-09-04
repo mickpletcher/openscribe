@@ -1,17 +1,31 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
-from datetime import date
-import difflib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import yaml
+
+from openscribe.schema import (
+    SchemaValidationError,
+    atomic_write_text,
+    load_yaml,
+    require_mapping,
+    safe_template_target,
+    validate_chapter_metadata,
+    validate_part_metadata,
+    validate_project_config,
+    validate_source_metadata,
+    validate_story_metadata,
+    validate_template,
+)
 
 PROJECT_DIR = ".openscribe"
 PROJECT_FILE = "project.yaml"
@@ -67,6 +81,7 @@ class SourceDocument:
 @dataclass(slots=True)
 class ChapterDocument:
     path: Path
+    chapter_id: str
     title: str
     status: str
     label: str
@@ -106,6 +121,35 @@ def slugify(value: str) -> str:
     return cleaned or "untitled"
 
 
+def new_chapter_id() -> str:
+    return f"chapter-{uuid4().hex}"
+
+
+def ensure_chapter_ids(root: Path) -> dict[str, str]:
+    manuscript = root / "manuscript"
+    if not manuscript.exists():
+        return {}
+
+    migrated: dict[str, str] = {}
+    seen_ids: set[str] = set()
+    for part_path in sorted(path for path in manuscript.iterdir() if path.is_dir()):
+        for chapter_path in sorted(part_path.glob("*.md")):
+            text = chapter_path.read_text(encoding="utf-8")
+            metadata, body = parse_frontmatter(text)
+            validate_chapter_metadata(metadata, f"Chapter frontmatter in '{chapter_path}'")
+            chapter_id = str(metadata.get("chapter_id", "")).strip()
+            if not chapter_id or chapter_id in seen_ids:
+                chapter_id = new_chapter_id()
+                metadata["chapter_id"] = chapter_id
+                atomic_write_text(
+                    chapter_path,
+                    f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+                )
+                migrated[chapter_path.stem] = chapter_id
+            seen_ids.add(chapter_id)
+    return migrated
+
+
 def project_root(start: Path | None = None) -> Path:
     current = (start or Path.cwd()).resolve()
     for candidate in (current, *current.parents):
@@ -129,6 +173,11 @@ def init_project_from_template(
     if (config_dir / PROJECT_FILE).exists():
         raise FileExistsError(f"Project already exists at {project_path}")
 
+    resolved_template_name, template = load_template_definition(template_name, template_file)
+    validate_template(template, f"Project template '{resolved_template_name}'")
+    for relative_path in template.get("files", {}):
+        safe_template_target(project_path, str(relative_path))
+
     for directory in (
         config_dir,
         config_dir / "templates",
@@ -141,8 +190,6 @@ def init_project_from_template(
         project_path / SNAPSHOTS_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)
-
-    resolved_template_name, template = load_template_definition(template_name, template_file)
 
     write_yaml(
         config_dir / PROJECT_FILE,
@@ -176,6 +223,12 @@ def init_project_from_template(
                 "enabled": False,
                 "provider": "openai",
                 "model": "gpt-4.1",
+            },
+            "proofreading": {
+                "enabled": False,
+                "endpoint": "http://127.0.0.1:8081/v2/check",
+                "language": "en-US",
+                "timeout_seconds": 30,
             },
         },
     )
@@ -263,9 +316,9 @@ def built_in_templates() -> dict[str, dict[str, Any]]:
 
 def _apply_template_files(root: Path, title: str, template: dict[str, Any]) -> None:
     for relative_path, content in template.get("files", {}).items():
-        target_path = root / str(relative_path)
+        target_path = safe_template_target(root, str(relative_path))
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(content.replace("{title}", title), encoding="utf-8")
+        atomic_write_text(target_path, content.replace("{title}", title))
 
 
 def template_library_path(root: Path) -> Path:
@@ -293,7 +346,10 @@ def load_template_definition(template_name: str, template_file: Path | None = No
     if template_file is not None:
         if not template_file.exists():
             raise FileNotFoundError(f"Template file '{template_file}' was not found.")
-        data = yaml.safe_load(template_file.read_text(encoding="utf-8")) or {}
+        data = validate_template(
+            load_yaml(template_file, default={}),
+            f"Template '{template_file}'",
+        )
         resolved_name = str(data.get("name", template_file.stem)).strip() or template_file.stem
         return slugify(resolved_name), data
 
@@ -309,7 +365,10 @@ def load_project_config(root: Path) -> dict[str, Any]:
     config_path = root / PROJECT_DIR / PROJECT_FILE
     if not config_path.exists():
         raise FileNotFoundError(f"Missing project config at {config_path}")
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    config = validate_project_config(
+        load_yaml(config_path, default={}),
+        f"Project config '{config_path}'",
+    )
     compile_config = config.setdefault("compile", {})
     compile_config.setdefault("default_format", "docx")
     compile_config.setdefault("backend", "auto")
@@ -328,6 +387,11 @@ def load_project_config(root: Path) -> dict[str, Any]:
     goals.setdefault("draft_word_target", 0)
     goals.setdefault("session_word_target", 0)
     goals.setdefault("deadline", "")
+    proofreading = config.setdefault("proofreading", {})
+    proofreading.setdefault("enabled", False)
+    proofreading.setdefault("endpoint", "http://127.0.0.1:8081/v2/check")
+    proofreading.setdefault("language", "en-US")
+    proofreading.setdefault("timeout_seconds", 30)
     return config
 
 
@@ -338,9 +402,9 @@ def save_project_config(root: Path, config: dict[str, Any]) -> Path:
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
-    path.write_text(
+    atomic_write_text(
+        path,
         yaml.safe_dump(data, sort_keys=False, allow_unicode=False),
-        encoding="utf-8",
     )
 
 
@@ -404,9 +468,9 @@ def create_story_idea(
         "tone": tone,
         "status": status,
     }
-    idea_path.write_text(
+    atomic_write_text(
+        idea_path,
         f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n{notes.strip()}".rstrip() + "\n",
-        encoding="utf-8",
     )
     return idea_path
 
@@ -449,6 +513,7 @@ def create_chapter(
     chapter_slug = slugify(title)
     chapter_path = part_path / f"ch-{chapter_number:02d}-{chapter_slug}.md"
     frontmatter = {
+        "chapter_id": new_chapter_id(),
         "title": title,
         "status": status,
         "label": label,
@@ -457,9 +522,9 @@ def create_chapter(
         "word_target": word_target,
         "notes": notes,
     }
-    chapter_path.write_text(
+    atomic_write_text(
+        chapter_path,
         f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n",
-        encoding="utf-8",
     )
     return chapter_path
 
@@ -631,7 +696,7 @@ def create_conference_materials(
         if path.exists():
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        atomic_write_text(path, content)
         created_paths.append(path)
     return created_paths
 
@@ -656,7 +721,7 @@ def import_conference_schedule(
     session_lines = [
         "# Conference Schedule",
         "",
-        f"## Venue",
+        "## Venue",
         "",
         venue_name,
         "",
@@ -666,7 +731,7 @@ def import_conference_schedule(
     checklist_lines = [
         "# Session Checklist",
         "",
-        f"## Venue",
+        "## Venue",
         "",
         venue_name,
         "",
@@ -687,14 +752,13 @@ def import_conference_schedule(
         session_lines.append(
             f"| {title} | {day or 'TBD'} | {time or 'TBD'} | {room or 'TBD'} | {format_name or 'TBD'} | {presenter or 'TBD'} | {status} |"
         )
-        checklist_lines.append(
-            f"| {title} | [ ] | [ ] | [ ] | {'[ ]' if create_checklists else 'n/a'} | {status} |"
-        )
+        checklist_lines.append(f"| {title} | [ ] | [ ] | [ ] | {'[ ]' if create_checklists else 'n/a'} | {status} |")
 
         session_path = root / CONFERENCE_SESSIONS_DIR / f"{venue_slug}-{index:02d}-{session_slug}.md"
         if not session_path.exists():
             session_path.parent.mkdir(parents=True, exist_ok=True)
-            session_path.write_text(
+            atomic_write_text(
+                session_path,
                 "# Conference Session\n\n"
                 f"## Title\n\n{title}\n\n"
                 f"## Venue\n\n{venue_name}\n\n"
@@ -712,21 +776,20 @@ def import_conference_schedule(
                 "* [ ] Submission portal reviewed\n\n"
                 "## Notes\n\n"
                 f"{notes.strip() or '* '}\n",
-                encoding="utf-8",
             )
             created_paths.append(session_path)
 
     overview_path = root / CONFERENCE_DIR / f"{venue_slug}-session-schedule.md"
     if not overview_path.exists():
         overview_path.parent.mkdir(parents=True, exist_ok=True)
-        overview_path.write_text("\n".join(session_lines) + "\n", encoding="utf-8")
+        atomic_write_text(overview_path, "\n".join(session_lines) + "\n")
         created_paths.append(overview_path)
 
     if create_checklists:
         checklist_path = root / CONFERENCE_DIR / f"{venue_slug}-session-checklist.md"
         if not checklist_path.exists():
             checklist_path.parent.mkdir(parents=True, exist_ok=True)
-            checklist_path.write_text("\n".join(checklist_lines) + "\n", encoding="utf-8")
+            atomic_write_text(checklist_path, "\n".join(checklist_lines) + "\n")
             created_paths.append(checklist_path)
 
     return created_paths
@@ -758,16 +821,10 @@ def create_source_note(
         "year": year,
         "url": url,
     }
-    body = (
-        "## Summary\n\n\n"
-        "## Key Quotes\n\n* \n\n"
-        "## Relevance\n\n\n"
-        "## Notes\n\n"
-        f"{notes.strip()}"
-    ).rstrip()
-    source_path.write_text(
+    body = (f"## Summary\n\n\n## Key Quotes\n\n* \n\n## Relevance\n\n\n## Notes\n\n{notes.strip()}").rstrip()
+    atomic_write_text(
+        source_path,
         f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n{body}\n",
-        encoding="utf-8",
     )
     return source_path
 
@@ -776,9 +833,7 @@ def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Pa
     files = [
         (
             root / "research" / "citation-log.md",
-            "# Citation Log\n\n"
-            f"## Style\n\n{style}\n\n"
-            "| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
+            f"# Citation Log\n\n## Style\n\n{style}\n\n| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
         ),
         (
             root / "research" / "bibliography-notes.md",
@@ -788,9 +843,7 @@ def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Pa
         ),
         (
             root / "research" / "source-usage-map.md",
-            "# Source Usage Map\n\n"
-            "## Sections\n\n"
-            "* Introduction\n* Methods\n* Results\n* Discussion\n",
+            "# Source Usage Map\n\n## Sections\n\n* Introduction\n* Methods\n* Results\n* Discussion\n",
         ),
     ]
     created_paths: list[Path] = []
@@ -798,7 +851,7 @@ def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Pa
         if path.exists():
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        atomic_write_text(path, content)
         created_paths.append(path)
     return created_paths
 
@@ -811,9 +864,10 @@ def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:
     scene_body = body.strip()
     new_scene = scene_heading + (scene_body + "\n" if scene_body else "")
     separator = "\n" if current_body.strip() else ""
-    chapter.path.write_text(
-        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{current_body.rstrip()}{separator}{new_scene}".rstrip() + "\n",
-        encoding="utf-8",
+    atomic_write_text(
+        chapter.path,
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{current_body.rstrip()}{separator}{new_scene}".rstrip()
+        + "\n",
     )
     return chapter.path
 
@@ -825,7 +879,15 @@ def add_screenplay_scene(root: Path, chapter_ref: str, slugline: str, body: str 
 
 def update_part_title(root: Path, part: str, title: str) -> Path:
     part_path = resolve_part_path(root, part)
-    write_yaml(part_path / PART_FILE, {"title": title})
+    metadata_path = part_path / PART_FILE
+    metadata = {}
+    if metadata_path.exists():
+        metadata = validate_part_metadata(
+            load_yaml(metadata_path, default={}),
+            f"Part metadata '{metadata_path}'",
+        )
+    metadata["title"] = title
+    write_yaml(metadata_path, metadata)
     return part_path
 
 
@@ -899,7 +961,9 @@ def reorder_chapter(root: Path, chapter_ref: str, position: int, part: str | Non
         source_path.rename(moved_path)
         _renumber_chapters(source_path.parent)
 
-    reordered = sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE and child != moved_path])
+    reordered = sorted(
+        [child for child in target_part_path.glob("*.md") if child.name != PART_FILE and child != moved_path]
+    )
     reordered.insert(bounded_position - 1, moved_path)
     _renumber_chapters(target_part_path, reordered)
     return sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE])
@@ -920,15 +984,14 @@ def update_chapter_metadata(
     chapter = find_chapter(root, chapter_ref)
     text = chapter.path.read_text(encoding="utf-8")
     metadata, body = parse_frontmatter(text)
-    metadata = {
-        "title": metadata.get("title", chapter.title),
-        "status": metadata.get("status", chapter.status),
-        "label": metadata.get("label", chapter.label),
-        "synopsis": metadata.get("synopsis", chapter.synopsis),
-        "pov": metadata.get("pov", chapter.pov),
-        "word_target": int(metadata.get("word_target", chapter.word_target) or 0),
-        "notes": metadata.get("notes", chapter.notes),
-    }
+    metadata.setdefault("chapter_id", chapter.chapter_id)
+    metadata.setdefault("title", chapter.title)
+    metadata.setdefault("status", chapter.status)
+    metadata.setdefault("label", chapter.label)
+    metadata.setdefault("synopsis", chapter.synopsis)
+    metadata.setdefault("pov", chapter.pov)
+    metadata.setdefault("word_target", chapter.word_target)
+    metadata.setdefault("notes", chapter.notes)
 
     if title is not None:
         metadata["title"] = title
@@ -945,9 +1008,9 @@ def update_chapter_metadata(
     if notes is not None:
         metadata["notes"] = notes
 
-    chapter.path.write_text(
+    atomic_write_text(
+        chapter.path,
         f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
-        encoding="utf-8",
     )
     return chapter.path
 
@@ -1054,7 +1117,7 @@ def _load_schedule_rows(schedule_path: Path) -> list[dict[str, str]]:
             raise ValueError("Conference schedule JSON must contain a list or a top level 'sessions' list.")
         return [_normalize_schedule_row(dict(item)) for item in data if isinstance(item, dict)]
     if suffix in {".yaml", ".yml"}:
-        data = yaml.safe_load(schedule_path.read_text(encoding="utf-8")) or []
+        data = load_yaml(schedule_path, default=[])
         if isinstance(data, dict):
             data = data.get("sessions", [])
         if not isinstance(data, list):
@@ -1064,7 +1127,9 @@ def _load_schedule_rows(schedule_path: Path) -> list[dict[str, str]]:
 
 
 def _normalize_schedule_row(row: dict[str, Any]) -> dict[str, str]:
-    normalized = {slugify(str(key)).replace("-", "_"): str(value).strip() for key, value in row.items() if key is not None}
+    normalized = {
+        slugify(str(key)).replace("-", "_"): str(value).strip() for key, value in row.items() if key is not None
+    }
     return {
         "title": normalized.get("title") or normalized.get("session") or normalized.get("name") or "",
         "day": normalized.get("day") or normalized.get("date") or "",
@@ -1087,8 +1152,11 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
     _, remainder = parts
     raw_frontmatter = text[4 : text.find("\n---\n")]
-    metadata = yaml.safe_load(raw_frontmatter) or {}
-    return metadata, remainder.lstrip("\n")
+    try:
+        metadata = yaml.safe_load(raw_frontmatter) or {}
+    except yaml.YAMLError as exc:
+        raise SchemaValidationError(f"Invalid YAML frontmatter: {exc}") from exc
+    return require_mapping(metadata, "Frontmatter"), remainder.lstrip("\n")
 
 
 def list_story_ideas(root: Path) -> list[StoryIdea]:
@@ -1099,6 +1167,7 @@ def list_story_ideas(root: Path) -> list[StoryIdea]:
     ideas: list[StoryIdea] = []
     for idea_path in sorted(ideas_dir.glob("*.md")):
         metadata, body = parse_frontmatter(idea_path.read_text(encoding="utf-8"))
+        validate_story_metadata(metadata, f"Story idea frontmatter in '{idea_path}'")
         ideas.append(
             StoryIdea(
                 path=idea_path,
@@ -1157,6 +1226,7 @@ def list_source_notes(root: Path) -> list[SourceDocument]:
     results: list[SourceDocument] = []
     for path in sorted(source_dir.glob("*.md")):
         metadata, body = parse_frontmatter(path.read_text(encoding="utf-8"))
+        validate_source_metadata(metadata, f"Source frontmatter in '{path}'")
         results.append(
             SourceDocument(
                 path=path,
@@ -1173,6 +1243,7 @@ def list_source_notes(root: Path) -> list[SourceDocument]:
 
 
 def list_chapters(root: Path) -> list[ChapterDocument]:
+    ensure_chapter_ids(root)
     manuscript = root / "manuscript"
     chapters: list[ChapterDocument] = []
     for part_path in sorted([child for child in manuscript.iterdir() if child.is_dir()]):
@@ -1180,9 +1251,11 @@ def list_chapters(root: Path) -> list[ChapterDocument]:
         for chapter_path in sorted(part_path.glob("*.md")):
             text = chapter_path.read_text(encoding="utf-8")
             metadata, body = parse_frontmatter(text)
+            validate_chapter_metadata(metadata, f"Chapter frontmatter in '{chapter_path}'")
             chapters.append(
                 ChapterDocument(
                     path=chapter_path,
+                    chapter_id=str(metadata["chapter_id"]),
                     title=metadata.get("title", chapter_path.stem),
                     status=metadata.get("status", "draft"),
                     label=metadata.get("label", "default"),
@@ -1216,7 +1289,10 @@ def find_chapter(root: Path, chapter_ref: str) -> ChapterDocument:
 def load_part_title(part_path: Path) -> str:
     metadata_path = part_path / PART_FILE
     if metadata_path.exists():
-        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+        metadata = validate_part_metadata(
+            load_yaml(metadata_path, default={}),
+            f"Part metadata '{metadata_path}'",
+        )
         title = str(metadata.get("title", "")).strip()
         if title:
             return title
@@ -1228,7 +1304,10 @@ def load_part_metadata(root: Path, part: str) -> dict[str, Any]:
     metadata_path = part_path / PART_FILE
     metadata = {}
     if metadata_path.exists():
-        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+        metadata = validate_part_metadata(
+            load_yaml(metadata_path, default={}),
+            f"Part metadata '{metadata_path}'",
+        )
     metadata["title"] = str(metadata.get("title", load_part_title(part_path)))
     metadata["part_id"] = part_path.name
     metadata["path"] = str(part_path)
@@ -1398,9 +1477,9 @@ def insert_citation_reference(
     else:
         updated_body = body.rstrip() + ("\n\n" if body.strip() else "") + citation_line + "\n"
 
-    chapter.path.write_text(
+    atomic_write_text(
+        chapter.path,
         f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{updated_body.rstrip()}\n",
-        encoding="utf-8",
     )
     return chapter.path
 
@@ -1413,7 +1492,9 @@ def find_source_note(root: Path, source_ref: str) -> SourceDocument:
     raise FileNotFoundError(f"Source note '{source_ref}' was not found.")
 
 
-def resolve_editor_target(root: Path, kind: str, reference: str | None = None, *, text: str | None = None, index: int = 1) -> Path:
+def resolve_editor_target(
+    root: Path, kind: str, reference: str | None = None, *, text: str | None = None, index: int = 1
+) -> Path:
     normalized_kind = kind.strip().lower()
     if normalized_kind == "chapter":
         if not reference:
@@ -1498,7 +1579,7 @@ def _insert_into_scene(body: str, scene_ref: str, citation_line: str) -> str:
 
 def _citation_marker(source: SourceDocument, citation_style: str) -> str:
     if citation_style.strip().upper() == "CHICAGO":
-        return f"> Citation: {source.author or 'Unknown'}. \"{source.title}.\" {source.year or 'n.d.'}"
+        return f'> Citation: {source.author or "Unknown"}. "{source.title}." {source.year or "n.d."}'
     if citation_style.strip().upper() == "MLA":
         return f"> Citation: {source.author or 'Unknown'}. {source.title}. {source.year or 'n.d.'}"
     return f"> Citation: {source.author or source.title} ({source.year or 'n.d.'})"
@@ -1531,7 +1612,9 @@ def import_folder_project(
     if not source_root.exists():
         raise FileNotFoundError(f"Source folder '{source_path}' was not found.")
 
-    project_root_path = init_project_from_template(target_path, title, template_name=template_name, template_file=template_file)
+    project_root_path = init_project_from_template(
+        target_path, title, template_name=template_name, template_file=template_file
+    )
 
     root_markdown_files = sorted(source_root.glob("*.md"))
     if root_markdown_files:
@@ -1583,9 +1666,14 @@ def _import_markdown_as_chapter(root: Path, source_file: Path, part: str) -> Pat
         synopsis=str(metadata.get("synopsis", "")),
         notes=str(metadata.get("notes", "")),
     )
-    chapter_path.write_text(
-        chapter_path.read_text(encoding="utf-8") + body.strip() + ("\n" if body.strip() else ""),
-        encoding="utf-8",
+    created_metadata, _ = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+    imported_metadata = dict(metadata)
+    imported_metadata.update(created_metadata)
+    atomic_write_text(
+        chapter_path,
+        f"---\n{yaml.safe_dump(imported_metadata, sort_keys=False).strip()}\n---\n\n"
+        + body.strip()
+        + ("\n" if body.strip() else ""),
     )
     return chapter_path
 

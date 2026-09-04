@@ -2,6 +2,23 @@
 
 Tracked record of roadmap items that shipped.
 
+## 2026-09-04
+
+### Data integrity baseline
+
+* preserved unknown metadata and introduced immutable chapter IDs with automatic migration
+* moved board chapter links to chapter IDs and migrated legacy references
+* made snapshot restore exact, preview first, staged, automatically backed up, and rollback protected
+* validated all persisted YAML structures and restricted template files to safe project paths
+* replaced index modification time freshness with SHA-256 source manifests
+
+### Test, package, and user safety baseline
+
+* added CI coverage for Python 3.11, 3.12, and 3.13
+* enforced an 80 percent test coverage floor plus Ruff, package build, and CLI smoke checks
+* added mounted TUI interaction tests and visible mutation and compile errors
+* required an explicit manuscript data transfer flag before hosted AI requests
+
 ## 2026-05-15
 
 ### Core writing workflow

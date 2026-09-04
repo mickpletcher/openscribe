@@ -4,6 +4,8 @@ import importlib
 import os
 from dataclasses import dataclass
 
+HOSTED_PROVIDERS = frozenset({"openai", "azure-openai", "anthropic", "gemini", "mistral"})
+
 
 class AIConfigurationError(RuntimeError):
     pass
@@ -25,13 +27,28 @@ def load_ai_settings(config: dict) -> AISettings:
     )
 
 
-def summarize_text(text: str, settings: AISettings, context_label: str) -> str:
+def requires_data_transfer_consent(settings: AISettings) -> bool:
+    return settings.provider.strip().lower() in HOSTED_PROVIDERS
+
+
+def summarize_text(
+    text: str,
+    settings: AISettings,
+    context_label: str,
+    *,
+    allow_data_transfer: bool = False,
+) -> str:
     if not settings.enabled:
-        raise AIConfigurationError(
-            "AI is disabled in .openscribe/project.yaml. Set ai.enabled to true first."
-        )
+        raise AIConfigurationError("AI is disabled in .openscribe/project.yaml. Set ai.enabled to true first.")
 
     provider = settings.provider.strip().lower()
+    if provider in HOSTED_PROVIDERS and not allow_data_transfer:
+        raise AIConfigurationError(
+            f"This command sends the complete {context_label} text to the hosted "
+            f"'{provider}' provider. Review the provider's data policy, then rerun "
+            "with --allow-data-transfer if you approve this transfer."
+        )
+
     prompt = _summary_prompt(text, context_label)
     if provider == "openai":
         return _summarize_with_openai(prompt, settings.model)
@@ -46,9 +63,7 @@ def summarize_text(text: str, settings: AISettings, context_label: str) -> str:
     if provider == "mistral":
         return _summarize_with_mistral(prompt, settings.model)
 
-    raise AIConfigurationError(
-        f"Provider '{settings.provider}' is not implemented in the CLI yet."
-    )
+    raise AIConfigurationError(f"Provider '{settings.provider}' is not implemented in the CLI yet.")
 
 
 def _summary_prompt(text: str, context_label: str) -> str:
@@ -66,7 +81,7 @@ def _summarize_with_openai(prompt: str, model: str) -> str:
     if not os.environ.get("OPENAI_API_KEY"):
         raise AIConfigurationError("OPENAI_API_KEY is not set.")
 
-    OpenAI = getattr(_load_dependency("openai", "OpenAI Python SDK"), "OpenAI")
+    OpenAI = _load_dependency("openai", "OpenAI Python SDK").OpenAI
     client = OpenAI()
     response = client.responses.create(
         model=model,
@@ -83,7 +98,7 @@ def _summarize_with_azure_openai(prompt: str, model: str) -> str:
     if not api_key:
         raise AIConfigurationError("AZURE_OPENAI_API_KEY is not set.")
 
-    OpenAI = getattr(_load_dependency("openai", "OpenAI Python SDK"), "OpenAI")
+    OpenAI = _load_dependency("openai", "OpenAI Python SDK").OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.responses.create(
         model=model,
@@ -98,7 +113,7 @@ def _summarize_with_openai_compatible_local(prompt: str, model: str) -> str:
         raise AIConfigurationError("OPENAI_COMPATIBLE_LOCAL_BASE_URL is not set.")
 
     api_key = os.environ.get("OPENAI_COMPATIBLE_LOCAL_API_KEY", "local")
-    OpenAI = getattr(_load_dependency("openai", "OpenAI Python SDK"), "OpenAI")
+    OpenAI = _load_dependency("openai", "OpenAI Python SDK").OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.responses.create(
         model=model,
@@ -157,7 +172,7 @@ def _load_dependency(module_name: str, package_label: str):
         return importlib.import_module(module_name)
     except ImportError as exc:
         raise AIConfigurationError(
-            f"{package_label} is not installed. Run `python -m pip install -e \".[ai]\"`."
+            f'{package_label} is not installed. Run `python -m pip install -e ".[ai]"`.'
         ) from exc
 
 

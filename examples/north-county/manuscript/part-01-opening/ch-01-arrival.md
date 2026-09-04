@@ -1,5 +1,6 @@
 ---
 title: Arrival
+chapter_id: chapter-11111111111111111111111111111111
 status: draft
 label: setup
 synopsis: Eli reaches North County and realizes the town is already watching him.

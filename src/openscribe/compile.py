@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from html import escape
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from html import escape
+from pathlib import Path
 
 from docx import Document
 from ebooklib import epub
@@ -152,9 +152,7 @@ def compile_project(
         )
         return target_path
 
-    raise CompileError(
-        f"Format '{options.format_name}' is not supported yet. Use docx, pdf, or epub."
-    )
+    raise CompileError(f"Format '{options.format_name}' is not supported yet. Use docx, pdf, or epub.")
 
 
 def assemble_manuscript_text(root: Path, template_name: str | None = None) -> str:
@@ -230,15 +228,17 @@ def _resolve_compile_options(
     profile_defaults = PROFILE_PRESETS.get(resolved_profile, {})
     explicit_template = template_name is not None
     resolved_template = (
-        template_name
-        or str(profile_defaults.get("template_name", ""))
-        or str(compile_config.get("default_template", "novel"))
-    ).strip().lower()
+        (
+            template_name
+            or str(profile_defaults.get("template_name", ""))
+            or str(compile_config.get("default_template", "novel"))
+        )
+        .strip()
+        .lower()
+    )
     if resolved_template not in TEMPLATE_PRESETS:
         supported = ", ".join(sorted(TEMPLATE_PRESETS))
-        raise CompileError(
-            f"Template '{resolved_template}' is not supported yet. Use {supported}."
-        )
+        raise CompileError(f"Template '{resolved_template}' is not supported yet. Use {supported}.")
 
     template_defaults = TEMPLATE_PRESETS[resolved_template]
     resolved_format = _resolve_format(config, format_name, output_path, resolved_profile or None)
@@ -315,9 +315,7 @@ def _compile_project_with_pandoc(
 ) -> None:
     pandoc_path = shutil.which("pandoc")
     if pandoc_path is None:
-        raise CompileError(
-            "Pandoc was requested but is not installed or not available on PATH."
-        )
+        raise CompileError("Pandoc was requested but is not installed or not available on PATH.")
 
     manuscript_text = _pandoc_markdown(root, project_title, author, chapters, options)
     with tempfile.TemporaryDirectory(prefix="openscribe-pandoc-") as temp_dir:
@@ -661,7 +659,7 @@ def _source_entry(source, citation_style: str) -> str:
         parts = [f"{author}." if author else "", f"{title}.", year, url]
         return " ".join(part for part in parts if part).strip()
     if style == "CHICAGO":
-        parts = [author, f"\"{title}.\"" if title else "", year, url]
+        parts = [author, f'"{title}."' if title else "", year, url]
         return ". ".join(part.strip().rstrip(".") for part in parts if part).strip() + "."
     parts = [f"{author} ({year})." if author and year else author or f"({year})." if year else "", title + ".", url]
     return " ".join(part for part in parts if part).strip()

@@ -2,19 +2,22 @@
 
 Open source CLI and TUI writing environment for long form projects
 
-## Project docs
+## Current Status
 
-See [getting-started.md](./getting-started.md) for the fastest beginner setup path.
-See [changelog.md](./changelog.md) for the repo change history.
-See [completed-upgrades.md](./completed-upgrades.md) for shipped roadmap work.
-See [assessment.md](./assessment.md) for the current project assessment.
-See [docs/ai-setup.md](./docs/ai-setup.md) for AI setup with cloud API keys and local model servers.
-See [Spec 001](./specs/001-compile-pipeline/README.md) for the compile milestone definition.
-See [Spec 002](./specs/002-board-mode/README.md) for the planning board milestone definition.
-See [Spec 003](./specs/003-elements-and-relations/README.md) for the elements and relations milestone definition.
-See the [North County example project](./examples/north-county/README.md) for a concrete sample project.
-`future-upgrades.md` stays local and should be refreshed as work ships and new ideas come up.
-`assessment.md` should be refreshed when project status or priorities change.
+- Status: Active pre-release alpha
+- Version: 0.1.0
+- Project tier: 1
+- Primary technologies: Python, Typer, Textual, Markdown, and YAML
+
+For current repository health, see [assessment.md](./assessment.md).
+
+## Documentation
+
+The single authority for each documentation responsibility is mapped in [PROJECT-STANDARD.md](./PROJECT-STANDARD.md).
+
+Use [getting-started.md](./getting-started.md) for the shortest setup path, [VALIDATION.md](./VALIDATION.md) for verification procedures, and [docs/ai-setup.md](./docs/ai-setup.md) for optional AI setup.
+
+The files under `specs/` are development milestone plans. They are not contractual requirements.
 
 ## What it is
 
@@ -77,6 +80,7 @@ This first build includes:
 * snapshot restore and diff helpers
 * editor launch helpers for chapters, parts, and search results
 * conference schedule import and session checklist automation
+* optional LanguageTool grammar and style checks for chapters
 * optional AI summary command for chapter review
 
 This build does not yet include venue specific bibliography styles, scene reordering, or richer drag based board editing.
@@ -89,6 +93,10 @@ You need:
 * PowerShell on Windows if you want to follow the examples exactly
 
 You do not need any AI provider, API key, or AI SDK setup to use the normal project, CLI, or TUI features.
+
+## Validation
+
+Use the commands and change-class matrix in [VALIDATION.md](./VALIDATION.md).
 
 ## Install
 
@@ -146,6 +154,37 @@ openscribe tui
 If you only want the writing tool, you can stop there.
 You can ignore the rest of the AI section completely.
 
+## LanguageTool proofreading
+
+`openscribe` can send one chapter at a time to a LanguageTool compatible `/v2/check` endpoint and display grammar, spelling, and style findings. It does not apply replacements or change manuscript files.
+
+The default is disabled and points to a local server:
+
+```yaml
+proofreading:
+  enabled: true
+  endpoint: http://127.0.0.1:8081/v2/check
+  language: en-US
+  timeout_seconds: 30
+```
+
+Start a self hosted server by following the [official LanguageTool HTTP server guide](https://dev.languagetool.org/http-server), then run:
+
+```powershell
+openscribe proofread chapter "The Beginning"
+openscribe proofread chapter "The Beginning" --language en-GB
+```
+
+Local loopback endpoints can use HTTP. Nonlocal endpoints must use HTTPS and require explicit approval for every command:
+
+```powershell
+openscribe proofread chapter "The Beginning" --allow-data-transfer
+```
+
+Before an approved hosted request, `openscribe` reports the endpoint and number of chapter characters being sent. The free public LanguageTool endpoint is intentionally rejected because its [published access policy](https://dev.languagetool.org/public-http-api) prohibits automated requests. Use a local server or a licensed hosted endpoint instead.
+
+This integration uses the LanguageTool HTTP API. It does not copy or distribute LanguageTool source code. See the [LanguageTool repository](https://github.com/languagetool-org/languagetool) for its server, source, and license details. The self hosted server does not include LanguageTool's cloud only AI rules.
+
 ## Research workflow
 
 If you are using `openscribe` for papers or conference work:
@@ -193,8 +232,13 @@ That guide covers:
 Current AI command:
 
 ```powershell
-openscribe ai summarize "The Beginning"
+openscribe ai summarize "The Beginning" --allow-data-transfer
 ```
+
+For hosted providers, `openscribe` refuses to send manuscript text unless that
+command includes `--allow-data-transfer`. Before the request, it reports the
+provider, model, and number of characters being sent. The local provider does
+not require this flag.
 
 ## AI architecture
 
@@ -543,6 +587,8 @@ Use this for saved user defined project templates.
 `.openscribe/index/`
 
 Use this for the derived project index built from manuscript, note, research, and element data.
+The index stores a SHA-256 source manifest. Search stops and asks for a rebuild
+after any indexed source is edited, added, or deleted.
 
 `.openscribe/snapshots/`
 
@@ -623,6 +669,7 @@ Example:
 ```markdown
 ---
 title: The Beginning
+chapter_id: chapter-8f2c486b47e149f7a26dc2b3df3244fb
 status: draft
 label: default
 synopsis: Hero meets mentor for the first time.
@@ -633,6 +680,11 @@ notes: Tighten the middle scene.
 
 Marcus stepped off the train into rain and diesel smoke.
 ```
+
+`chapter_id` is generated once and stays stable when a chapter is renamed,
+moved, or renumbered. Board relationships store this ID. Existing projects are
+migrated when chapters and boards are loaded. Metadata commands preserve
+frontmatter fields they do not recognize.
 
 ### Frontmatter fields
 
@@ -1279,11 +1331,17 @@ openscribe snapshot diff before-rewrite
 
 ### `openscribe snapshot restore`
 
-Restores files from a saved snapshot.
+Previews an exact restore from a saved snapshot. No files change without
+`--apply`.
 
 ```powershell
 openscribe snapshot restore before-rewrite
+openscribe snapshot restore before-rewrite --apply
 ```
+
+An applied restore first creates an automatic checkpoint. It then restores the
+saved managed files and removes managed files that were created after the
+snapshot.
 
 ### `openscribe workflow screenplay-scene`
 
@@ -1586,6 +1644,7 @@ openscribe board promote note-001 --part Opening --chapter "Ledger clue"
 openscribe idea add "The Flood Ledger" --premise "A county clerk finds a ledger that predicts deaths."
 openscribe element add character "Eli Harper" --notes "Main point of view"
 openscribe snapshot save "after-outline"
+openscribe proofread chapter "Arrival"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
@@ -1633,26 +1692,14 @@ A simple pattern:
 You can also record snapshots from inside `openscribe`:
 
 * `openscribe snapshot save "label"` creates a checkpoint archive
-* `openscribe snapshot save "label" --mode git` records the current git commit and dirty state
+* `openscribe snapshot save "label" --mode git` records the current git commit and dirty state and includes a restorable archive
+* `openscribe snapshot restore "label"` previews an exact restore
+* `openscribe snapshot restore "label" --apply` creates a backup and applies it
 
 ## Current limitations
 
-Right now:
-
-* the TUI can now handle several chapter metadata quick actions, but full freeform metadata editing is still CLI first
-* word counts only reflect the chapter body text
-* part storage still uses numbered folder names on disk
-* chapter ordering is based on numbered filenames and folders
-* scene support is heading based and does not yet have separate scene metadata
-* compile currently exports to Word, PDF, and EPUB only
-* compile profiles are present, but formatting depth is still intentionally simple
-* bibliography output and citation insertion exist, but venue specific styles are still shallow
-* element appears in tracking is derived from text matches and aliases
+See [TECH-DEBT.md](./TECH-DEBT.md) for current compromises and [assessment.md](./assessment.md) for their effect on repository health.
 
 ## Roadmap
 
-Planned next:
-
-* venue specific bibliography styles
-* deeper conference revision workflows and schedule transforms
-* stronger scene metadata and scene reordering
+See [future-upgrades.md](./future-upgrades.md). The current order is FU-001 and FU-002 for scene workflows, FU-003 for AI review commands, then FU-004 for Word round-trip design.

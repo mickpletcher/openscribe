@@ -1,5 +1,41 @@
 # changelog
 
+## 2026-09-04
+
+### Living documentation adoption
+
+* adopted Software Project Living Documentation Standard 2.2 at Tier 1 in Adoption Mode
+* added the authority map, repository development rules, agent rules, technical debt authority, validation runbook, and documentation compliance check
+* converted the deferred-upgrades plan into a tracked living authority with permanent FU identifiers
+* linked README status, validation, limitations, and roadmap sections to their single authorities
+* aligned the repository rules with the standard's Class 4 ADR presumption and second-reviewer requirement
+
+### Data integrity and recovery
+
+* preserved unknown frontmatter fields during metadata updates and imports
+* added immutable chapter IDs plus migration for existing chapters and duplicate IDs
+* migrated board chapter relationships from changeable chapter names and filenames to chapter IDs
+* changed snapshot restore to an exact preview first workflow with `--apply`, automatic backup, staged replacement, deletion of post-snapshot managed files, and rollback
+* added structural and field type validation for project YAML, content frontmatter, boards, elements, templates, indexes, and snapshot metadata
+* blocked unsafe template paths before project creation
+* replaced index modification time checks with SHA-256 source manifests that detect edits, additions, and deletions
+
+### Quality and disclosure
+
+* added Windows CI for Python 3.11 through 3.13 with an 80 percent coverage floor
+* added Ruff checks, source and wheel builds, and installed CLI smoke tests
+* replaced silent TUI action failures with visible notifications and added mounted interaction tests
+* added explicit `--allow-data-transfer` approval and a provider, model, and character count disclosure before hosted AI requests
+* updated the sample project, recovery instructions, roadmap, and assessment to match the verified alpha state
+
+### LanguageTool proofreading
+
+* added optional chapter grammar, spelling, and style checks through the LanguageTool `/v2/check` HTTP API
+* defaulted proofreading to a disabled local loopback endpoint and rejected automated use of the free public endpoint
+* required HTTPS plus explicit per-command data transfer approval for nonlocal LanguageTool endpoints
+* kept findings read only so proofreading cannot silently rewrite manuscript files
+* added request, response, endpoint safety, disclosure, CLI, and configuration regression coverage
+
 ## 2026-05-15
 
 ### TUI metadata quick actions and conference schedule import

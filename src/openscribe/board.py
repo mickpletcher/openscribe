@@ -6,7 +6,8 @@ from typing import Any
 
 import yaml
 
-from openscribe.project import create_chapter, project_root
+from openscribe.project import create_chapter, list_chapters
+from openscribe.schema import atomic_write_text, load_yaml, validate_board
 
 BOARD_DIR = ".openscribe/boards"
 BOARD_FILE = "default.yaml"
@@ -33,13 +34,16 @@ def load_board(root: Path) -> dict[str, Any]:
     path = board_path(root)
     if not path.exists():
         return {"notes": []}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {"notes": []}
+    board = validate_board(load_yaml(path, default={"notes": []}), f"Board '{path}'")
+    if _migrate_chapter_links(root, board):
+        save_board(root, board)
+    return board
 
 
 def save_board(root: Path, board: dict[str, Any]) -> Path:
     path = board_path(root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(board, sort_keys=False), encoding="utf-8")
+    validate_board(board, f"Board '{path}'")
+    atomic_write_text(path, yaml.safe_dump(board, sort_keys=False))
     return path
 
 
@@ -79,7 +83,9 @@ def add_note(root: Path, title: str, body: str = "", group: str = "", x: int = 0
     }
     board.setdefault("notes", []).append(note)
     save_board(root, board)
-    return BoardNote(note_id=next_id, title=title, body=body, group=group, links=[], x=x, y=y, hidden=False, chapter_links=[])
+    return BoardNote(
+        note_id=next_id, title=title, body=body, group=group, links=[], x=x, y=y, hidden=False, chapter_links=[]
+    )
 
 
 def add_link(root: Path, from_id: str, to_id: str) -> None:
@@ -125,21 +131,21 @@ def set_note_hidden(root: Path, note_id: str, hidden: bool) -> BoardNote:
     return _note_from_dict(note)
 
 
-def add_chapter_link(root: Path, note_id: str, chapter_ref: str) -> BoardNote:
+def add_chapter_link(root: Path, note_id: str, chapter_id: str) -> BoardNote:
     board = load_board(root)
     note = _require_note(board, note_id)
     chapter_links = [str(value) for value in note.get("chapter_links", [])]
-    if chapter_ref not in chapter_links:
-        chapter_links.append(chapter_ref)
+    if chapter_id not in chapter_links:
+        chapter_links.append(chapter_id)
     note["chapter_links"] = chapter_links
     save_board(root, board)
     return _note_from_dict(note)
 
 
-def remove_chapter_link(root: Path, note_id: str, chapter_ref: str) -> BoardNote:
+def remove_chapter_link(root: Path, note_id: str, chapter_id: str) -> BoardNote:
     board = load_board(root)
     note = _require_note(board, note_id)
-    note["chapter_links"] = [str(value) for value in note.get("chapter_links", []) if str(value) != chapter_ref]
+    note["chapter_links"] = [str(value) for value in note.get("chapter_links", []) if str(value) != chapter_id]
     save_board(root, board)
     return _note_from_dict(note)
 
@@ -196,21 +202,23 @@ def render_board(root: Path, width: int = 72, height: int = 18) -> str:
     return rendered or "[Empty board]"
 
 
-def promote_note_to_chapter(root: Path, note_id: str, chapter_title: str | None = None, part: str | None = None) -> Path:
+def promote_note_to_chapter(
+    root: Path, note_id: str, chapter_title: str | None = None, part: str | None = None
+) -> Path:
     board = load_board(root)
     note = _require_note(board, note_id)
     title = chapter_title or str(note.get("title", "")).strip() or f"Board Note {note_id}"
     chapter_path = create_chapter(root, title, part=part, synopsis=str(note.get("body", "")).strip())
     body = str(note.get("body", "")).strip()
     if body:
-        chapter_path.write_text(
+        atomic_write_text(
+            chapter_path,
             chapter_path.read_text(encoding="utf-8") + body + "\n",
-            encoding="utf-8",
         )
     chapter_links = [str(value) for value in note.get("chapter_links", [])]
-    chapter_slug = chapter_path.stem
-    if chapter_slug not in chapter_links:
-        chapter_links.append(chapter_slug)
+    chapter_id = next(chapter.chapter_id for chapter in list_chapters(root) if chapter.path == chapter_path)
+    if chapter_id not in chapter_links:
+        chapter_links.append(chapter_id)
     note["chapter_links"] = chapter_links
     save_board(root, board)
     return chapter_path
@@ -227,6 +235,27 @@ def _next_note_id(board: dict[str, Any]) -> str:
                 continue
     next_number = (max(existing) + 1) if existing else 1
     return f"note-{next_number:03d}"
+
+
+def _migrate_chapter_links(root: Path, board: dict[str, Any]) -> bool:
+    chapters = list_chapters(root)
+    references: dict[str, str] = {}
+    for chapter in chapters:
+        for reference in (chapter.chapter_id, chapter.slug, chapter.title, chapter.path.stem):
+            references.setdefault(reference.strip().lower(), chapter.chapter_id)
+
+    changed = False
+    for item in board.get("notes", []):
+        original_links = [str(value) for value in item.get("chapter_links", [])]
+        migrated_links: list[str] = []
+        for value in original_links:
+            resolved = references.get(value.strip().lower(), value)
+            if resolved not in migrated_links:
+                migrated_links.append(resolved)
+        if migrated_links != original_links:
+            item["chapter_links"] = migrated_links
+            changed = True
+    return changed
 
 
 def _require_note(board: dict[str, Any], note_id: str) -> dict[str, Any]:
