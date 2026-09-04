@@ -217,6 +217,8 @@ __marimo__/
 # Streamlit
 
 #File Exclusions
+**/.openscribe/snapshots/
+**/.openscribe/word-roundtrip/
 openscribe.code-workspace
 .streamlit/secrets.toml
 github-social-preview.jpg

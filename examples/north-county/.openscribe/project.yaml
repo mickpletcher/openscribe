@@ -1,6 +1,6 @@
 title: North County
 author: Mick
-version: 1
+version: 3
 template: fiction
 compile:
   default_format: docx

@@ -10,6 +10,7 @@ notes: Push the threat harder in the second half of the scene.
 ---
 
 ## Feed Store
+<!-- openscribe-scene-id: scene-4e7543ea41a34f279690f1d9a002f805 -->
 
 The pay phone outside the feed store still worked if you hit the side panel first.
 
@@ -18,6 +19,7 @@ He expected voicemail.
 Instead, someone answered on the second ring and said his name before he spoke.
 
 ## The Warning
+<!-- openscribe-scene-id: scene-528dc769ec64447c82ec5a9bca12bce2 -->
 
 "You made good time," the voice said.
 

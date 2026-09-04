@@ -12,6 +12,7 @@ from rich.tree import Tree
 from openscribe.ai import (
     AIConfigurationError,
     load_ai_settings,
+    run_ai_task,
     summarize_text,
 )
 from openscribe.ai import (
@@ -42,9 +43,12 @@ from openscribe.elements import (
     update_element,
 )
 from openscribe.index import index_is_current, load_project_index, rebuild_project_index
+from openscribe.migrations import MigrationError, migrate_project, plan_project_migration
 from openscribe.project import (
+    SceneOperation,
     add_scene,
     add_screenplay_scene,
+    apply_scene_operation,
     batch_update_chapters,
     built_in_templates,
     chapter_deadline_status,
@@ -71,12 +75,17 @@ from openscribe.project import (
     load_part_metadata,
     load_project_config,
     open_in_editor,
+    plan_merge_scene,
+    plan_reorder_scene,
+    plan_split_scene,
     project_root,
     reorder_chapter,
     reorder_part,
     resolve_editor_target,
     save_project_template,
+    scene_operation_diff,
     scene_report,
+    strip_scene_markers,
     template_library_path,
     update_chapter_metadata,
     update_goals,
@@ -124,6 +133,8 @@ template_app = typer.Typer(help="Project template workflows.")
 import_app = typer.Typer(help="Import workflows.")
 workflow_app = typer.Typer(help="Format specific workflow helpers.")
 move_app = typer.Typer(help="Reordering workflows.")
+scene_app = typer.Typer(help="Previewable scene restructuring workflows.")
+migrate_app = typer.Typer(help="Project format migration workflows.")
 open_app = typer.Typer(help="Open project files in your editor.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
@@ -141,6 +152,8 @@ app.add_typer(template_app, name="template")
 app.add_typer(import_app, name="import")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(move_app, name="move")
+app.add_typer(scene_app, name="scene")
+app.add_typer(migrate_app, name="migrate")
 app.add_typer(open_app, name="open")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
@@ -903,6 +916,91 @@ def move_chapter(
         console.print(f"{index}. {chapter_path.name}")
 
 
+@scene_app.command("move")
+def scene_move(
+    scene: str = typer.Argument(..., help="Scene ID, title, or slug."),
+    chapter: str = typer.Option(..., "--chapter", help="Source chapter title, ID, or slug."),
+    position: int = typer.Option(..., "--position", help="New 1 based scene position."),
+    to_chapter: str | None = typer.Option(None, "--to-chapter", help="Optional target chapter."),
+    apply: bool = typer.Option(False, "--apply", help="Apply the previewed scene move."),
+) -> None:
+    root = project_root()
+    try:
+        operation = plan_reorder_scene(root, chapter, scene, position, target_chapter_ref=to_chapter)
+        _run_scene_operation(root, operation, apply)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@scene_app.command("split")
+def scene_split(
+    scene: str = typer.Argument(..., help="Scene ID, title, or slug."),
+    chapter: str = typer.Option(..., "--chapter", help="Chapter title, ID, or slug."),
+    at_text: str = typer.Option(..., "--at-text", help="Text that starts the new scene."),
+    new_title: str = typer.Option(..., "--new-title", help="Title for the new scene."),
+    apply: bool = typer.Option(False, "--apply", help="Apply the previewed scene split."),
+) -> None:
+    root = project_root()
+    try:
+        operation = plan_split_scene(root, chapter, scene, at_text, new_title)
+        _run_scene_operation(root, operation, apply)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@scene_app.command("merge")
+def scene_merge(
+    scene: str = typer.Argument(..., help="Destination scene ID, title, or slug."),
+    other_scene: str = typer.Option(..., "--with", help="Scene to consume."),
+    chapter: str = typer.Option(..., "--chapter", help="Destination chapter title, ID, or slug."),
+    other_chapter: str | None = typer.Option(None, "--other-chapter", help="Optional source chapter."),
+    apply: bool = typer.Option(False, "--apply", help="Apply the previewed scene merge."),
+) -> None:
+    root = project_root()
+    try:
+        operation = plan_merge_scene(
+            root,
+            chapter,
+            scene,
+            other_scene,
+            other_chapter_ref=other_chapter,
+        )
+        _run_scene_operation(root, operation, apply)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@migrate_app.command("status")
+def migrate_status() -> None:
+    root = project_root()
+    try:
+        plan = plan_project_migration(root)
+    except MigrationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(f"Project format: {plan.current_version}. Supported format: {plan.target_version}.")
+    if not plan.steps:
+        console.print("No migration is required.")
+        return
+    for step in plan.steps:
+        console.print(f"v{step.from_version} -> v{step.to_version}: {step.name}")
+
+
+@migrate_app.command("apply")
+def migrate_apply() -> None:
+    root = project_root()
+    try:
+        result = migrate_project(root)
+    except MigrationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if not result.plan.steps:
+        console.print("No migration is required.")
+        return
+    console.print(
+        f"Migrated project from v{result.plan.current_version} to v{result.plan.target_version}. "
+        f"Backup: {result.backup_path.relative_to(root) if result.backup_path else 'none'}"
+    )
+
+
 @idea_app.command("list")
 def idea_list() -> None:
     root = project_root()
@@ -1302,10 +1400,158 @@ def ai_summarize(
     )
 
 
+@ai_app.command("rewrite")
+def ai_rewrite(
+    chapter: str = typer.Argument(..., help="Chapter title, ID, or slug."),
+    allow_data_transfer: bool = typer.Option(False, "--allow-data-transfer"),
+) -> None:
+    _run_ai_chapter_task(chapter, "rewrite", "AI Rewrite Suggestion", allow_data_transfer)
+
+
+@ai_app.command("outline")
+def ai_outline(
+    chapter: str = typer.Argument(..., help="Chapter title, ID, or slug."),
+    allow_data_transfer: bool = typer.Option(False, "--allow-data-transfer"),
+) -> None:
+    _run_ai_chapter_task(chapter, "outline", "AI Outline", allow_data_transfer)
+
+
+@ai_app.command("analyze")
+def ai_analyze(
+    chapter: str = typer.Argument(..., help="Chapter title, ID, or slug."),
+    focus: str = typer.Option(
+        "prose",
+        "--focus",
+        help="Analysis focus: pacing, continuity, point-of-view, or prose.",
+    ),
+    allow_data_transfer: bool = typer.Option(False, "--allow-data-transfer"),
+) -> None:
+    normalized_focus = focus.strip().lower()
+    aliases = {"pov": "point-of-view", "point of view": "point-of-view"}
+    normalized_focus = aliases.get(normalized_focus, normalized_focus)
+    if normalized_focus not in {"pacing", "continuity", "point-of-view", "prose"}:
+        raise typer.BadParameter("Focus must be pacing, continuity, point-of-view, or prose.")
+    _run_ai_chapter_task(
+        chapter,
+        normalized_focus,
+        f"AI {normalized_focus.title()} Review",
+        allow_data_transfer,
+    )
+
+
+@ai_app.command("metadata")
+def ai_metadata(
+    chapter: str = typer.Argument(..., help="Chapter title, ID, or slug."),
+    allow_data_transfer: bool = typer.Option(False, "--allow-data-transfer"),
+) -> None:
+    _run_ai_chapter_task(chapter, "metadata", "AI Metadata Suggestions", allow_data_transfer)
+
+
+@ai_app.command("brainstorm")
+def ai_brainstorm(
+    chapter: str = typer.Argument(..., help="Chapter title, ID, or slug."),
+    question: str = typer.Option("Possible next developments", "--question", help="Brainstorming direction."),
+    allow_data_transfer: bool = typer.Option(False, "--allow-data-transfer"),
+) -> None:
+    _run_ai_chapter_task(
+        chapter,
+        "brainstorm",
+        "AI Brainstorm",
+        allow_data_transfer,
+        question=question,
+    )
+
+
+@ai_app.command("query")
+def ai_query(
+    question: str = typer.Argument(..., help="Question to answer from the manuscript."),
+    allow_data_transfer: bool = typer.Option(False, "--allow-data-transfer"),
+) -> None:
+    root = project_root()
+    chapters = list_chapters(root)
+    manuscript_text = "\n\n".join(
+        f"# {chapter.title}\n\n{strip_scene_markers(chapter.body).strip()}" for chapter in chapters
+    )
+    if not manuscript_text.strip():
+        raise typer.BadParameter("The project manuscript is empty.")
+    _run_ai_task(
+        root,
+        manuscript_text,
+        "project manuscript",
+        "query",
+        "AI Project Query",
+        allow_data_transfer,
+        question=question,
+    )
+
+
+def _run_ai_chapter_task(
+    chapter_ref: str,
+    task: str,
+    panel_title: str,
+    allow_data_transfer: bool,
+    *,
+    question: str = "",
+) -> None:
+    root = project_root()
+    document = find_chapter(root, chapter_ref)
+    text = strip_scene_markers(document.body)
+    if not text.strip():
+        raise typer.BadParameter("The chapter body is empty.")
+    _run_ai_task(
+        root,
+        text,
+        "chapter",
+        task,
+        f"{panel_title}: {document.title}",
+        allow_data_transfer,
+        question=question,
+    )
+
+
+def _run_ai_task(
+    root: Path,
+    text: str,
+    context_label: str,
+    task: str,
+    panel_title: str,
+    allow_data_transfer: bool,
+    *,
+    question: str = "",
+) -> None:
+    settings = load_ai_settings(load_project_config(root))
+    try:
+        if settings.enabled and ai_requires_data_transfer_consent(settings) and allow_data_transfer:
+            console.print(
+                f"Sending {len(text)} characters of {context_label} text to "
+                f"hosted provider '{settings.provider}' using model '{settings.model}'."
+            )
+        output = run_ai_task(
+            text,
+            settings,
+            context_label,
+            task,
+            question=question,
+            allow_data_transfer=allow_data_transfer,
+        )
+    except AIConfigurationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(Panel(output, title=panel_title, border_style="cyan"))
+
+
 def _yaml_dump(data: dict) -> str:
     import yaml
 
     return yaml.safe_dump(data, sort_keys=False).strip()
+
+
+def _run_scene_operation(root: Path, operation: SceneOperation, apply: bool) -> None:
+    console.print(Panel(scene_operation_diff(root, operation), title=operation.summary, border_style="cyan"))
+    if not apply:
+        console.print("Preview only. Rerun with --apply to modify the manuscript.")
+        return
+    backup_path = apply_scene_operation(root, operation)
+    console.print(f"Applied scene operation. Backup: {backup_path.relative_to(root)}")
 
 
 def _print_restore_preview(preview) -> None:

@@ -13,7 +13,14 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-from openscribe.project import ChapterDocument, list_chapters, list_source_notes, load_project_config, slugify
+from openscribe.project import (
+    ChapterDocument,
+    list_chapters,
+    list_source_notes,
+    load_project_config,
+    slugify,
+    strip_scene_markers,
+)
 
 
 class CompileError(RuntimeError):
@@ -177,7 +184,7 @@ def assemble_manuscript_text(root: Path, template_name: str | None = None) -> st
                 sections.append(chapter.part)
 
         chapter_heading = _chapter_heading(chapter.title, chapter_number, options)
-        chapter_sections = [chapter_heading, chapter.body.strip()]
+        chapter_sections = [chapter_heading, strip_scene_markers(chapter.body).strip()]
         sections.append("\n\n".join([part for part in chapter_sections if part]))
 
     bibliography_sections = _bibliography_sections(root, options)
@@ -575,7 +582,8 @@ def _compile_project_to_epub(
 
 
 def _paragraphs(text: str) -> list[str]:
-    return [block.strip() for block in text.split("\n\n") if block.strip()]
+    visible_text = strip_scene_markers(text)
+    return [block.strip() for block in visible_text.split("\n\n") if block.strip()]
 
 
 def _wrap_pdf_text(text: str, max_width: float, font_name: str, font_size: int) -> list[str]:

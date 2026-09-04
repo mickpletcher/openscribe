@@ -7,15 +7,22 @@ The base writing workflow does not need AI.
 
 ## What AI can do now
 
-The current CLI supports:
+The current CLI supports read-only summary, rewrite, outline, pacing, continuity, point-of-view, prose, metadata, brainstorming, and project-query tasks.
 
-* `openscribe ai summarize "Chapter Title"`
+```powershell
+openscribe ai summarize "Chapter Title"
+openscribe ai rewrite "Chapter Title"
+openscribe ai outline "Chapter Title"
+openscribe ai analyze "Chapter Title" --focus pacing
+openscribe ai analyze "Chapter Title" --focus continuity
+openscribe ai analyze "Chapter Title" --focus pov
+openscribe ai analyze "Chapter Title" --focus prose
+openscribe ai metadata "Chapter Title"
+openscribe ai brainstorm "Chapter Title" --question "What could fail next?"
+openscribe ai query "Which clues remain unresolved?"
+```
 
-This reads the chapter body and returns:
-
-* a short overview paragraph
-* five concise bullet points
-* one revision risk to review next
+The commands print model output. They do not change manuscript or metadata files.
 
 ## Base install vs AI install
 
@@ -54,13 +61,15 @@ To enable AI:
 ## Cloud providers
 
 These options use hosted APIs and usually require an account plus an API key.
-The complete selected chapter body is sent to the configured provider. Review
+The complete selected chapter body, or the complete assembled manuscript for `ai query`, is sent to the configured provider. Review
 that provider's current data handling and retention terms before use.
 
 Hosted requests require explicit approval on every command:
 
 ```powershell
 openscribe ai summarize "The Beginning" --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus continuity --allow-data-transfer
+openscribe ai query "Which clues remain unresolved?" --allow-data-transfer
 ```
 
 Without `--allow-data-transfer`, the command stops before loading a provider

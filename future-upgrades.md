@@ -1,6 +1,6 @@
 # Future Upgrades
 
-### FU-001: Add scene identity and metadata
+### FU-001: Add richer scene metadata
 
 **Status:** Planned
 **Priority:** High
@@ -9,76 +9,24 @@
 
 **Opportunity**
 
-Add immutable scene IDs plus status, synopsis, point of view, target, notes, and related-element metadata without abandoning Markdown headings.
+Add status, synopsis, point of view, target, notes, and related-element metadata keyed to the immutable scene IDs without abandoning Markdown headings.
 
 **Potential benefit**
 
-Scenes can be linked and reorganized without depending on changeable headings or positions.
+Writers can manage scene progress and continuity with the same depth already available at chapter level.
 
 **Why deferred**
 
-The versioned migration framework in `TD-001` must be resolved first.
+Immutable scene IDs and the versioned migration framework are complete. The remaining metadata format needs a separate persisted-data decision before implementation.
 
 **Trigger**
 
-After the current integrity changes pass hosted CI and a restore drill.
+When scene-level planning becomes a higher priority than the remaining TUI and release hardening work.
 
 **Estimated effort:** Large
-**Dependencies:** TD-001
+**Dependencies:** Immutable scene IDs
 
-### FU-002: Add previewable scene restructuring
-
-**Status:** Planned
-**Priority:** High
-**Area:** Manuscript workflow
-**Origin:** Internal
-
-**Opportunity**
-
-Add scene reorder, split, and merge commands within and across chapters.
-
-**Potential benefit**
-
-Large drafts can be restructured without manual copy and paste.
-
-**Why deferred**
-
-Safe restructuring depends on stable scene identity and recovery behavior.
-
-**Trigger**
-
-After FU-001 and a destructive-operation preview design are complete.
-
-**Estimated effort:** Large
-**Dependencies:** FU-001
-
-### FU-003: Add scoped AI review and suggestion commands
-
-**Status:** Planned
-**Priority:** High
-**Area:** AI workflow
-**Origin:** Internal
-
-**Opportunity**
-
-Add pacing, continuity, point of view, prose, rewrite-suggestion, outline, metadata-suggestion, and project-query commands.
-
-**Potential benefit**
-
-Writers can request focused analysis instead of generic chat.
-
-**Why deferred**
-
-Scene workflow and data-selection boundaries should stabilize first.
-
-**Trigger**
-
-After FU-001 and FU-002 establish stable scene scope.
-
-**Estimated effort:** Large
-**Dependencies:** FU-001, FU-002, existing hosted data-transfer approval
-
-### FU-004: Design Word round-trip integration
+### FU-004: Build Word round-trip integration
 
 **Status:** Proposed
 **Priority:** Medium
@@ -87,7 +35,7 @@ After FU-001 and FU-002 establish stable scene scope.
 
 **Opportunity**
 
-Define paragraph-to-chapter and scene identity, conflict detection, preview, backup, tracked-change handling, and a desktop local bridge before building an Office add-in.
+Implement the accepted development design in `specs/004-word-round-trip/`, including content-control identity, three-way conflict detection, preview, backup, tracked-change refusal, and a desktop local bridge.
 
 **Potential benefit**
 
@@ -95,14 +43,14 @@ Writers can use Word without making DOCX the canonical store.
 
 **Why deferred**
 
-Round-trip identity and conflict behavior are not defined, and Word export is currently one-way.
+The design is complete. The OOXML package layer, importer, local bridge, Office task pane, and real Word validation are not built.
 
 **Trigger**
 
-After scene identity and recovery behavior are proven.
+After the round-trip implementation receives its own Class 4 review and test fixtures.
 
 **Estimated effort:** Large
-**Dependencies:** FU-001, FU-002
+**Dependencies:** `specs/004-word-round-trip/`, stable chapter and scene IDs, snapshot recovery
 
 ### FU-005: Customize compile profiles per project
 
@@ -286,7 +234,7 @@ When a specific venue or journal exposes a reproducible gap.
 **Estimated effort:** Medium
 **Dependencies:** None
 
-### FU-012: Surface LanguageTool findings in the TUI editor
+### FU-012: Add actionable LanguageTool review controls
 
 **Status:** Proposed
 **Priority:** Medium
@@ -295,7 +243,7 @@ When a specific venue or journal exposes a reproducible gap.
 
 **Opportunity**
 
-Display LanguageTool findings beside chapter text with navigation, ignore controls, and previewable replacement actions.
+Add finding navigation, ignore controls, and previewable replacement actions to the existing TUI findings panel.
 
 **Potential benefit**
 
@@ -303,11 +251,11 @@ Writers can review prose without leaving the authoring interface while Markdown 
 
 **Why deferred**
 
-The chapter CLI integration proves the API and privacy boundary first. Safe replacement workflows also need broader TUI interaction coverage.
+The TUI now displays local findings and visibly refuses hosted transfer. Applying suggestions still needs an explicit diff and recovery design plus broader interaction coverage.
 
 **Trigger**
 
-After TD-003 is reduced and the local LanguageTool contract is verified against a real server.
+After TD-003 is reduced and a previewable suggestion-application design is reviewed.
 
 **Estimated effort:** Medium
-**Dependencies:** TD-003, current chapter proofreading command
+**Dependencies:** TD-003, current TUI proofreading panel

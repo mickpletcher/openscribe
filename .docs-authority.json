@@ -63,7 +63,7 @@
       "class": "contractual"
     },
     "Decision history": {
-      "authority": "Not required at this tier",
+      "authority": "docs/decisions/README.md",
       "class": "derived"
     },
     "Resolved history": {

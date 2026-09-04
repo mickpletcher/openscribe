@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from textual.widgets import Input, Tree
+from textual.widgets import Input, Static, TextArea, Tree
 
 from openscribe.board import add_note, list_notes
 from openscribe.compile import CompileError
 from openscribe.elements import add_element
 from openscribe.project import (
+    add_scene,
     create_chapter,
     create_part,
     create_source_note,
@@ -17,6 +18,7 @@ from openscribe.project import (
     list_chapters,
     list_source_notes,
 )
+from openscribe.proofreading import ProofreadingIssue, ProofreadingResult
 from openscribe.tui import OpenScribeApp
 
 
@@ -247,5 +249,109 @@ def test_tui_action_errors_are_visible(tmp_path: Path, monkeypatch) -> None:
             await pilot.press("c")
             await pilot.pause()
             assert app.last_error == "CompileError: PDF engine unavailable"
+
+    asyncio.run(exercise())
+
+
+def test_tui_edits_and_saves_chapter_and_scene_text(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(root, "Arrival", part="Opening")
+    add_scene(root, "Arrival", "Station", "The platform was empty.")
+    app = OpenScribeApp(root)
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            chapter = app.chapters[0]
+            chapter_key = chapter.path.as_posix()
+            app._apply_selection(chapter_key)
+            editor = app.query_one("#editor", TextArea)
+            assert editor.display
+            assert "openscribe-scene-id" not in editor.text
+            editor.text = "## Station\n\nThe platform was crowded."
+            editor.focus()
+            await pilot.press("ctrl+s")
+
+            updated_chapter = app.chapters[0]
+            assert updated_chapter.scenes[0].scene_id == chapter.scenes[0].scene_id
+            scene_data = {
+                "kind": "scene",
+                "chapter_id": updated_chapter.chapter_id,
+                "scene_id": updated_chapter.scenes[0].scene_id,
+            }
+            app._apply_selection(scene_data)
+            editor.text = "The platform fell silent."
+            editor.focus()
+            await pilot.press("ctrl+s")
+
+    asyncio.run(exercise())
+
+    chapter = list_chapters(root)[0]
+    assert chapter.scenes[0].body == "The platform fell silent."
+    assert f"openscribe-scene-id: {chapter.scenes[0].scene_id}" in chapter.body
+
+
+def test_tui_displays_local_proofreading_findings(tmp_path: Path, monkeypatch) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(root, "Arrival", part="Opening")
+    app = OpenScribeApp(root)
+    app.config["proofreading"]["enabled"] = True
+
+    def fake_check(text, settings):
+        assert text == "This are wrong."
+        return ProofreadingResult(
+            issues=(
+                ProofreadingIssue(
+                    message="Use 'is' instead.",
+                    short_message="Agreement",
+                    offset=5,
+                    length=3,
+                    replacements=("is",),
+                    rule_id="THIS_NNS",
+                    category="Grammar",
+                    issue_type="grammar",
+                    context=text,
+                ),
+            ),
+            language="en-US",
+            software_version="test",
+            incomplete_results=False,
+        )
+
+    monkeypatch.setattr("openscribe.tui.check_text", fake_check)
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            app._apply_selection(app.chapters[0].path.as_posix())
+            editor = app.query_one("#editor", TextArea)
+            editor.text = "This are wrong."
+            editor.focus()
+            await pilot.press("ctrl+g")
+            findings = str(app.query_one("#proofreading", Static).content)
+            assert "THIS_NNS" in findings
+            assert "Suggestions: is" in findings
+
+    asyncio.run(exercise())
+
+
+def test_tui_blocks_hosted_proofreading_with_visible_disclosure(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_chapter(root, "Arrival", part="Opening")
+    app = OpenScribeApp(root)
+    app.config["proofreading"].update({"enabled": True, "endpoint": "https://proofreading.example.test/v2/check"})
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            app._apply_selection(app.chapters[0].path.as_posix())
+            editor = app.query_one("#editor", TextArea)
+            editor.text = "Private manuscript text."
+            editor.focus()
+            await pilot.press("ctrl+g")
+            findings = str(app.query_one("#proofreading", Static).content)
+            assert "Hosted proofreading is blocked" in findings
+            assert "--allow-data-transfer" in findings
+            assert app.last_error.startswith("LanguageToolError:")
 
     asyncio.run(exercise())

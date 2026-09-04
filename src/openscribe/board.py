@@ -40,6 +40,17 @@ def load_board(root: Path) -> dict[str, Any]:
     return board
 
 
+def migrate_chapter_links(root: Path) -> bool:
+    path = board_path(root)
+    if not path.exists():
+        return False
+    board = validate_board(load_yaml(path, default={"notes": []}), f"Board '{path}'")
+    changed = _migrate_chapter_links(root, board)
+    if changed:
+        save_board(root, board)
+    return changed
+
+
 def save_board(root: Path, board: dict[str, Any]) -> Path:
     path = board_path(root)
     validate_board(board, f"Board '{path}'")

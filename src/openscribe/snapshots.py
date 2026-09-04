@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import difflib
+import os
 import shutil
+import stat
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -49,6 +51,30 @@ class RestoreResult:
 
 def snapshots_path(root: Path) -> Path:
     return root / SNAPSHOTS_DIR
+
+
+def recover_interrupted_restores(root: Path) -> None:
+    transaction_parent = root / ".openscribe"
+    if not transaction_parent.exists():
+        return
+    for transaction_root in sorted(transaction_parent.glob(".restore-transaction-*")):
+        if not transaction_root.is_dir():
+            continue
+        journal_path = transaction_root / "journal.yaml"
+        if not journal_path.exists():
+            _cleanup_restore_transaction(transaction_root)
+            continue
+        journal = load_yaml(journal_path, default={})
+        if not isinstance(journal, dict):
+            raise RuntimeError(f"Restore transaction journal is invalid: {journal_path}")
+        state = str(journal.get("state", "")).strip().lower()
+        if state == "committed":
+            _cleanup_restore_transaction(transaction_root)
+            continue
+        if state != "applying":
+            raise RuntimeError(f"Restore transaction has unknown state '{state}': {journal_path}")
+        _rollback_restore_transaction(root, transaction_root, journal)
+        _cleanup_restore_transaction(transaction_root)
 
 
 def create_snapshot(root: Path, label: str, mode: str = "checkpoint") -> Path:
@@ -363,44 +389,84 @@ def _apply_exact_snapshot(
         target.write_bytes(content)
 
     operations: list[dict[str, Any]] = []
+    for relative_path in MANAGED_PATHS:
+        target = root / relative_path
+        staged = stage_root / relative_path
+        operations.append(
+            {
+                "path": relative_path,
+                "target_existed": target.exists(),
+                "staged_existed": staged.exists(),
+            }
+        )
+    journal_path = transaction_root / "journal.yaml"
+    journal: dict[str, Any] = {"version": 1, "state": "applying", "operations": operations}
+    atomic_write_text(journal_path, yaml.safe_dump(journal, sort_keys=False))
     try:
-        for relative_path in MANAGED_PATHS:
+        for operation in operations:
+            relative_path = str(operation["path"])
             target = root / relative_path
             staged = stage_root / relative_path
             old = old_root / relative_path
-            operation = {
-                "target": target,
-                "staged": staged,
-                "old": old,
-                "moved_old": False,
-                "installed": False,
-            }
-            operations.append(operation)
             if target.exists():
                 old.parent.mkdir(parents=True, exist_ok=True)
                 target.replace(old)
-                operation["moved_old"] = True
             if staged.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 staged.replace(target)
-                operation["installed"] = True
+        journal["state"] = "committed"
+        atomic_write_text(journal_path, yaml.safe_dump(journal, sort_keys=False))
     except Exception:
-        for operation in reversed(operations):
-            target = operation["target"]
-            staged = operation["staged"]
-            old = operation["old"]
-            if operation["installed"] and target.exists():
-                staged.parent.mkdir(parents=True, exist_ok=True)
-                target.replace(staged)
-            if operation["moved_old"] and old.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                old.replace(target)
+        _rollback_restore_transaction(root, transaction_root, journal)
         raise
-    finally:
-        shutil.rmtree(transaction_root, ignore_errors=True)
+    _cleanup_restore_transaction(transaction_root)
 
     for directory in ("manuscript", "characters", "research", "notes"):
         (root / directory).mkdir(parents=True, exist_ok=True)
+
+
+def _rollback_restore_transaction(root: Path, transaction_root: Path, journal: dict[str, Any]) -> None:
+    operations = journal.get("operations", [])
+    if not isinstance(operations, list):
+        raise RuntimeError(f"Restore transaction operations are invalid: {transaction_root / 'journal.yaml'}")
+    for operation in reversed(operations):
+        if not isinstance(operation, dict):
+            raise RuntimeError(f"Restore transaction operation is invalid: {transaction_root / 'journal.yaml'}")
+        relative_path = str(operation.get("path", ""))
+        if relative_path not in MANAGED_PATHS:
+            raise RuntimeError(f"Restore transaction contains unsupported path '{relative_path}'.")
+        target = root / relative_path
+        staged = transaction_root / "stage" / relative_path
+        old = transaction_root / "old" / relative_path
+        target_existed = operation.get("target_existed") is True
+        staged_existed = operation.get("staged_existed") is True
+
+        if target_existed and old.exists():
+            _remove_restore_path(target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            old.replace(target)
+        elif not target_existed and staged_existed and not staged.exists() and target.exists():
+            _remove_restore_path(target)
+
+
+def _remove_restore_path(path: Path) -> None:
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def _cleanup_restore_transaction(transaction_root: Path) -> None:
+    def remove_readonly(function, path, _error) -> None:
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+
+    try:
+        shutil.rmtree(transaction_root, onerror=remove_readonly)
+    except OSError:
+        return
 
 
 def _validate_snapshot_relative_path(value: str) -> str:

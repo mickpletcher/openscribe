@@ -25,7 +25,7 @@ This repository follows Software Project Living Documentation Standard 2.2.
 | Agreed scope | Not required at this tier | Contractual | No client agreement is stored in this repository |
 | Agreed design | Not required at this tier | Contractual | No client agreement is stored in this repository |
 | Scope amendments | Not required at this tier | Contractual | No client agreement is stored in this repository |
-| Decision history | Not required at this tier | Derived | Optional at Tier 1 |
+| Decision history | `docs/decisions/README.md` | Derived | Tier 1 opted in for persisted-format decisions on 2026-09-04 |
 | Resolved history | `completed-upgrades.md` | Derived | Existing history adopted without reconstruction |
 | Development rules | `PROJECT-STANDARD.md` | Governance | This file |
 | Agent rules | `AGENTS.md` | Governance | Single repository agent authority |

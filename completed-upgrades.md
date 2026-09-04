@@ -19,6 +19,24 @@ Tracked record of roadmap items that shipped.
 * added mounted TUI interaction tests and visible mutation and compile errors
 * required an explicit manuscript data transfer flag before hosted AI requests
 
+### Versioned migrations and recoverable restore
+
+* resolved TD-001 with a project format version, ordered migration registry, automatic pre-migration checkpoint, and rollback tests
+* added immutable inline scene IDs without exposing those IDs in compiled or continuous-reading output
+* resolved TD-002 with a durable restore transaction journal and automatic startup recovery at both replacement boundaries
+* completed a byte-for-byte restore drill against a disposable copy of the checked-in sample project
+
+### Scene authoring, proofreading, and AI review
+
+* added preview-first scene move, split, and merge commands within and across chapters with automatic checkpoints on apply
+* added an editable chapter and scene surface to the TUI with explicit save behavior
+* displayed local LanguageTool findings beside TUI manuscript text and visibly blocked hosted proofreading from that surface
+* added read-only AI rewrite, outline, pacing, continuity, point-of-view, prose, metadata, brainstorming, and project-query commands under the existing hosted-transfer approval boundary
+
+### Word round-trip design
+
+* defined content-control identity, a DOCX manifest, local baselines, three-way conflicts, tracked-change refusal, preview, backup, rollback, local-bridge security, and real Word validation in `specs/004-word-round-trip/`
+
 ## 2026-05-15
 
 ### Core writing workflow

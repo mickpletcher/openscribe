@@ -63,6 +63,13 @@ def test_compile_writes_docx_output(tmp_path: Path, monkeypatch) -> None:
         chapter_path.read_text(encoding="utf-8") + "Eli stepped off the bus into wet summer heat.\n",
         encoding="utf-8",
     )
+    assert (
+        runner.invoke(
+            app,
+            ["new", "scene", "Station", "--chapter", "Arrival", "--body", "The doors closed behind him."],
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(app, ["compile"])
     assert result.exit_code == 0
@@ -76,6 +83,8 @@ def test_compile_writes_docx_output(tmp_path: Path, monkeypatch) -> None:
     assert "Opening" in paragraph_text
     assert "Arrival" in paragraph_text
     assert "Eli stepped off the bus into wet summer heat." in paragraph_text
+    assert "The doors closed behind him." in paragraph_text
+    assert not any("openscribe-scene-id" in paragraph for paragraph in paragraph_text)
 
 
 def test_compile_writes_pdf_output(tmp_path: Path, monkeypatch) -> None:
@@ -1207,6 +1216,70 @@ def test_hosted_ai_requires_and_displays_data_transfer_approval(
     assert "OPENAI_API_KEY is not set" in approved.stderr
 
 
+def test_scoped_ai_commands_are_read_only_and_route_expected_tasks(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+    config_path = tmp_path / ".openscribe" / "project.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["ai"]["enabled"] = True
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    chapter_path.write_text(
+        chapter_path.read_text(encoding="utf-8") + "Private manuscript text.\n",
+        encoding="utf-8",
+    )
+    before = chapter_path.read_bytes()
+    calls: list[tuple[str, str]] = []
+
+    def fake_task(text, settings, context_label, task, **kwargs):
+        calls.append((task, kwargs.get("question", "")))
+        return f"result for {task}"
+
+    monkeypatch.setattr("openscribe.cli.run_ai_task", fake_task)
+    commands = [
+        ["rewrite", "Arrival"],
+        ["outline", "Arrival"],
+        ["analyze", "Arrival", "--focus", "pacing"],
+        ["analyze", "Arrival", "--focus", "continuity"],
+        ["analyze", "Arrival", "--focus", "pov"],
+        ["analyze", "Arrival", "--focus", "prose"],
+        ["metadata", "Arrival"],
+        ["brainstorm", "Arrival", "--question", "What breaks next?"],
+        ["query", "Who arrived?"],
+    ]
+    for command in commands:
+        result = runner.invoke(app, ["ai", *command, "--allow-data-transfer"])
+        assert result.exit_code == 0, result.output
+        assert "result for" in result.stdout
+
+    assert [task for task, _ in calls] == [
+        "rewrite",
+        "outline",
+        "pacing",
+        "continuity",
+        "point-of-view",
+        "prose",
+        "metadata",
+        "brainstorm",
+        "query",
+    ]
+    assert calls[-2][1] == "What breaks next?"
+    assert calls[-1][1] == "Who arrived?"
+    assert chapter_path.read_bytes() == before
+
+
+def test_ai_analyze_rejects_unknown_focus(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+
+    result = runner.invoke(app, ["ai", "analyze", "missing", "--focus", "sentiment"])
+
+    assert result.exit_code == 2
+    assert "Focus must be" in result.stderr
+
+
 def test_proofread_chapter_renders_languagetool_findings(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init", "North County"]).exit_code == 0
@@ -1307,3 +1380,92 @@ def test_hosted_proofreading_requires_and_displays_data_transfer_approval(
     assert "Sending" in approved.stdout
     assert "hosted LanguageTool endpoint" in approved.stdout
     assert "No findings" in approved.stdout
+
+
+def test_scene_commands_preview_then_apply(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["new", "scene", "Bus Stop", "--chapter", "Arrival", "--body", "First half. Second half."],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["new", "scene", "Town Hall", "--chapter", "Arrival", "--body", "Questions begin."],
+        ).exit_code
+        == 0
+    )
+
+    chapter_path = tmp_path / "manuscript" / "part-01-opening" / "ch-01-arrival.md"
+    before = chapter_path.read_text(encoding="utf-8")
+    preview = runner.invoke(
+        app,
+        ["scene", "move", "Bus Stop", "--chapter", "Arrival", "--position", "2"],
+    )
+    assert preview.exit_code == 0
+    assert "Preview only" in preview.stdout
+    assert chapter_path.read_text(encoding="utf-8") == before
+
+    applied = runner.invoke(
+        app,
+        ["scene", "move", "Bus Stop", "--chapter", "Arrival", "--position", "2", "--apply"],
+    )
+    assert applied.exit_code == 0
+    assert "Applied scene operation" in applied.stdout
+    assert chapter_path.read_text(encoding="utf-8").index("## Town Hall") < chapter_path.read_text(
+        encoding="utf-8"
+    ).index("## Bus Stop")
+
+    split = runner.invoke(
+        app,
+        [
+            "scene",
+            "split",
+            "Bus Stop",
+            "--chapter",
+            "Arrival",
+            "--at-text",
+            "Second half",
+            "--new-title",
+            "After the Pause",
+            "--apply",
+        ],
+    )
+    assert split.exit_code == 0
+    assert "## After the Pause" in chapter_path.read_text(encoding="utf-8")
+
+    merge = runner.invoke(
+        app,
+        [
+            "scene",
+            "merge",
+            "Bus Stop",
+            "--with",
+            "After the Pause",
+            "--chapter",
+            "Arrival",
+            "--apply",
+        ],
+    )
+    assert merge.exit_code == 0
+    assert "## After the Pause" not in chapter_path.read_text(encoding="utf-8")
+
+
+def test_migrate_commands_report_current_project_version(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+
+    status = runner.invoke(app, ["migrate", "status"])
+    assert status.exit_code == 0
+    assert "Project format: 3" in status.stdout
+    assert "No migration is required" in status.stdout
+
+    apply = runner.invoke(app, ["migrate", "apply"])
+    assert apply.exit_code == 0
+    assert "No migration is required" in apply.stdout

@@ -29,7 +29,9 @@ Use for dependency, packaging, architecture, security, release, or broad data-mo
 2. Coverage with the enforced 80 percent floor.
 3. Source distribution and wheel build.
 4. Installed-wheel CLI smoke test.
-5. Living-document compliance check.
+5. Dependency vulnerability audit.
+6. Medium-and-higher Python security scan.
+7. Living-document compliance check.
 
 ## Environment Requirements
 
@@ -150,6 +152,26 @@ Expected exit code: `0`.
 Expected output: one row for every mapped responsibility and no `MISSING`, `INVALID`, or `REVIEW` status.
 Typical runtime: under 10 seconds.
 
+### Dependency audit
+
+```powershell
+uv run --isolated --python 3.13 --extra dev --with pip-audit pip-audit
+```
+
+Expected exit code: `0`.
+Expected output: no known vulnerabilities in third-party dependencies. The unpublished local package may be reported as skipped.
+Typical runtime: under two minutes after dependency caching.
+
+### Python security scan
+
+```powershell
+uvx bandit -r src -q -ll
+```
+
+Expected exit code: `0`.
+Expected output: no medium-or-higher findings.
+Typical runtime: under one minute.
+
 ## Known Validation Limitations
 
 ### VL-001: Hosted AI providers use mocked contracts
@@ -168,13 +190,13 @@ Risk: visual or terminal-specific defects can remain undetected.
 
 Follow-up: perform a manual TUI smoke and accessibility review before a public release or major TUI expansion.
 
-### VL-003: LanguageTool remote compatibility uses a mocked contract
+### VL-003: Licensed hosted LanguageTool compatibility is unverified
 
-Automated tests mock the LanguageTool `/v2/check` response. They prove request encoding, response parsing, endpoint restrictions, and disclosure behavior, but not compatibility with a currently running LanguageTool release or licensed hosted service.
+Automated tests mock the LanguageTool `/v2/check` response. A local synthetic smoke proves compatibility with a running self-hosted server when the procedure above is executed. No licensed hosted endpoint is available to the repository suite.
 
-Risk: a LanguageTool server or API change can break proofreading while the local suite remains green.
+Risk: authentication or service-specific behavior at a licensed hosted endpoint can differ from the self-hosted server.
 
-Follow-up: run the synthetic local contract smoke test before releasing proofreading support. Test a licensed hosted endpoint only with explicit approval and nonprivate text.
+Follow-up: test a licensed hosted endpoint only with explicit approval, isolated credentials, and nonprivate synthetic text before claiming hosted compatibility.
 
 ## Validation Matrix
 

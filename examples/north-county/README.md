@@ -73,6 +73,7 @@ py -3.11 -m openscribe tui
 ```
 
 Inside the TUI you can now use the search box to filter chapters, sources, board notes, and library content.
+Select a chapter or scene to edit it. Press `Ctrl+S` to save and `Ctrl+G` to run the configured local LanguageTool check.
 You can inspect part metadata, open the board canvas section, review corkboard cards, browse source links, use keyboard board note movement with saved positions, and cycle selected chapter metadata from the keyboard.
 
 The board commands store freeform planning notes under `.openscribe/boards/`.
@@ -93,6 +94,13 @@ Restore previews by default. `--apply` creates an automatic backup, restores the
 The template commands store saved user templates under `.openscribe/templates/`.
 
 The proofreading command requires a running LanguageTool server and `proofreading.enabled: true` in `.openscribe/project.yaml`. It reports suggestions without editing the chapter.
+
+Scene restructuring previews a unified diff unless `--apply` is present:
+
+```powershell
+py -3.11 -m openscribe scene move "Bus Stop" --chapter "Arrival" --position 2
+py -3.11 -m openscribe scene split "Bus Stop" --chapter "Arrival" --at-text "Eli" --new-title "The Decision"
+```
 
 The move commands renumber parts and chapters so manuscript order stays stable on disk.
 

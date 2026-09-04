@@ -7,7 +7,7 @@ from rich.syntax import Syntax
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Input, Static, Tree
+from textual.widgets import Footer, Header, Input, Static, TextArea, Tree
 
 from openscribe.board import (
     auto_layout,
@@ -24,6 +24,7 @@ from openscribe.index import index_is_current
 from openscribe.project import (
     AuxiliaryDocument,
     ChapterDocument,
+    SceneDocument,
     SourceDocument,
     adjust_chapter_word_target,
     cycle_chapter_label,
@@ -39,7 +40,17 @@ from openscribe.project import (
     load_project_config,
     manuscript_goal_stats,
     source_link_map,
+    strip_scene_markers,
+    update_chapter_body,
     update_chapter_metadata,
+    update_scene_body,
+)
+from openscribe.proofreading import (
+    LanguageToolError,
+    check_text,
+    line_and_column,
+    load_languagetool_settings,
+    requires_data_transfer_consent,
 )
 
 
@@ -73,11 +84,27 @@ class OpenScribeApp(App[None]):
         height: 1fr;
     }
 
-    #preview {
+    #content {
         width: 43%;
         border: solid #666666;
+    }
+
+    #preview,
+    #editor,
+    #proofreading {
+        width: 100%;
         padding: 1 2;
         overflow: auto;
+    }
+
+    #preview,
+    #editor {
+        height: 1fr;
+    }
+
+    #proofreading {
+        height: 12;
+        border-top: solid #666666;
     }
 
     #meta {
@@ -91,6 +118,8 @@ class OpenScribeApp(App[None]):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("ctrl+f", "focus_search", "Search", priority=True),
+        Binding("ctrl+s", "save_editor", "Save", priority=True),
+        Binding("ctrl+g", "proofread_editor", "Proofread", priority=True),
         Binding("ctrl+left", "move_board_note(-2,0)", "Board left", priority=True),
         Binding("ctrl+right", "move_board_note(2,0)", "Board right", priority=True),
         Binding("ctrl+up", "move_board_note(0,-1)", "Board up", priority=True),
@@ -146,11 +175,16 @@ class OpenScribeApp(App[None]):
                 yield Input(placeholder="Filter chapters, notes, sources, or elements", id="search-box")
                 yield Static(self._search_summary(), id="search-status")
                 yield Tree("Manuscript", id="binder-tree")
-            yield Static("Select a node from the binder.", id="preview")
+            with Vertical(id="content"):
+                yield TextArea("", id="editor", soft_wrap=True, show_line_numbers=True)
+                yield Static("Select a node from the binder.", id="preview")
+                yield Static("", id="proofreading")
             yield Static(self._project_summary(), id="meta")
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#editor", TextArea).display = False
+        self.query_one("#proofreading", Static).display = False
         self._rebuild_tree()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
@@ -167,9 +201,67 @@ class OpenScribeApp(App[None]):
         self.query_one("#search-box", Input).focus()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if isinstance(self.focused, TextArea) and action not in {
+            "focus_search",
+            "proofread_editor",
+            "save_editor",
+        }:
+            return None
         if isinstance(self.focused, Input) and action in self.MUTATING_ACTIONS:
             return None
         return True
+
+    def action_save_editor(self) -> None:
+        editor = self.query_one("#editor", TextArea)
+        try:
+            if isinstance(self.current_node_data, str) and self.current_node_data in self.chapter_lookup:
+                chapter = self.chapter_lookup[self.current_node_data]
+                update_chapter_body(self.root, chapter.chapter_id, editor.text)
+                selection: Any = chapter.path.as_posix()
+            elif isinstance(self.current_node_data, dict) and self.current_node_data.get("kind") == "scene":
+                update_scene_body(
+                    self.root,
+                    str(self.current_node_data["chapter_id"]),
+                    str(self.current_node_data["scene_id"]),
+                    editor.text,
+                )
+                selection = dict(self.current_node_data)
+            else:
+                return
+            self.chapters = list_chapters(self.root)
+            self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
+            self._rebuild_tree()
+            self._apply_selection(selection)
+            self.notify("Manuscript text saved.", title="Saved", severity="information")
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
+
+    def action_proofread_editor(self) -> None:
+        if not self._is_editor_selection():
+            return
+        editor = self.query_one("#editor", TextArea)
+        proofreading = self.query_one("#proofreading", Static)
+        try:
+            settings = load_languagetool_settings(self.config)
+            if requires_data_transfer_consent(settings):
+                raise LanguageToolError(
+                    "Hosted proofreading is blocked in the TUI. Use `openscribe proofread chapter "
+                    "<chapter> --allow-data-transfer` after reviewing the disclosure."
+                )
+            result = check_text(editor.text, settings)
+            lines = [f"LanguageTool {result.software_version} | {result.language} | Findings: {len(result.issues)}"]
+            for issue in result.issues:
+                line, column = line_and_column(editor.text, issue.offset)
+                suggestions = ", ".join(issue.replacements[:3]) or "none"
+                lines.append(f"{line}:{column} [{issue.rule_id}] {issue.message} | Suggestions: {suggestions}")
+            if not result.issues:
+                lines.append("No findings.")
+            if result.incomplete_results:
+                lines.append("LanguageTool reported incomplete results.")
+            proofreading.update("\n".join(lines))
+            proofreading.display = True
+        except (LanguageToolError, OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def action_move_board_note(self, dx: int, dy: int) -> None:
         if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
@@ -289,7 +381,13 @@ class OpenScribeApp(App[None]):
 
     def _show_error(self, error: BaseException) -> None:
         self.last_error = f"{type(error).__name__}: {error}"
-        self.query_one("#preview", Static).update(f"Action failed\n\n{self.last_error}")
+        if self._is_editor_selection():
+            proofreading = self.query_one("#proofreading", Static)
+            proofreading.update(f"Action failed\n\n{self.last_error}")
+            proofreading.display = True
+        else:
+            self._show_preview_mode()
+            self.query_one("#preview", Static).update(f"Action failed\n\n{self.last_error}")
         self.query_one("#meta", Static).update(
             "Review the project files before retrying. The operation may have partially completed."
         )
@@ -300,6 +398,7 @@ class OpenScribeApp(App[None]):
         if not node_data:
             return
 
+        self._show_preview_mode()
         preview = self.query_one("#preview", Static)
         metadata = self.query_one("#meta", Static)
 
@@ -369,13 +468,44 @@ class OpenScribeApp(App[None]):
             metadata.update(self._paired_library_summary())
             return
 
+        if isinstance(node_data, dict) and node_data.get("kind") == "scene":
+            chapter = next(
+                (item for item in self.chapters if item.chapter_id == str(node_data["chapter_id"])),
+                None,
+            )
+            if chapter is None:
+                return
+            scene = next((item for item in chapter.scenes if item.scene_id == str(node_data["scene_id"])), None)
+            if scene is None:
+                return
+            self._show_editor(scene.body)
+            metadata.update(self._scene_summary(chapter, scene))
+            return
+
         if node_data not in self.chapter_lookup:
             return
         chapter = self.chapter_lookup[node_data]
-        preview.update(
-            Syntax(chapter.body.strip() or "[Empty chapter]", "markdown", word_wrap=True, line_numbers=False)
-        )
+        self._show_editor(strip_scene_markers(chapter.body))
         metadata.update(self._chapter_summary(self.root, chapter))
+
+    def _show_preview_mode(self) -> None:
+        self.query_one("#editor", TextArea).display = False
+        self.query_one("#preview", Static).display = True
+        self.query_one("#proofreading", Static).display = False
+
+    def _show_editor(self, text: str) -> None:
+        editor = self.query_one("#editor", TextArea)
+        editor.load_text(text)
+        editor.display = True
+        self.query_one("#preview", Static).display = False
+        proofreading = self.query_one("#proofreading", Static)
+        proofreading.update("Ctrl+G runs the configured LanguageTool check.")
+        proofreading.display = True
+
+    def _is_editor_selection(self) -> bool:
+        if isinstance(self.current_node_data, str):
+            return self.current_node_data in self.chapter_lookup
+        return isinstance(self.current_node_data, dict) and self.current_node_data.get("kind") == "scene"
 
     def _rebuild_tree(self) -> None:
         binder = self.query_one("#binder-tree", Tree)
@@ -395,6 +525,11 @@ class OpenScribeApp(App[None]):
                 )
                 parts[chapter.part_id] = part_node
             chapter_node = part_node.add(chapter.title, data=chapter.path.as_posix())
+            for scene in chapter.scenes:
+                chapter_node.add_leaf(
+                    scene.title,
+                    data={"kind": "scene", "chapter_id": chapter.chapter_id, "scene_id": scene.scene_id},
+                )
             linked_sources = linked_sources_for_chapter(self.root, chapter)
             if linked_sources:
                 source_branch = chapter_node.add("Sources", expand=False)
@@ -454,6 +589,8 @@ class OpenScribeApp(App[None]):
                 "Keys",
                 "q  Quit",
                 "Ctrl+F  Focus search",
+                "Ctrl+S  Save chapter or scene text",
+                "Ctrl+G  Run local LanguageTool check",
                 "Ctrl+Arrows  Move board note",
                 "v  Toggle board note",
                 "b  Auto layout board",
@@ -496,6 +633,21 @@ class OpenScribeApp(App[None]):
                 "",
                 "Quick Actions",
                 "s status  l label  o POV  w target+250  W target-250",
+            ]
+        )
+
+    @staticmethod
+    def _scene_summary(chapter: ChapterDocument, scene: SceneDocument) -> str:
+        return "\n".join(
+            [
+                f"Scene: {scene.title}",
+                f"ID: {scene.scene_id}",
+                f"Chapter: {chapter.title}",
+                f"Chapter ID: {chapter.chapter_id}",
+                f"Words: {len(scene.body.split())}",
+                "",
+                "Quick Actions",
+                "Ctrl+S save  Ctrl+G proofread",
             ]
         )
 

@@ -11,10 +11,10 @@ notes_count: 1
 source_manifest:
   .openscribe/boards/default.yaml: 63030fcc898032a922b2f35265fcaa4535405d5b6109d2f95b8d757e95c1b5c9
   .openscribe/elements/elements.yaml: 067cf79ca63aede985743080c2d870e17794c047480dcf6d3879e69256d68636
-  .openscribe/project.yaml: 7e8e72e8ac7c526424765404118cec508440e70016dff62f206f93f57b945b0b
+  .openscribe/project.yaml: da636ac38ccadb9fca9b7314ccfb62207f018a816d6bbad47c6ba48ba134dfde
   characters/eli-harper.md: 73bf20d6a4e78c6c1f35bb909282f0c11db6bce75fc8a0fc25e4544c4e9bbe5c
-  manuscript/part-01-opening/ch-01-arrival.md: 631c4c67b5dcbb1d3a8ebac7e3e23440a5313ebd75b93ad58692176af2f75ea8
-  manuscript/part-01-opening/ch-02-the-call.md: 557d7885e92ce5648ee30f26ac6a33a8b219e477206d1812329fd41f96f31f2e
+  manuscript/part-01-opening/ch-01-arrival.md: e4e2135ca1222ad6058338d172b38c6c195bda877dcdb33a6ba7727e6afb9cf0
+  manuscript/part-01-opening/ch-02-the-call.md: 178d06fa9b55cd2a262ac9208aa1b7437e3157ef5a1791d3ddafd4203a9c2601
   manuscript/part-01-opening/part.yaml: 9d039629fc26d3a22b5dbc3d192ee5015cba9bd518c065000051847c7af9f741
   notes/revision-notes.md: e5e8ccf5c1439592ad91f605db616f5b0e3798cb007cb6146ea35072fb0238c5
   notes/story-ideas/the-flood-ledger.md: b447b2dc8f73a194470ed5895f36d3af3f96a134c09eb9658a188c1a5cd252a8
@@ -34,6 +34,8 @@ chapters:
     watching him. Add more sensory detail around the station and the square. ## Bus
     Stop
 
+    <!-- openscribe-scene-id: scene-33ae8ab69adc4c66835475a4e5e7dec6 -->
+
 
     Eli stepped off the bus into wet summer heat and the smell of cut hay.
 
@@ -46,6 +48,8 @@ chapters:
 
     ## Porch Watchers
 
+    <!-- openscribe-scene-id: scene-db6421e644fc4443a2e239271d84348a -->
+
 
     Across the road, three men on a porch stopped talking when they saw him.
 
@@ -55,6 +59,8 @@ chapters:
 
 
     ## Willow Lane
+
+    <!-- openscribe-scene-id: scene-7af1a16e7675442abba2eee8561c08a9 -->
 
 
     Eli checked the paper in his pocket again even though he knew the address by heart.
@@ -87,6 +93,8 @@ chapters:
   search_text: 'The Call A short phone call confirms that Eli is not in town by accident.
     Push the threat harder in the second half of the scene. ## Feed Store
 
+    <!-- openscribe-scene-id: scene-4e7543ea41a34f279690f1d9a002f805 -->
+
 
     The pay phone outside the feed store still worked if you hit the side panel first.
 
@@ -99,6 +107,8 @@ chapters:
 
 
     ## The Warning
+
+    <!-- openscribe-scene-id: scene-528dc769ec64447c82ec5a9bca12bce2 -->
 
 
     "You made good time," the voice said.

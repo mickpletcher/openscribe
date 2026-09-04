@@ -50,14 +50,15 @@ This first build includes:
 * user defined project templates
 * part creation
 * chapter creation
-* scene creation inside chapters
+* scene creation with immutable inline IDs
+* preview-first scene move, split, and merge within and across chapters
 * batch chapter metadata updates
 * chapter search and query
 * project reports
 * derived project index rebuild and search
 * folder import for existing manuscript projects
 * story idea capture for future books
-* snapshots with checkpoint and git based modes
+* snapshots with checkpoint and git based modes, exact preview-first restore, automatic backup, and interruption recovery
 * planning board notes, layout, visual board view, and promotion
 * element, alias, relation, and appears in tracking
 * nonfiction section and screenplay scene workflow helpers
@@ -76,20 +77,22 @@ This first build includes:
 * compile profiles for print, ebook, submission, and research paper output
 * citation aware research compile settings with bibliography controls
 * wider Textual TUI views for manuscript, corkboard cards, source links, board canvas, characters, research, notes, story ideas, and elements
+* editable chapter and scene text in the TUI with explicit save behavior
 * richer TUI chapter metadata quick actions for status, label, point of view, and word target
 * snapshot restore and diff helpers
 * editor launch helpers for chapters, parts, and search results
 * conference schedule import and session checklist automation
-* optional LanguageTool grammar and style checks for chapters
-* optional AI summary command for chapter review
+* optional LanguageTool grammar and style checks in the CLI and TUI
+* optional read-only AI summary, rewrite, outline, focused review, metadata, brainstorming, and project-query commands
+* ordered, automatically backed up project-format migrations
 
-This build does not yet include venue specific bibliography styles, scene reordering, or richer drag based board editing.
+This build does not yet include venue specific bibliography styles, richer scene metadata, Word round-trip import, or drag based board editing.
 
 ## Requirements
 
 You need:
 
-* Python 3.11 or newer
+* Python 3.11, 3.12, or 3.13
 * PowerShell on Windows if you want to follow the examples exactly
 
 You do not need any AI provider, API key, or AI SDK setup to use the normal project, CLI, or TUI features.
@@ -183,6 +186,8 @@ openscribe proofread chapter "The Beginning" --allow-data-transfer
 
 Before an approved hosted request, `openscribe` reports the endpoint and number of chapter characters being sent. The free public LanguageTool endpoint is intentionally rejected because its [published access policy](https://dev.languagetool.org/public-http-api) prohibits automated requests. Use a local server or a licensed hosted endpoint instead.
 
+Inside `openscribe tui`, select a chapter or scene and press `Ctrl+G` to show findings beside the editor. The TUI runs local endpoints only. For a hosted endpoint, it shows the disclosure path and requires you to use the CLI with `--allow-data-transfer`.
+
 This integration uses the LanguageTool HTTP API. It does not copy or distribute LanguageTool source code. See the [LanguageTool repository](https://github.com/languagetool-org/languagetool) for its server, source, and license details. The self hosted server does not include LanguageTool's cloud only AI rules.
 
 ## Research workflow
@@ -229,16 +234,25 @@ That guide covers:
 * project config examples
 * troubleshooting
 
-Current AI command:
+Current AI commands:
 
 ```powershell
 openscribe ai summarize "The Beginning" --allow-data-transfer
+openscribe ai rewrite "The Beginning" --allow-data-transfer
+openscribe ai outline "The Beginning" --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus pacing --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus continuity --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus pov --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus prose --allow-data-transfer
+openscribe ai metadata "The Beginning" --allow-data-transfer
+openscribe ai brainstorm "The Beginning" --question "What could fail next?" --allow-data-transfer
+openscribe ai query "Where was the ledger last seen?" --allow-data-transfer
 ```
 
 For hosted providers, `openscribe` refuses to send manuscript text unless that
-command includes `--allow-data-transfer`. Before the request, it reports the
+command includes `--allow-data-transfer`. Before each request, it reports the
 provider, model, and number of characters being sent. The local provider does
-not require this flag.
+not require this flag. These commands print suggestions and never write them to manuscript files.
 
 ## AI architecture
 
@@ -255,17 +269,19 @@ The design is simple:
 That keeps the AI layer replaceable.
 It also means the same command surface can work across multiple vendors.
 
-### Recommended command layout
+### Command layout
 
 Keep AI features separate from the core writing commands.
 
-Good examples:
+Available commands:
 
 * `openscribe ai summarize`
 * `openscribe ai rewrite`
 * `openscribe ai outline`
 * `openscribe ai analyze`
 * `openscribe ai brainstorm`
+* `openscribe ai metadata`
+* `openscribe ai query`
 
 ### Safe behavior
 
@@ -495,20 +511,9 @@ ai:
   model: mistral-large-latest
 ```
 
-## Recommended build order for AI
+## Remaining AI work
 
-Do not build every AI feature at once.
-
-Use this order:
-
-1. `ai summarize`
-2. `ai rewrite`
-3. `ai outline`
-4. `ai analyze`
-5. board aware prompts
-6. element aware prompts
-
-That keeps the AI layer useful without letting it overtake the writing workflow.
+Board-aware and element-aware prompts remain deferred. The current command set scopes every request to one chapter or the assembled project manuscript and keeps all output read only.
 
 ## Adding more providers to the codebase
 
@@ -679,12 +684,19 @@ notes: Tighten the middle scene.
 ---
 
 Marcus stepped off the train into rain and diesel smoke.
+
+## Station Platform
+<!-- openscribe-scene-id: scene-2f507e2f0ea04adca93644188df1ac66 -->
+
+The last train pulled away.
 ```
 
 `chapter_id` is generated once and stays stable when a chapter is renamed,
 moved, or renumbered. Board relationships store this ID. Existing projects are
 migrated when chapters and boards are loaded. Metadata commands preserve
 frontmatter fields they do not recognize.
+
+Scene IDs are stored in HTML comments immediately after scene headings. They remain stable when scenes move, split, or merge and are removed from reading and compile output. Do not copy one scene ID onto another scene.
 
 ### Frontmatter fields
 
@@ -722,8 +734,7 @@ Internal notes for revision, continuity, or reminders.
 
 ## Writing in your editor
 
-`openscribe` creates the files.
-You still write the actual manuscript in your editor of choice.
+`openscribe` creates the files. You can write in the TUI or use an editor of your choice.
 
 A common pattern is:
 
@@ -731,6 +742,8 @@ A common pattern is:
 2. open `manuscript\part-xx-...\ch-xx-....md` in VS Code
 3. write below the frontmatter
 4. keep the metadata updated as the draft changes
+
+For integrated editing, run `openscribe tui`, select a chapter or scene, edit the middle pane, and press `Ctrl+S`. Chapter editing hides the internal scene ID comments and restores the matching IDs when it saves.
 
 ## Viewing the outline
 
@@ -1018,7 +1031,7 @@ openscribe tui
 The current TUI has three areas:
 
 * binder tree on the left
-* chapter preview in the middle
+* chapter or scene editor and proofreading findings in the middle
 * metadata summary on the right
 
 What it does:
@@ -1026,9 +1039,12 @@ What it does:
 * reads the part and chapter structure from `manuscript/`
 * reads board canvas, corkboard cards, source links, character, research, notes, story idea, and element content into the same browser
 * includes a search box for filtering chapters, sources, board notes, and library content
-* lets you select a chapter from the binder tree
+* lets you select and edit a chapter or scene from the binder tree
 * lets you select a part node to inspect part metadata
-* shows the chapter body in the preview pane
+* hides internal scene ID comments while editing chapter text
+* saves chapter or scene text only when you press `Ctrl+S`
+* runs configured local LanguageTool proofreading with `Ctrl+G`
+* displays action and proofreading failures beside the active text
 * shows chapter status, label, synopsis, point of view, notes, word target, and linked sources in the right panel
 * shows part metadata, story idea metadata, element metadata, source note metadata, progress goals, and compile defaults in the right panel
 * lets you move board notes with keyboard controls and save new positions immediately
@@ -1045,6 +1061,8 @@ Current keys:
 
 * `q` quits the app
 * `Ctrl+F` focuses the search box
+* `Ctrl+S` saves the selected chapter or scene text
+* `Ctrl+G` runs the configured local LanguageTool check
 * `Ctrl+Arrow keys` move the selected board note
 * `v` toggles the selected board note visibility
 * `b` applies board auto layout
@@ -1056,8 +1074,7 @@ Current keys:
 * `p` promotes the selected board note into a chapter
 * `c` runs compile with project defaults
 
-This is still a lightweight interface.
-It is strongest for navigation, review, and board positioning.
+This is still a lightweight authoring interface. It does not yet provide rich text formatting, drag based manuscript reordering, or automatic proofreading replacements.
 
 ## Command reference
 
@@ -1112,6 +1129,26 @@ Adds a scene heading inside a chapter file.
 ```powershell
 openscribe new scene "Cold Open" --chapter "The Beginning"
 openscribe new scene "County Road" --chapter "Arrival" --body "Eli sees the porch men again."
+```
+
+### `openscribe scene move`, `split`, and `merge`
+
+Preview structural scene changes by default. Add `--apply` only after reviewing the unified diff. Applied changes create an automatic checkpoint.
+
+```powershell
+openscribe scene move "Cold Open" --chapter "The Beginning" --position 2
+openscribe scene move "Cold Open" --chapter "The Beginning" --to-chapter "The Turn" --position 1 --apply
+openscribe scene split "Cold Open" --chapter "The Beginning" --at-text "The phone rang" --new-title "The Call" --apply
+openscribe scene merge "Cold Open" --with "The Call" --chapter "The Beginning" --apply
+```
+
+### `openscribe migrate status` and `apply`
+
+Project loading runs registered migrations automatically. These commands let you inspect or deliberately run the same ordered, backed-up migration path.
+
+```powershell
+openscribe migrate status
+openscribe migrate apply
 ```
 
 ### `openscribe new section`
@@ -1619,6 +1656,23 @@ Opens the Textual interface.
 openscribe tui
 ```
 
+### `openscribe proofread chapter`
+
+Runs a read-only LanguageTool check. Hosted endpoints require `--allow-data-transfer`.
+
+```powershell
+openscribe proofread chapter "The Beginning"
+```
+
+### `openscribe ai`
+
+Runs read-only manuscript review and suggestion tasks. Use `openscribe ai --help` for the full command list. Hosted providers require `--allow-data-transfer` on every invocation.
+
+```powershell
+openscribe ai analyze "The Beginning" --focus pacing --allow-data-transfer
+openscribe ai query "Which clues remain unresolved?" --allow-data-transfer
+```
+
 ## Example session
 
 This is a full example from an empty folder.
@@ -1702,4 +1756,4 @@ See [TECH-DEBT.md](./TECH-DEBT.md) for current compromises and [assessment.md](.
 
 ## Roadmap
 
-See [future-upgrades.md](./future-upgrades.md). The current order is FU-001 and FU-002 for scene workflows, FU-003 for AI review commands, then FU-004 for Word round-trip design.
+See [future-upgrades.md](./future-upgrades.md). Immutable scene identity, safe scene restructuring, scoped AI review, and the Word round-trip design are complete. The next Word step is the implementation defined in [specs/004-word-round-trip](./specs/004-word-round-trip/README.md).
