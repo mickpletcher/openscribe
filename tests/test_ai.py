@@ -5,7 +5,13 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from openscribe.ai import AIConfigurationError, AISettings, summarize_text
+from openscribe.ai import (
+    AIConfigurationError,
+    AISettings,
+    requires_data_transfer_consent,
+    run_ai_task,
+    summarize_text,
+)
 
 
 class _FakeOpenAIClient:
@@ -13,25 +19,19 @@ class _FakeOpenAIClient:
 
     def __init__(self, *args, **kwargs) -> None:
         type(self).last_kwargs = kwargs
-        self.responses = SimpleNamespace(
-            create=lambda **call_kwargs: SimpleNamespace(output_text="openai summary")
-        )
+        self.responses = SimpleNamespace(create=lambda **call_kwargs: SimpleNamespace(output_text="openai summary"))
 
 
 class _FakeAnthropicClient:
     def __init__(self, *args, **kwargs) -> None:
         self.messages = SimpleNamespace(
-            create=lambda **call_kwargs: SimpleNamespace(
-                content=[SimpleNamespace(text="anthropic summary")]
-            )
+            create=lambda **call_kwargs: SimpleNamespace(content=[SimpleNamespace(text="anthropic summary")])
         )
 
 
 class _FakeGeminiClient:
     def __init__(self, *args, **kwargs) -> None:
-        self.models = SimpleNamespace(
-            generate_content=lambda **call_kwargs: SimpleNamespace(text="gemini summary")
-        )
+        self.models = SimpleNamespace(generate_content=lambda **call_kwargs: SimpleNamespace(text="gemini summary"))
 
     def close(self) -> None:
         return None
@@ -116,7 +116,12 @@ def test_summarize_text_routes_supported_providers(
         monkeypatch.setitem(sys.modules, "google", google_module)
 
     settings = AISettings(enabled=True, provider=provider, model="test-model")
-    result = summarize_text("Sample text", settings, "chapter")
+    result = summarize_text(
+        "Sample text",
+        settings,
+        "chapter",
+        allow_data_transfer=provider != "openai-compatible-local",
+    )
 
     assert result == expected
     if provider == "openai-compatible-local":
@@ -141,4 +146,75 @@ def test_summarize_text_requires_sdk_when_missing(monkeypatch) -> None:
 
     settings = AISettings(enabled=True, provider="anthropic", model="test-model")
     with pytest.raises(AIConfigurationError, match="not installed"):
-        summarize_text("Sample text", settings, "chapter")
+        summarize_text(
+            "Sample text",
+            settings,
+            "chapter",
+            allow_data_transfer=True,
+        )
+
+
+def test_hosted_provider_requires_explicit_data_transfer_consent() -> None:
+    settings = AISettings(enabled=True, provider="openai", model="test-model")
+
+    assert requires_data_transfer_consent(settings)
+    with pytest.raises(AIConfigurationError, match="complete chapter text"):
+        summarize_text("Private manuscript", settings, "chapter")
+
+
+def test_local_provider_does_not_require_data_transfer_consent(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_COMPATIBLE_LOCAL_BASE_URL", "http://127.0.0.1:1234/v1")
+    settings = AISettings(
+        enabled=True,
+        provider="openai-compatible-local",
+        model="test-model",
+    )
+
+    assert not requires_data_transfer_consent(settings)
+
+
+@pytest.mark.parametrize(
+    ("task", "question", "expected_fragment"),
+    [
+        ("pacing", "", "Review pacing"),
+        ("continuity", "", "Review continuity"),
+        ("point-of-view", "", "Review point of view"),
+        ("prose", "", "Review prose"),
+        ("rewrite", "", "Propose a revised version"),
+        ("outline", "", "Create a structural outline"),
+        ("metadata", "", "Suggest a concise title"),
+        ("brainstorm", "What could go wrong?", "Direction: What could go wrong?"),
+        ("query", "Who found the ledger?", "Who found the ledger?"),
+    ],
+)
+def test_run_ai_task_builds_scoped_read_only_prompts(monkeypatch, task, question, expected_fragment) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_provider(prompt: str, model: str) -> str:
+        captured["prompt"] = prompt
+        return "review output"
+
+    monkeypatch.setattr("openscribe.ai._summarize_with_openai", fake_provider)
+    settings = AISettings(enabled=True, provider="openai", model="test-model")
+
+    output = run_ai_task(
+        "Private manuscript",
+        settings,
+        "chapter",
+        task,
+        question=question,
+        allow_data_transfer=True,
+    )
+
+    assert output == "review output"
+    assert expected_fragment in captured["prompt"]
+    assert "Do not claim to edit or save files" in captured["prompt"]
+    assert captured["prompt"].endswith("Private manuscript")
+
+
+def test_project_query_requires_a_question(monkeypatch) -> None:
+    monkeypatch.setattr("openscribe.ai._summarize_with_openai", lambda prompt, model: "unused")
+    settings = AISettings(enabled=True, provider="openai", model="test-model")
+
+    with pytest.raises(AIConfigurationError, match="nonempty question"):
+        run_ai_task("Private manuscript", settings, "project manuscript", "query", allow_data_transfer=True)

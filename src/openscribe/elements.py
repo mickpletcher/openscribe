@@ -7,6 +7,7 @@ from typing import Any
 import yaml
 
 from openscribe.project import ChapterDocument, list_chapters, slugify
+from openscribe.schema import atomic_write_text, load_yaml, validate_elements
 
 ELEMENTS_DIR = ".openscribe/elements"
 ELEMENTS_FILE = "elements.yaml"
@@ -32,13 +33,13 @@ def load_elements(root: Path) -> dict[str, Any]:
     path = elements_path(root)
     if not path.exists():
         return {"elements": []}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {"elements": []}
+    return validate_elements(load_yaml(path, default={"elements": []}), f"Elements '{path}'")
 
 
 def save_elements(root: Path, data: dict[str, Any]) -> Path:
     path = elements_path(root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    validate_elements(data, f"Elements '{path}'")
+    atomic_write_text(path, yaml.safe_dump(data, sort_keys=False))
     return path
 
 

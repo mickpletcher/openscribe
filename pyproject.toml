@@ -8,9 +8,11 @@ version = "0.1.0"
 description = "Open source CLI and TUI writing environment for long form projects"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Mick" }]
 dependencies = [
+  "defusedxml>=0.7.1",
   "EbookLib>=0.18",
   "python-docx>=1.1.2",
   "pyyaml>=6.0.1",
@@ -21,11 +23,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+desktop = ["PySide6>=6.8"]
 ai = [
   "anthropic>=0.57.1",
   "google-genai>=1.29.0",
   "mistralai>=1.9.3",
   "openai>=1.40.0",
+]
+dev = [
+  "PySide6>=6.8",
+  "pytest-qt>=4.4",
+  "build>=1.3.0",
+  "pytest>=8.4.0",
+  "pytest-cov>=7.0.0",
+  "ruff>=0.13.0",
 ]
 
 [project.scripts]
@@ -36,3 +47,14 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+openscribe = ["word_addin/*.html", "word_addin/*.js"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "BLE", "UP", "RUF"]
+ignore = ["B008"]

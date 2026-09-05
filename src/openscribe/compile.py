@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from html import escape
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from html import escape
+from pathlib import Path
 
 from docx import Document
 from ebooklib import epub
@@ -13,7 +13,14 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-from openscribe.project import ChapterDocument, list_chapters, list_source_notes, load_project_config, slugify
+from openscribe.project import (
+    ChapterDocument,
+    list_chapters,
+    list_source_notes,
+    load_project_config,
+    slugify,
+    strip_scene_markers,
+)
 
 
 class CompileError(RuntimeError):
@@ -152,9 +159,7 @@ def compile_project(
         )
         return target_path
 
-    raise CompileError(
-        f"Format '{options.format_name}' is not supported yet. Use docx, pdf, or epub."
-    )
+    raise CompileError(f"Format '{options.format_name}' is not supported yet. Use docx, pdf, or epub.")
 
 
 def assemble_manuscript_text(root: Path, template_name: str | None = None) -> str:
@@ -179,7 +184,7 @@ def assemble_manuscript_text(root: Path, template_name: str | None = None) -> st
                 sections.append(chapter.part)
 
         chapter_heading = _chapter_heading(chapter.title, chapter_number, options)
-        chapter_sections = [chapter_heading, chapter.body.strip()]
+        chapter_sections = [chapter_heading, strip_scene_markers(chapter.body).strip()]
         sections.append("\n\n".join([part for part in chapter_sections if part]))
 
     bibliography_sections = _bibliography_sections(root, options)
@@ -230,15 +235,17 @@ def _resolve_compile_options(
     profile_defaults = PROFILE_PRESETS.get(resolved_profile, {})
     explicit_template = template_name is not None
     resolved_template = (
-        template_name
-        or str(profile_defaults.get("template_name", ""))
-        or str(compile_config.get("default_template", "novel"))
-    ).strip().lower()
+        (
+            template_name
+            or str(profile_defaults.get("template_name", ""))
+            or str(compile_config.get("default_template", "novel"))
+        )
+        .strip()
+        .lower()
+    )
     if resolved_template not in TEMPLATE_PRESETS:
         supported = ", ".join(sorted(TEMPLATE_PRESETS))
-        raise CompileError(
-            f"Template '{resolved_template}' is not supported yet. Use {supported}."
-        )
+        raise CompileError(f"Template '{resolved_template}' is not supported yet. Use {supported}.")
 
     template_defaults = TEMPLATE_PRESETS[resolved_template]
     resolved_format = _resolve_format(config, format_name, output_path, resolved_profile or None)
@@ -315,9 +322,7 @@ def _compile_project_with_pandoc(
 ) -> None:
     pandoc_path = shutil.which("pandoc")
     if pandoc_path is None:
-        raise CompileError(
-            "Pandoc was requested but is not installed or not available on PATH."
-        )
+        raise CompileError("Pandoc was requested but is not installed or not available on PATH.")
 
     manuscript_text = _pandoc_markdown(root, project_title, author, chapters, options)
     with tempfile.TemporaryDirectory(prefix="openscribe-pandoc-") as temp_dir:
@@ -577,7 +582,8 @@ def _compile_project_to_epub(
 
 
 def _paragraphs(text: str) -> list[str]:
-    return [block.strip() for block in text.split("\n\n") if block.strip()]
+    visible_text = strip_scene_markers(text)
+    return [block.strip() for block in visible_text.split("\n\n") if block.strip()]
 
 
 def _wrap_pdf_text(text: str, max_width: float, font_name: str, font_size: int) -> list[str]:
@@ -661,7 +667,7 @@ def _source_entry(source, citation_style: str) -> str:
         parts = [f"{author}." if author else "", f"{title}.", year, url]
         return " ".join(part for part in parts if part).strip()
     if style == "CHICAGO":
-        parts = [author, f"\"{title}.\"" if title else "", year, url]
+        parts = [author, f'"{title}."' if title else "", year, url]
         return ". ".join(part.strip().rstrip(".") for part in parts if part).strip() + "."
     parts = [f"{author} ({year})." if author and year else author or f"({year})." if year else "", title + ".", url]
     return " ".join(part for part in parts if part).strip()

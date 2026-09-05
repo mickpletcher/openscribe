@@ -15,7 +15,7 @@ You do not need AI to use `openscribe`.
 
 ## What `openscribe` is
 
-`openscribe` is a CLI first writing tool for long form projects.
+`openscribe` is a writing tool with an optional desktop app plus CLI and TUI interfaces.
 Your manuscript stays in normal Markdown files.
 Project settings live in YAML.
 You can edit the files directly in your editor, use the CLI, or use the TUI.
@@ -38,13 +38,13 @@ From the repo root:
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+python -m pip install -e ".[desktop]"
 ```
 
 Check that the command works:
 
 ```powershell
-py -3.11 -m openscribe --help
+python -m openscribe --help
 ```
 
 If `openscribe` is already on your `PATH`, you can also run:
@@ -54,6 +54,10 @@ openscribe --help
 ```
 
 ## Create your first project
+
+For the desktop workflow, run `openscribe desktop` and choose New project. Select an empty folder, add a chapter and scene, then write in the center editor. Use `Ctrl+S` to save. Local drafts survive navigation; unsaved writing requires a decision before closing. The toolbar includes proofreading, export, checkpoints, and restore. See the [desktop guide](README.md#desktop-writing) for details.
+
+The commands below provide the same basic workflow from the CLI.
 
 Make a new fiction project:
 
@@ -170,7 +174,12 @@ Save a checkpoint:
 ```powershell
 openscribe snapshot save "first-pass"
 openscribe snapshot list
+openscribe snapshot restore "first-pass"
+openscribe snapshot restore "first-pass" --apply
 ```
+
+The first restore command is only a preview. `--apply` creates an automatic
+backup before changing managed project files.
 
 Create a board note:
 

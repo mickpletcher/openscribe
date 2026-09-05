@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://appsforoffice.microsoft.com; connect-src 'self'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'">
+  <title>OpenScribe local review</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="taskpane.js" defer></script>
+  <style>body{font:15px system-ui;background:#f5f4ef;color:#252b2d;padding:18px}button,input{padding:9px;margin:6px 0;max-width:100%;box-sizing:border-box}input{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:12px}#status{color:#833}button{cursor:pointer}</style>
+</head>
+<body>
+  <h1>OpenScribe</h1>
+  <p>This pane sends the active document only to your local OpenScribe bridge. It does not upload manuscript text to a hosted service. Microsoft supplies the Office JavaScript runtime.</p>
+  <label for="token">Local bridge session token</label>
+  <input id="token" type="password" autocomplete="off">
+  <button id="preview" disabled>Preview Word changes</button>
+  <button id="apply" disabled>Apply reviewed changes</button>
+  <p id="status" role="status">Waiting for Word.</p>
+  <pre id="diff" aria-label="Import preview"></pre>
+</body>
+</html>

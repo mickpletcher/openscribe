@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from openscribe.elements import list_element_records
+from openscribe.locking import project_locked
 from openscribe.project import (
     INDEX_DIR,
     AuxiliaryDocument,
@@ -14,6 +16,7 @@ from openscribe.project import (
     list_story_ideas,
     load_project_config,
 )
+from openscribe.schema import atomic_write_text, load_yaml, validate_index
 
 INDEX_FILE = "project-index.yaml"
 
@@ -22,6 +25,7 @@ def index_path(root: Path) -> Path:
     return root / INDEX_DIR / INDEX_FILE
 
 
+@project_locked
 def rebuild_project_index(root: Path) -> Path:
     chapters = list_chapters(root)
     ideas = list_story_ideas(root)
@@ -42,8 +46,10 @@ def rebuild_project_index(root: Path) -> Path:
         "characters_count": len(characters),
         "research_count": len(research),
         "notes_count": len(notes),
+        "source_manifest": _source_manifest(root),
         "chapters": [
             {
+                "chapter_id": chapter.chapter_id,
                 "title": chapter.title,
                 "part": chapter.part,
                 "part_id": chapter.part_id,
@@ -53,13 +59,8 @@ def rebuild_project_index(root: Path) -> Path:
                 "word_count": chapter.word_count,
                 "scene_count": chapter.scene_count,
                 "path": str(chapter.path.relative_to(root)),
-                "search_text": " ".join(
-                    [chapter.title, chapter.synopsis, chapter.notes, chapter.body]
-                ).strip(),
-                "scenes": [
-                    {"title": scene.title, "slug": scene.slug}
-                    for scene in chapter.scenes
-                ],
+                "search_text": " ".join([chapter.title, chapter.synopsis, chapter.notes, chapter.body]).strip(),
+                "scenes": [{"title": scene.title, "slug": scene.slug} for scene in chapter.scenes],
             }
             for chapter in chapters
         ],
@@ -89,8 +90,7 @@ def rebuild_project_index(root: Path) -> Path:
     }
 
     target_path = index_path(root)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    atomic_write_text(target_path, yaml.safe_dump(data, sort_keys=False))
     return target_path
 
 
@@ -98,31 +98,48 @@ def load_project_index(root: Path) -> dict[str, Any]:
     path = index_path(root)
     if not path.exists():
         raise FileNotFoundError("Project index does not exist yet. Run `openscribe index rebuild`.")
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return validate_index(load_yaml(path, default={}), f"Project index '{path}'")
 
 
 def index_is_current(root: Path) -> bool:
     path = index_path(root)
     if not path.exists():
         return False
-    index_mtime = path.stat().st_mtime
-    for source in _index_sources(root):
-        if source.stat().st_mtime > index_mtime:
-            return False
-    return True
+    try:
+        data = load_project_index(root)
+    except (OSError, ValueError):
+        return False
+    recorded = data.get("source_manifest")
+    if not isinstance(recorded, dict):
+        return False
+    return recorded == _source_manifest(root)
 
 
 def _index_sources(root: Path) -> list[Path]:
     sources: list[Path] = []
-    for folder_name in (".openscribe", "manuscript", "characters", "research", "notes"):
+    config_path = root / ".openscribe" / "project.yaml"
+    if config_path.is_file():
+        sources.append(config_path)
+    for folder_name in (
+        ".openscribe/boards",
+        ".openscribe/elements",
+        "manuscript",
+        "characters",
+        "research",
+        "notes",
+    ):
         folder = root / folder_name
         if not folder.exists():
             continue
-        if folder.is_file():
-            sources.append(folder)
-            continue
-        sources.extend(path for path in folder.rglob("*") if path.is_file())
-    return sources
+        sources.extend(path for path in folder.rglob("*") if path.is_file() and not path.is_symlink())
+    return sorted(sources)
+
+
+def _source_manifest(root: Path) -> dict[str, str]:
+    return {
+        str(path.relative_to(root)).replace("\\", "/"): sha256(path.read_bytes()).hexdigest()
+        for path in _index_sources(root)
+    }
 
 
 def _auxiliary_entries(root: Path, documents: list[AuxiliaryDocument]) -> list[dict[str, str]]:

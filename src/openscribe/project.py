@@ -1,17 +1,36 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
-from datetime import date
 import difflib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import yaml
+
+from openscribe.editing import staged_operation
+from openscribe.locking import project_locked
+from openscribe.schema import (
+    SchemaValidationError,
+    atomic_write_text,
+    load_yaml,
+    require_mapping,
+    safe_template_target,
+    validate_chapter_metadata,
+    validate_part_metadata,
+    validate_project_config,
+    validate_source_metadata,
+    validate_story_metadata,
+    validate_template,
+)
 
 PROJECT_DIR = ".openscribe"
 PROJECT_FILE = "project.yaml"
@@ -24,10 +43,17 @@ CONFERENCE_DIR = "research/conferences"
 CONFERENCE_SESSIONS_DIR = "research/conferences/sessions"
 PRESENTATIONS_DIR = "notes/presentations"
 SOURCES_DIR = "research/sources"
+CURRENT_PROJECT_VERSION = 3
+SCENE_ID_PATTERN = re.compile(r"^scene-[a-f0-9]{32}$")
+SCENE_MARKER_PATTERN = re.compile(
+    r"^\r?\n<!--\s*openscribe-scene-id:\s*(scene-[a-f0-9]{32})\s*-->\s*(?:\r?\n)?",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass(slots=True)
 class SceneDocument:
+    scene_id: str
     title: str
     body: str
     slug: str
@@ -38,6 +64,7 @@ class SceneMatch:
     chapter: ChapterDocument | None
     chapter_title: str
     part: str
+    scene_id: str
     scene_title: str
     scene_slug: str
     scene_body: str
@@ -67,6 +94,7 @@ class SourceDocument:
 @dataclass(slots=True)
 class ChapterDocument:
     path: Path
+    chapter_id: str
     title: str
     status: str
     label: str
@@ -82,7 +110,7 @@ class ChapterDocument:
 
     @property
     def word_count(self) -> int:
-        return len([word for word in re.findall(r"\b[\w']+\b", self.body)])
+        return len([word for word in re.findall(r"\b[\w']+\b", strip_scene_markers(self.body))])
 
     @property
     def scene_count(self) -> int:
@@ -101,9 +129,95 @@ class StoryIdea:
     slug: str
 
 
+@dataclass(frozen=True, slots=True)
+class SceneFileChange:
+    path: Path
+    before: str
+    after: str
+
+
+@dataclass(frozen=True, slots=True)
+class SceneOperation:
+    summary: str
+    changes: tuple[SceneFileChange, ...]
+
+
 def slugify(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return cleaned or "untitled"
+
+
+def new_chapter_id() -> str:
+    return f"chapter-{uuid4().hex}"
+
+
+def new_scene_id() -> str:
+    return f"scene-{uuid4().hex}"
+
+
+def strip_scene_markers(text: str) -> str:
+    return re.sub(
+        r"^<!--[ \t]*openscribe-scene-id:[ \t]*scene-[a-f0-9]{32}[ \t]*-->[ \t]*(?:\r?\n)?",
+        "",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+
+
+def ensure_chapter_ids(root: Path) -> dict[str, str]:
+    manuscript = root / "manuscript"
+    if not manuscript.exists():
+        return {}
+
+    migrated: dict[str, str] = {}
+    seen_ids: set[str] = set()
+    for part_path in sorted(path for path in manuscript.iterdir() if path.is_dir()):
+        for chapter_path in sorted(part_path.glob("*.md")):
+            text = chapter_path.read_text(encoding="utf-8")
+            metadata, body = parse_frontmatter(text)
+            validate_chapter_metadata(metadata, f"Chapter frontmatter in '{chapter_path}'")
+            chapter_id = str(metadata.get("chapter_id", "")).strip()
+            if chapter_id and chapter_id in seen_ids:
+                raise SchemaValidationError("Duplicate chapter ID. Resolve the duplicate before migration.")
+            if not chapter_id:
+                chapter_id = new_chapter_id()
+                metadata["chapter_id"] = chapter_id
+                atomic_write_text(
+                    chapter_path,
+                    f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+                )
+                migrated[chapter_path.stem] = chapter_id
+            seen_ids.add(chapter_id)
+    return migrated
+
+
+def ensure_scene_ids(root: Path) -> dict[str, list[str]]:
+    manuscript = root / "manuscript"
+    if not manuscript.exists():
+        return {}
+
+    migrated: dict[str, list[str]] = {}
+    seen_ids: set[str] = set()
+    for part_path in sorted(path for path in manuscript.iterdir() if path.is_dir()):
+        for chapter_path in sorted(part_path.glob("*.md")):
+            text = chapter_path.read_text(encoding="utf-8")
+            metadata, body = parse_frontmatter(text)
+            preamble, scenes = _parse_scene_layout(body)
+            changed_ids: list[str] = []
+            for scene in scenes:
+                if scene.scene_id and scene.scene_id in seen_ids:
+                    raise SchemaValidationError("Duplicate scene ID. Resolve the duplicate before migration.")
+                if not SCENE_ID_PATTERN.fullmatch(scene.scene_id):
+                    scene.scene_id = new_scene_id()
+                    changed_ids.append(scene.scene_id)
+                seen_ids.add(scene.scene_id)
+            if changed_ids:
+                atomic_write_text(
+                    chapter_path,
+                    _chapter_text(metadata, _render_scene_layout(preamble, scenes)),
+                )
+                migrated[chapter_path.stem] = changed_ids
+    return migrated
 
 
 def project_root(start: Path | None = None) -> Path:
@@ -129,6 +243,11 @@ def init_project_from_template(
     if (config_dir / PROJECT_FILE).exists():
         raise FileExistsError(f"Project already exists at {project_path}")
 
+    resolved_template_name, template = load_template_definition(template_name, template_file)
+    validate_template(template, f"Project template '{resolved_template_name}'")
+    for relative_path in template.get("files", {}):
+        safe_template_target(project_path, str(relative_path))
+
     for directory in (
         config_dir,
         config_dir / "templates",
@@ -142,14 +261,12 @@ def init_project_from_template(
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
-    resolved_template_name, template = load_template_definition(template_name, template_file)
-
     write_yaml(
         config_dir / PROJECT_FILE,
         {
             "title": title,
             "author": "",
-            "version": 1,
+            "version": CURRENT_PROJECT_VERSION,
             "template": resolved_template_name,
             "compile": {
                 "default_format": str(template["compile"].get("default_format", "docx")),
@@ -176,6 +293,12 @@ def init_project_from_template(
                 "enabled": False,
                 "provider": "openai",
                 "model": "gpt-4.1",
+            },
+            "proofreading": {
+                "enabled": False,
+                "endpoint": "http://127.0.0.1:8081/v2/check",
+                "language": "en-US",
+                "timeout_seconds": 30,
             },
         },
     )
@@ -263,9 +386,9 @@ def built_in_templates() -> dict[str, dict[str, Any]]:
 
 def _apply_template_files(root: Path, title: str, template: dict[str, Any]) -> None:
     for relative_path, content in template.get("files", {}).items():
-        target_path = root / str(relative_path)
+        target_path = safe_template_target(root, str(relative_path))
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(content.replace("{title}", title), encoding="utf-8")
+        atomic_write_text(target_path, content.replace("{title}", title))
 
 
 def template_library_path(root: Path) -> Path:
@@ -293,7 +416,10 @@ def load_template_definition(template_name: str, template_file: Path | None = No
     if template_file is not None:
         if not template_file.exists():
             raise FileNotFoundError(f"Template file '{template_file}' was not found.")
-        data = yaml.safe_load(template_file.read_text(encoding="utf-8")) or {}
+        data = validate_template(
+            load_yaml(template_file, default={}),
+            f"Template '{template_file}'",
+        )
         resolved_name = str(data.get("name", template_file.stem)).strip() or template_file.stem
         return slugify(resolved_name), data
 
@@ -305,11 +431,24 @@ def load_template_definition(template_name: str, template_file: Path | None = No
     return normalized, template
 
 
+@project_locked
 def load_project_config(root: Path) -> dict[str, Any]:
+    from openscribe.snapshots import recover_interrupted_restores
+
+    recover_interrupted_restores(root)
     config_path = root / PROJECT_DIR / PROJECT_FILE
     if not config_path.exists():
         raise FileNotFoundError(f"Missing project config at {config_path}")
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    raw_config = load_yaml(config_path, default={})
+    config = validate_project_config(raw_config, f"Project config '{config_path}'")
+    version = config.get("version", 1)
+    if version != CURRENT_PROJECT_VERSION:
+        from openscribe.migrations import MigrationError
+
+        raise MigrationError(
+            f"Project format {version} is not supported for editing. "
+            "Run `openscribe migrate status` and explicitly apply any available migration."
+        )
     compile_config = config.setdefault("compile", {})
     compile_config.setdefault("default_format", "docx")
     compile_config.setdefault("backend", "auto")
@@ -328,6 +467,11 @@ def load_project_config(root: Path) -> dict[str, Any]:
     goals.setdefault("draft_word_target", 0)
     goals.setdefault("session_word_target", 0)
     goals.setdefault("deadline", "")
+    proofreading = config.setdefault("proofreading", {})
+    proofreading.setdefault("enabled", False)
+    proofreading.setdefault("endpoint", "http://127.0.0.1:8081/v2/check")
+    proofreading.setdefault("language", "en-US")
+    proofreading.setdefault("timeout_seconds", 30)
     return config
 
 
@@ -338,9 +482,9 @@ def save_project_config(root: Path, config: dict[str, Any]) -> Path:
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
-    path.write_text(
+    atomic_write_text(
+        path,
         yaml.safe_dump(data, sort_keys=False, allow_unicode=False),
-        encoding="utf-8",
     )
 
 
@@ -365,7 +509,9 @@ def next_chapter_number(part_path: Path) -> int:
     return (max(existing) + 1) if existing else 1
 
 
+@project_locked
 def create_part(root: Path, title: str) -> Path:
+    load_project_config(root)
     part_number = next_part_number(root)
     folder_name = f"part-{part_number:02d}-{slugify(title)}"
     part_path = root / "manuscript" / folder_name
@@ -404,9 +550,9 @@ def create_story_idea(
         "tone": tone,
         "status": status,
     }
-    idea_path.write_text(
+    atomic_write_text(
+        idea_path,
         f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n{notes.strip()}".rstrip() + "\n",
-        encoding="utf-8",
     )
     return idea_path
 
@@ -433,6 +579,7 @@ def resolve_part_path(root: Path, part: str | None) -> Path:
     return parts[-1]
 
 
+@project_locked
 def create_chapter(
     root: Path,
     title: str,
@@ -444,11 +591,13 @@ def create_chapter(
     synopsis: str = "",
     notes: str = "",
 ) -> Path:
+    load_project_config(root)
     part_path = resolve_part_path(root, part)
     chapter_number = next_chapter_number(part_path)
     chapter_slug = slugify(title)
     chapter_path = part_path / f"ch-{chapter_number:02d}-{chapter_slug}.md"
     frontmatter = {
+        "chapter_id": new_chapter_id(),
         "title": title,
         "status": status,
         "label": label,
@@ -457,9 +606,9 @@ def create_chapter(
         "word_target": word_target,
         "notes": notes,
     }
-    chapter_path.write_text(
+    atomic_write_text(
+        chapter_path,
         f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n",
-        encoding="utf-8",
     )
     return chapter_path
 
@@ -631,7 +780,7 @@ def create_conference_materials(
         if path.exists():
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        atomic_write_text(path, content)
         created_paths.append(path)
     return created_paths
 
@@ -656,7 +805,7 @@ def import_conference_schedule(
     session_lines = [
         "# Conference Schedule",
         "",
-        f"## Venue",
+        "## Venue",
         "",
         venue_name,
         "",
@@ -666,7 +815,7 @@ def import_conference_schedule(
     checklist_lines = [
         "# Session Checklist",
         "",
-        f"## Venue",
+        "## Venue",
         "",
         venue_name,
         "",
@@ -687,14 +836,13 @@ def import_conference_schedule(
         session_lines.append(
             f"| {title} | {day or 'TBD'} | {time or 'TBD'} | {room or 'TBD'} | {format_name or 'TBD'} | {presenter or 'TBD'} | {status} |"
         )
-        checklist_lines.append(
-            f"| {title} | [ ] | [ ] | [ ] | {'[ ]' if create_checklists else 'n/a'} | {status} |"
-        )
+        checklist_lines.append(f"| {title} | [ ] | [ ] | [ ] | {'[ ]' if create_checklists else 'n/a'} | {status} |")
 
         session_path = root / CONFERENCE_SESSIONS_DIR / f"{venue_slug}-{index:02d}-{session_slug}.md"
         if not session_path.exists():
             session_path.parent.mkdir(parents=True, exist_ok=True)
-            session_path.write_text(
+            atomic_write_text(
+                session_path,
                 "# Conference Session\n\n"
                 f"## Title\n\n{title}\n\n"
                 f"## Venue\n\n{venue_name}\n\n"
@@ -712,21 +860,20 @@ def import_conference_schedule(
                 "* [ ] Submission portal reviewed\n\n"
                 "## Notes\n\n"
                 f"{notes.strip() or '* '}\n",
-                encoding="utf-8",
             )
             created_paths.append(session_path)
 
     overview_path = root / CONFERENCE_DIR / f"{venue_slug}-session-schedule.md"
     if not overview_path.exists():
         overview_path.parent.mkdir(parents=True, exist_ok=True)
-        overview_path.write_text("\n".join(session_lines) + "\n", encoding="utf-8")
+        atomic_write_text(overview_path, "\n".join(session_lines) + "\n")
         created_paths.append(overview_path)
 
     if create_checklists:
         checklist_path = root / CONFERENCE_DIR / f"{venue_slug}-session-checklist.md"
         if not checklist_path.exists():
             checklist_path.parent.mkdir(parents=True, exist_ok=True)
-            checklist_path.write_text("\n".join(checklist_lines) + "\n", encoding="utf-8")
+            atomic_write_text(checklist_path, "\n".join(checklist_lines) + "\n")
             created_paths.append(checklist_path)
 
     return created_paths
@@ -758,16 +905,10 @@ def create_source_note(
         "year": year,
         "url": url,
     }
-    body = (
-        "## Summary\n\n\n"
-        "## Key Quotes\n\n* \n\n"
-        "## Relevance\n\n\n"
-        "## Notes\n\n"
-        f"{notes.strip()}"
-    ).rstrip()
-    source_path.write_text(
+    body = (f"## Summary\n\n\n## Key Quotes\n\n* \n\n## Relevance\n\n\n## Notes\n\n{notes.strip()}").rstrip()
+    atomic_write_text(
+        source_path,
         f"---\n{yaml.safe_dump(frontmatter, sort_keys=False).strip()}\n---\n\n{body}\n",
-        encoding="utf-8",
     )
     return source_path
 
@@ -776,9 +917,7 @@ def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Pa
     files = [
         (
             root / "research" / "citation-log.md",
-            "# Citation Log\n\n"
-            f"## Style\n\n{style}\n\n"
-            "| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
+            f"# Citation Log\n\n## Style\n\n{style}\n\n| Section | Source | Use | Notes |\n| --- | --- | --- | --- |\n",
         ),
         (
             root / "research" / "bibliography-notes.md",
@@ -788,9 +927,7 @@ def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Pa
         ),
         (
             root / "research" / "source-usage-map.md",
-            "# Source Usage Map\n\n"
-            "## Sections\n\n"
-            "* Introduction\n* Methods\n* Results\n* Discussion\n",
+            "# Source Usage Map\n\n## Sections\n\n* Introduction\n* Methods\n* Results\n* Discussion\n",
         ),
     ]
     created_paths: list[Path] = []
@@ -798,23 +935,32 @@ def ensure_citation_tracking_files(root: Path, *, style: str = "APA") -> list[Pa
         if path.exists():
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        atomic_write_text(path, content)
         created_paths.append(path)
     return created_paths
 
 
+@project_locked
 def add_scene(root: Path, chapter_ref: str, title: str, body: str = "") -> Path:
+    from openscribe.editing import FileEdit, apply_edits
+
+    if not title.strip() or "\n" in title or "\r" in title:
+        raise ValueError("Scene titles must be nonempty single lines.")
+    if parse_scenes(body) or "openscribe-scene-id:" in body:
+        raise ValueError("Scene prose cannot introduce additional scene headings or IDs.")
     chapter = find_chapter(root, chapter_ref)
-    text = chapter.path.read_text(encoding="utf-8")
+    before = chapter.path.read_bytes()
+    text = before.decode("utf-8")
     metadata, current_body = parse_frontmatter(text)
-    scene_heading = f"## {title.strip()}\n\n"
+    scene_heading = f"## {title.strip()}\n<!-- openscribe-scene-id: {new_scene_id()} -->\n\n"
     scene_body = body.strip()
     new_scene = scene_heading + (scene_body + "\n" if scene_body else "")
-    separator = "\n" if current_body.strip() else ""
-    chapter.path.write_text(
-        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{current_body.rstrip()}{separator}{new_scene}".rstrip() + "\n",
-        encoding="utf-8",
+    separator = "\n\n" if current_body.strip() else ""
+    updated = (
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{current_body.rstrip()}{separator}{new_scene}".rstrip()
+        + "\n"
     )
+    apply_edits(root, (FileEdit(chapter.path, before, updated.encode("utf-8")),), "automatic backup before adding scene")
     return chapter.path
 
 
@@ -825,7 +971,15 @@ def add_screenplay_scene(root: Path, chapter_ref: str, slugline: str, body: str 
 
 def update_part_title(root: Path, part: str, title: str) -> Path:
     part_path = resolve_part_path(root, part)
-    write_yaml(part_path / PART_FILE, {"title": title})
+    metadata_path = part_path / PART_FILE
+    metadata = {}
+    if metadata_path.exists():
+        metadata = validate_part_metadata(
+            load_yaml(metadata_path, default={}),
+            f"Part metadata '{metadata_path}'",
+        )
+    metadata["title"] = title
+    write_yaml(metadata_path, metadata)
     return part_path
 
 
@@ -869,6 +1023,7 @@ def update_research_compile_settings(
     return save_project_config(root, config)
 
 
+@staged_operation("automatic backup before part reorder")
 def reorder_part(root: Path, part: str, position: int) -> list[Path]:
     manuscript = root / "manuscript"
     parts = sorted([child for child in manuscript.iterdir() if child.is_dir()])
@@ -883,6 +1038,7 @@ def reorder_part(root: Path, part: str, position: int) -> list[Path]:
     return sorted([child for child in manuscript.iterdir() if child.is_dir()])
 
 
+@staged_operation("automatic backup before chapter reorder")
 def reorder_chapter(root: Path, chapter_ref: str, position: int, part: str | None = None) -> list[Path]:
     chapter = find_chapter(root, chapter_ref)
     source_path = chapter.path
@@ -899,12 +1055,15 @@ def reorder_chapter(root: Path, chapter_ref: str, position: int, part: str | Non
         source_path.rename(moved_path)
         _renumber_chapters(source_path.parent)
 
-    reordered = sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE and child != moved_path])
+    reordered = sorted(
+        [child for child in target_part_path.glob("*.md") if child.name != PART_FILE and child != moved_path]
+    )
     reordered.insert(bounded_position - 1, moved_path)
     _renumber_chapters(target_part_path, reordered)
     return sorted([child for child in target_part_path.glob("*.md") if child.name != PART_FILE])
 
 
+@project_locked
 def update_chapter_metadata(
     root: Path,
     chapter_ref: str,
@@ -916,19 +1075,24 @@ def update_chapter_metadata(
     pov: str | None = None,
     word_target: int | None = None,
     notes: str | None = None,
+    expected: bytes | None = None,
 ) -> Path:
+    from openscribe.editing import EditConflictError, FileEdit, apply_edits
+
     chapter = find_chapter(root, chapter_ref)
-    text = chapter.path.read_text(encoding="utf-8")
+    before = chapter.path.read_bytes()
+    if expected is not None and before != expected:
+        raise EditConflictError("Chapter metadata changed on disk. Reload before saving.")
+    text = before.decode("utf-8")
     metadata, body = parse_frontmatter(text)
-    metadata = {
-        "title": metadata.get("title", chapter.title),
-        "status": metadata.get("status", chapter.status),
-        "label": metadata.get("label", chapter.label),
-        "synopsis": metadata.get("synopsis", chapter.synopsis),
-        "pov": metadata.get("pov", chapter.pov),
-        "word_target": int(metadata.get("word_target", chapter.word_target) or 0),
-        "notes": metadata.get("notes", chapter.notes),
-    }
+    metadata.setdefault("chapter_id", chapter.chapter_id)
+    metadata.setdefault("title", chapter.title)
+    metadata.setdefault("status", chapter.status)
+    metadata.setdefault("label", chapter.label)
+    metadata.setdefault("synopsis", chapter.synopsis)
+    metadata.setdefault("pov", chapter.pov)
+    metadata.setdefault("word_target", chapter.word_target)
+    metadata.setdefault("notes", chapter.notes)
 
     if title is not None:
         metadata["title"] = title
@@ -945,10 +1109,66 @@ def update_chapter_metadata(
     if notes is not None:
         metadata["notes"] = notes
 
-    chapter.path.write_text(
-        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
-        encoding="utf-8",
-    )
+    validate_chapter_metadata(metadata, "Updated chapter metadata")
+    updated = f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}"
+    apply_edits(root, (FileEdit(chapter.path, before, updated.encode("utf-8")),), "automatic backup before metadata save")
+    return chapter.path
+
+
+@project_locked
+def update_chapter_body(root: Path, chapter_ref: str, visible_body: str, *, expected: bytes | None = None) -> Path:
+    from openscribe.editing import EditConflictError, FileEdit, apply_edits
+
+    chapter = find_chapter(root, chapter_ref)
+    original_bytes = chapter.path.read_bytes()
+    if expected is not None and original_bytes != expected:
+        raise EditConflictError("Chapter changed on disk. Reload and review before saving.")
+    original_text = original_bytes.decode("utf-8")
+    metadata, original_body = parse_frontmatter(original_text)
+    _, original_scenes = _parse_scene_layout(original_body)
+    new_preamble, new_scenes = _parse_scene_layout(visible_body)
+
+    if original_scenes:
+        if any(not scene.scene_id for scene in original_scenes):
+            raise ValueError("Scene identity is missing. Run `openscribe migrate repair` first.")
+        if [scene.title for scene in new_scenes] != [scene.title for scene in original_scenes]:
+            raise ValueError(
+                "Chapter editing cannot infer scene identity after heading changes. "
+                "Use the scene editor or scene move/split/merge commands; your draft has not been saved."
+            )
+        for scene, original in zip(new_scenes, original_scenes, strict=True):
+            if scene.scene_id and scene.scene_id != original.scene_id:
+                raise ValueError("Scene identity cannot be replaced in the chapter editor.")
+            scene.scene_id = original.scene_id
+    else:
+        for scene in new_scenes:
+            scene.scene_id = new_scene_id()
+
+    updated_body = _render_scene_layout(new_preamble, new_scenes) if new_scenes else visible_body.rstrip() + "\n"
+    apply_edits(root, (FileEdit(chapter.path, original_bytes, _chapter_text(metadata, updated_body).encode("utf-8")),),
+                "automatic backup before chapter save")
+    return chapter.path
+
+
+@project_locked
+def update_scene_body(
+    root: Path, chapter_ref: str, scene_ref: str, body: str, *, expected: bytes | None = None
+) -> Path:
+    from openscribe.editing import EditConflictError, FileEdit, apply_edits
+
+    chapter = find_chapter(root, chapter_ref)
+    original_bytes = chapter.path.read_bytes()
+    if expected is not None and original_bytes != expected:
+        raise EditConflictError("Chapter changed on disk. Reload and review before saving.")
+    if parse_scenes(body) or "openscribe-scene-id:" in body:
+        raise ValueError("Use scene commands to change structure, not headings or identity markers inside scene prose.")
+    original_text = original_bytes.decode("utf-8")
+    metadata, chapter_body = parse_frontmatter(original_text)
+    preamble, scenes = _parse_scene_layout(chapter_body)
+    scene = scenes[_find_scene_index(scenes, scene_ref)]
+    scene.body = body.strip()
+    updated = _chapter_text(metadata, _render_scene_layout(preamble, scenes)).encode("utf-8")
+    apply_edits(root, (FileEdit(chapter.path, original_bytes, updated),), "automatic backup before scene save")
     return chapter.path
 
 
@@ -1054,7 +1274,7 @@ def _load_schedule_rows(schedule_path: Path) -> list[dict[str, str]]:
             raise ValueError("Conference schedule JSON must contain a list or a top level 'sessions' list.")
         return [_normalize_schedule_row(dict(item)) for item in data if isinstance(item, dict)]
     if suffix in {".yaml", ".yml"}:
-        data = yaml.safe_load(schedule_path.read_text(encoding="utf-8")) or []
+        data = load_yaml(schedule_path, default=[])
         if isinstance(data, dict):
             data = data.get("sessions", [])
         if not isinstance(data, list):
@@ -1064,7 +1284,9 @@ def _load_schedule_rows(schedule_path: Path) -> list[dict[str, str]]:
 
 
 def _normalize_schedule_row(row: dict[str, Any]) -> dict[str, str]:
-    normalized = {slugify(str(key)).replace("-", "_"): str(value).strip() for key, value in row.items() if key is not None}
+    normalized = {
+        slugify(str(key)).replace("-", "_"): str(value).strip() for key, value in row.items() if key is not None
+    }
     return {
         "title": normalized.get("title") or normalized.get("session") or normalized.get("name") or "",
         "day": normalized.get("day") or normalized.get("date") or "",
@@ -1078,6 +1300,7 @@ def _normalize_schedule_row(row: dict[str, Any]) -> dict[str, str]:
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
+    text = text.replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return {}, text
 
@@ -1087,8 +1310,11 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
     _, remainder = parts
     raw_frontmatter = text[4 : text.find("\n---\n")]
-    metadata = yaml.safe_load(raw_frontmatter) or {}
-    return metadata, remainder.lstrip("\n")
+    try:
+        metadata = yaml.safe_load(raw_frontmatter) or {}
+    except yaml.YAMLError as exc:
+        raise SchemaValidationError(f"Invalid YAML frontmatter: {exc}") from exc
+    return require_mapping(metadata, "Frontmatter"), remainder.lstrip("\n")
 
 
 def list_story_ideas(root: Path) -> list[StoryIdea]:
@@ -1099,6 +1325,7 @@ def list_story_ideas(root: Path) -> list[StoryIdea]:
     ideas: list[StoryIdea] = []
     for idea_path in sorted(ideas_dir.glob("*.md")):
         metadata, body = parse_frontmatter(idea_path.read_text(encoding="utf-8"))
+        validate_story_metadata(metadata, f"Story idea frontmatter in '{idea_path}'")
         ideas.append(
             StoryIdea(
                 path=idea_path,
@@ -1157,6 +1384,7 @@ def list_source_notes(root: Path) -> list[SourceDocument]:
     results: list[SourceDocument] = []
     for path in sorted(source_dir.glob("*.md")):
         metadata, body = parse_frontmatter(path.read_text(encoding="utf-8"))
+        validate_source_metadata(metadata, f"Source frontmatter in '{path}'")
         results.append(
             SourceDocument(
                 path=path,
@@ -1172,17 +1400,33 @@ def list_source_notes(root: Path) -> list[SourceDocument]:
     return results
 
 
+@project_locked
 def list_chapters(root: Path) -> list[ChapterDocument]:
+    from openscribe.snapshots import recover_interrupted_restores
+
+    recover_interrupted_restores(root)
     manuscript = root / "manuscript"
     chapters: list[ChapterDocument] = []
+    seen_ids: set[str] = set()
+    seen_scene_ids: set[str] = set()
     for part_path in sorted([child for child in manuscript.iterdir() if child.is_dir()]):
         part_title = load_part_title(part_path)
         for chapter_path in sorted(part_path.glob("*.md")):
             text = chapter_path.read_text(encoding="utf-8")
             metadata, body = parse_frontmatter(text)
+            validate_chapter_metadata(metadata, f"Chapter frontmatter in '{chapter_path}'")
+            chapter_id = str(metadata.get("chapter_id", ""))
+            if chapter_id and chapter_id in seen_ids:
+                raise SchemaValidationError("Duplicate chapter ID. No files were modified.")
+            seen_ids.add(chapter_id)
+            for scene in parse_scenes(body):
+                if scene.scene_id and scene.scene_id in seen_scene_ids:
+                    raise SchemaValidationError("Duplicate scene ID. No files were modified.")
+                seen_scene_ids.add(scene.scene_id)
             chapters.append(
                 ChapterDocument(
                     path=chapter_path,
+                    chapter_id=chapter_id,
                     title=metadata.get("title", chapter_path.stem),
                     status=metadata.get("status", "draft"),
                     label=metadata.get("label", "default"),
@@ -1204,6 +1448,8 @@ def find_chapter(root: Path, chapter_ref: str) -> ChapterDocument:
     normalized = chapter_ref.strip().lower()
     chapters = list_chapters(root)
     for chapter in chapters:
+        if chapter.chapter_id.lower() == normalized:
+            return chapter
         if chapter.slug.lower() == normalized:
             return chapter
         if chapter.title.strip().lower() == normalized:
@@ -1216,7 +1462,10 @@ def find_chapter(root: Path, chapter_ref: str) -> ChapterDocument:
 def load_part_title(part_path: Path) -> str:
     metadata_path = part_path / PART_FILE
     if metadata_path.exists():
-        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+        metadata = validate_part_metadata(
+            load_yaml(metadata_path, default={}),
+            f"Part metadata '{metadata_path}'",
+        )
         title = str(metadata.get("title", "")).strip()
         if title:
             return title
@@ -1228,7 +1477,10 @@ def load_part_metadata(root: Path, part: str) -> dict[str, Any]:
     metadata_path = part_path / PART_FILE
     metadata = {}
     if metadata_path.exists():
-        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
+        metadata = validate_part_metadata(
+            load_yaml(metadata_path, default={}),
+            f"Part metadata '{metadata_path}'",
+        )
     metadata["title"] = str(metadata.get("title", load_part_title(part_path)))
     metadata["part_id"] = part_path.name
     metadata["path"] = str(part_path)
@@ -1297,6 +1549,7 @@ def find_scenes(
                     chapter=chapter,
                     chapter_title=chapter.title,
                     part=chapter.part,
+                    scene_id=scene.scene_id,
                     scene_title=scene.title,
                     scene_slug=scene.slug,
                     scene_body=scene.body,
@@ -1398,9 +1651,9 @@ def insert_citation_reference(
     else:
         updated_body = body.rstrip() + ("\n\n" if body.strip() else "") + citation_line + "\n"
 
-    chapter.path.write_text(
+    atomic_write_text(
+        chapter.path,
         f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{updated_body.rstrip()}\n",
-        encoding="utf-8",
     )
     return chapter.path
 
@@ -1413,7 +1666,9 @@ def find_source_note(root: Path, source_ref: str) -> SourceDocument:
     raise FileNotFoundError(f"Source note '{source_ref}' was not found.")
 
 
-def resolve_editor_target(root: Path, kind: str, reference: str | None = None, *, text: str | None = None, index: int = 1) -> Path:
+def resolve_editor_target(
+    root: Path, kind: str, reference: str | None = None, *, text: str | None = None, index: int = 1
+) -> Path:
     normalized_kind = kind.strip().lower()
     if normalized_kind == "chapter":
         if not reference:
@@ -1435,7 +1690,14 @@ def resolve_editor_target(root: Path, kind: str, reference: str | None = None, *
 
 
 def open_in_editor(path: Path) -> None:
-    os.startfile(str(path))
+    if os.name == "nt":
+        os.startfile(str(path))
+        return
+    command = ["open" if sys.platform == "darwin" else "xdg-open", str(path)]
+    try:
+        subprocess.Popen(command)
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Could not find the platform editor launcher '{command[0]}'.") from exc
 
 
 def scene_report(root: Path, *, text: str | None = None) -> dict[str, Any]:
@@ -1480,12 +1742,14 @@ def _insert_into_scene(body: str, scene_ref: str, citation_line: str) -> str:
         raise FileNotFoundError("The chapter does not contain scene headings.")
     normalized = scene_ref.strip().lower()
     lines = body.splitlines()
-    heading_indexes = [(index, line[3:].strip()) for index, line in enumerate(lines) if line.startswith("## ")]
-    for idx, (_, title) in enumerate(heading_indexes):
-        if slugify(title) != normalized and title.strip().lower() != normalized:
+    heading_indexes = [index for index, line in enumerate(lines) if line.startswith("## ")]
+    for idx, scene in enumerate(scenes):
+        if normalized not in {scene.scene_id.lower(), scene.slug.lower(), scene.title.strip().lower()}:
             continue
-        start = heading_indexes[idx][0] + 1
-        end = heading_indexes[idx + 1][0] if idx + 1 < len(heading_indexes) else len(lines)
+        start = heading_indexes[idx] + 1
+        if start < len(lines) and lines[start].strip().startswith("<!-- openscribe-scene-id:"):
+            start += 1
+        end = heading_indexes[idx + 1] if idx + 1 < len(heading_indexes) else len(lines)
         scene_lines = lines[start:end]
         while scene_lines and not scene_lines[-1].strip():
             scene_lines.pop()
@@ -1498,26 +1762,254 @@ def _insert_into_scene(body: str, scene_ref: str, citation_line: str) -> str:
 
 def _citation_marker(source: SourceDocument, citation_style: str) -> str:
     if citation_style.strip().upper() == "CHICAGO":
-        return f"> Citation: {source.author or 'Unknown'}. \"{source.title}.\" {source.year or 'n.d.'}"
+        return f'> Citation: {source.author or "Unknown"}. "{source.title}." {source.year or "n.d."}'
     if citation_style.strip().upper() == "MLA":
         return f"> Citation: {source.author or 'Unknown'}. {source.title}. {source.year or 'n.d.'}"
     return f"> Citation: {source.author or source.title} ({source.year or 'n.d.'})"
 
 
-def parse_scenes(body: str) -> list[SceneDocument]:
-    heading_pattern = re.compile(r"^##\s+(.+?)\s*$", flags=re.MULTILINE)
-    matches = list(heading_pattern.finditer(body))
-    if not matches:
-        return []
+def find_scene(chapter: ChapterDocument, scene_ref: str) -> SceneDocument:
+    scenes = chapter.scenes
+    return scenes[_find_scene_index(scenes, scene_ref)]
 
+
+def plan_reorder_scene(
+    root: Path,
+    chapter_ref: str,
+    scene_ref: str,
+    position: int,
+    *,
+    target_chapter_ref: str | None = None,
+) -> SceneOperation:
+    source_chapter = find_chapter(root, chapter_ref)
+    target_chapter = find_chapter(root, target_chapter_ref) if target_chapter_ref else source_chapter
+    source_text = source_chapter.path.read_text(encoding="utf-8")
+    source_metadata, source_body = parse_frontmatter(source_text)
+    source_preamble, source_scenes = _parse_scene_layout(source_body)
+    source_index = _find_scene_index(source_scenes, scene_ref)
+    moved_scene = source_scenes.pop(source_index)
+
+    if target_chapter.path == source_chapter.path:
+        target_metadata = source_metadata
+        target_preamble = source_preamble
+        target_scenes = source_scenes
+    else:
+        target_text = target_chapter.path.read_text(encoding="utf-8")
+        target_metadata, target_body = parse_frontmatter(target_text)
+        target_preamble, target_scenes = _parse_scene_layout(target_body)
+
+    if position < 1 or position > len(target_scenes) + 1:
+        raise ValueError(f"Scene position must be between 1 and {len(target_scenes) + 1}.")
+    target_scenes.insert(position - 1, moved_scene)
+
+    changes = [
+        SceneFileChange(
+            source_chapter.path,
+            source_text,
+            _chapter_text(source_metadata, _render_scene_layout(source_preamble, source_scenes)),
+        )
+    ]
+    if target_chapter.path != source_chapter.path:
+        changes.append(
+            SceneFileChange(
+                target_chapter.path,
+                target_text,
+                _chapter_text(target_metadata, _render_scene_layout(target_preamble, target_scenes)),
+            )
+        )
+    return SceneOperation(
+        summary=f"Move scene '{moved_scene.title}' to position {position} in '{target_chapter.title}'.",
+        changes=tuple(change for change in changes if change.before != change.after),
+    )
+
+
+def plan_split_scene(
+    root: Path,
+    chapter_ref: str,
+    scene_ref: str,
+    at_text: str,
+    new_title: str,
+) -> SceneOperation:
+    chapter = find_chapter(root, chapter_ref)
+    original_text = chapter.path.read_text(encoding="utf-8")
+    metadata, body = parse_frontmatter(original_text)
+    preamble, scenes = _parse_scene_layout(body)
+    scene_index = _find_scene_index(scenes, scene_ref)
+    scene = scenes[scene_index]
+    split_at = scene.body.lower().find(at_text.lower())
+    if not at_text.strip() or split_at <= 0 or split_at >= len(scene.body):
+        raise ValueError("Split text must identify a nonempty point inside the scene body.")
+    first_body = scene.body[:split_at].rstrip()
+    second_body = scene.body[split_at:].lstrip()
+    scene.body = first_body
+    new_scene = SceneDocument(
+        scene_id=new_scene_id(),
+        title=new_title.strip(),
+        body=second_body,
+        slug=slugify(new_title),
+    )
+    if not new_scene.title:
+        raise ValueError("New scene title cannot be empty.")
+    scenes.insert(scene_index + 1, new_scene)
+    updated_text = _chapter_text(metadata, _render_scene_layout(preamble, scenes))
+    return SceneOperation(
+        summary=f"Split scene '{scene.title}' into '{scene.title}' and '{new_scene.title}'.",
+        changes=(SceneFileChange(chapter.path, original_text, updated_text),),
+    )
+
+
+def plan_merge_scene(
+    root: Path,
+    chapter_ref: str,
+    scene_ref: str,
+    other_scene_ref: str,
+    *,
+    other_chapter_ref: str | None = None,
+) -> SceneOperation:
+    chapter = find_chapter(root, chapter_ref)
+    other_chapter = find_chapter(root, other_chapter_ref) if other_chapter_ref else chapter
+    original_text = chapter.path.read_text(encoding="utf-8")
+    metadata, body = parse_frontmatter(original_text)
+    preamble, scenes = _parse_scene_layout(body)
+    scene_index = _find_scene_index(scenes, scene_ref)
+    scene = scenes[scene_index]
+
+    if other_chapter.path == chapter.path:
+        other_text = original_text
+        other_metadata = metadata
+        other_preamble = preamble
+        other_scenes = scenes
+    else:
+        other_text = other_chapter.path.read_text(encoding="utf-8")
+        other_metadata, other_body = parse_frontmatter(other_text)
+        other_preamble, other_scenes = _parse_scene_layout(other_body)
+    other_index = _find_scene_index(other_scenes, other_scene_ref)
+    other_scene = other_scenes[other_index]
+    if scene.scene_id == other_scene.scene_id:
+        raise ValueError("A scene cannot be merged with itself.")
+
+    scene.body = "\n\n".join(part for part in (scene.body.rstrip(), other_scene.body.lstrip()) if part)
+    other_scenes.pop(other_index)
+    changes = [
+        SceneFileChange(
+            chapter.path,
+            original_text,
+            _chapter_text(metadata, _render_scene_layout(preamble, scenes)),
+        )
+    ]
+    if other_chapter.path != chapter.path:
+        changes.append(
+            SceneFileChange(
+                other_chapter.path,
+                other_text,
+                _chapter_text(other_metadata, _render_scene_layout(other_preamble, other_scenes)),
+            )
+        )
+    return SceneOperation(
+        summary=f"Merge scene '{other_scene.title}' into '{scene.title}'.",
+        changes=tuple(change for change in changes if change.before != change.after),
+    )
+
+
+@project_locked
+def apply_scene_operation(root: Path, operation: SceneOperation) -> Path:
+    if not operation.changes:
+        raise ValueError("The scene operation would not change the manuscript.")
+
+    from openscribe.editing import FileEdit, apply_edits
+
+    edits = []
+    for change in operation.changes:
+        before = change.path.read_bytes()
+        if before.decode("utf-8").replace("\r\n", "\n") != change.before.replace("\r\n", "\n"):
+            raise ValueError("Scene plan is stale. Preview again before applying.")
+        edits.append(FileEdit(change.path, before, change.after.encode("utf-8")))
+    return apply_edits(root, tuple(edits), f"automatic backup before {operation.summary}")
+
+
+def scene_operation_diff(root: Path, operation: SceneOperation) -> str:
+    chunks: list[str] = []
+    for change in operation.changes:
+        relative_path = change.path.relative_to(root).as_posix()
+        chunks.append(
+            "\n".join(
+                difflib.unified_diff(
+                    change.before.splitlines(),
+                    change.after.splitlines(),
+                    fromfile=f"before/{relative_path}",
+                    tofile=f"after/{relative_path}",
+                    lineterm="",
+                )
+            )
+        )
+    return "\n\n".join(chunk for chunk in chunks if chunk.strip()) or "[No changes]"
+
+
+def parse_scenes(body: str) -> list[SceneDocument]:
+    return _parse_scene_layout(body)[1]
+
+
+def _parse_scene_layout(body: str) -> tuple[str, list[SceneDocument]]:
+    matches = _scene_headings(body)
+    if not matches:
+        return body.rstrip(), []
+
+    preamble = body[: matches[0].start()].strip("\r\n")
     scenes: list[SceneDocument] = []
     for index, match in enumerate(matches):
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
         scene_title = match.group(1).strip()
-        scene_body = body[start:end].strip()
-        scenes.append(SceneDocument(title=scene_title, body=scene_body, slug=slugify(scene_title)))
-    return scenes
+        content = body[start:end]
+        marker = SCENE_MARKER_PATTERN.match(content)
+        scene_id = marker.group(1).lower() if marker else ""
+        scene_body = content[marker.end() if marker else 0 :].strip("\r\n")
+        scenes.append(SceneDocument(scene_id=scene_id, title=scene_title, body=scene_body, slug=slugify(scene_title)))
+    return preamble, scenes
+
+
+def _scene_headings(body: str) -> list[re.Match]:
+    headings: list[re.Match] = []
+    fence = ""
+    for match in re.finditer(r"^.*$", body, re.MULTILINE):
+        line = match.group().rstrip("\r")
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if marker:
+            run = marker.group(1)
+            if not fence:
+                fence = run
+            elif run[0] == fence[0] and len(run) >= len(fence) and not line[marker.end():].strip():
+                fence = ""
+            continue
+        if not fence:
+            heading = re.compile(r"##[ \t]+([^\r\n]+?)[ \t]*\r?$").match(body, match.start(), match.end())
+            if heading:
+                headings.append(heading)
+    return headings
+
+
+def _render_scene_layout(preamble: str, scenes: list[SceneDocument]) -> str:
+    blocks: list[str] = []
+    if preamble.strip():
+        blocks.append(preamble.strip("\r\n"))
+    for scene in scenes:
+        block = f"## {scene.title}\n<!-- openscribe-scene-id: {scene.scene_id} -->"
+        if scene.body.strip():
+            block += f"\n\n{scene.body.strip(chr(13) + chr(10))}"
+        blocks.append(block)
+    return ("\n\n".join(blocks).rstrip("\r\n") + "\n") if blocks else ""
+
+
+def _chapter_text(metadata: dict[str, Any], body: str) -> str:
+    return f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}"
+
+
+def _find_scene_index(scenes: list[SceneDocument], scene_ref: str) -> int:
+    normalized = scene_ref.strip().lower()
+    for index, scene in enumerate(scenes):
+        if normalized in {scene.scene_id.lower(), scene.slug.lower(), scene.title.strip().lower()}:
+            return index
+    raise FileNotFoundError(f"Scene '{scene_ref}' was not found.")
 
 
 def import_folder_project(
@@ -1531,7 +2023,9 @@ def import_folder_project(
     if not source_root.exists():
         raise FileNotFoundError(f"Source folder '{source_path}' was not found.")
 
-    project_root_path = init_project_from_template(target_path, title, template_name=template_name, template_file=template_file)
+    project_root_path = init_project_from_template(
+        target_path, title, template_name=template_name, template_file=template_file
+    )
 
     root_markdown_files = sorted(source_root.glob("*.md"))
     if root_markdown_files:
@@ -1583,9 +2077,14 @@ def _import_markdown_as_chapter(root: Path, source_file: Path, part: str) -> Pat
         synopsis=str(metadata.get("synopsis", "")),
         notes=str(metadata.get("notes", "")),
     )
-    chapter_path.write_text(
-        chapter_path.read_text(encoding="utf-8") + body.strip() + ("\n" if body.strip() else ""),
-        encoding="utf-8",
+    created_metadata, _ = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+    imported_metadata = dict(metadata)
+    imported_metadata.update(created_metadata)
+    atomic_write_text(
+        chapter_path,
+        f"---\n{yaml.safe_dump(imported_metadata, sort_keys=False).strip()}\n---\n\n"
+        + body.strip()
+        + ("\n" if body.strip() else ""),
     )
     return chapter_path
 

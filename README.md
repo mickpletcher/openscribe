@@ -1,26 +1,29 @@
 # openscribe
 
-Open source CLI and TUI writing environment for long form projects
+Open source desktop, CLI, and TUI writing environment for long form projects
 
-## Project docs
+## Current Status
 
-See [getting-started.md](./getting-started.md) for the fastest beginner setup path.
-See [changelog.md](./changelog.md) for the repo change history.
-See [completed-upgrades.md](./completed-upgrades.md) for shipped roadmap work.
-See [assessment.md](./assessment.md) for the current project assessment.
-See [docs/ai-setup.md](./docs/ai-setup.md) for AI setup with cloud API keys and local model servers.
-See [Spec 001](./specs/001-compile-pipeline/README.md) for the compile milestone definition.
-See [Spec 002](./specs/002-board-mode/README.md) for the planning board milestone definition.
-See [Spec 003](./specs/003-elements-and-relations/README.md) for the elements and relations milestone definition.
-See the [North County example project](./examples/north-county/README.md) for a concrete sample project.
-`future-upgrades.md` stays local and should be refreshed as work ships and new ideas come up.
-`assessment.md` should be refreshed when project status or priorities change.
+- Status: Active pre-release alpha
+- Version: 0.1.0
+- Project tier: 1
+- Primary technologies: Python, PySide6, Typer, Textual, Markdown, and YAML
+
+For current repository health, see [assessment.md](./assessment.md).
+
+## Documentation
+
+The single authority for each documentation responsibility is mapped in [PROJECT-STANDARD.md](./PROJECT-STANDARD.md).
+
+Use [getting-started.md](./getting-started.md) for the shortest setup path, [VALIDATION.md](./VALIDATION.md) for verification procedures, and [docs/ai-setup.md](./docs/ai-setup.md) for optional AI setup.
+
+The files under `specs/` are development milestone plans. They are not contractual requirements.
 
 ## What it is
 
 `openscribe` is a writing tool for books and other long form work.
 It stores everything as plain Markdown files with YAML frontmatter.
-You can work from the command line, open the Textual interface, or edit files directly in your editor.
+You can use the optional desktop writing app, the command line, the Textual interface, or an external editor.
 
 The source files stay readable without the app.
 That matters if you want your manuscript under git, want full control of backups, or want to move between tools later.
@@ -47,14 +50,15 @@ This first build includes:
 * user defined project templates
 * part creation
 * chapter creation
-* scene creation inside chapters
+* scene creation with immutable inline IDs
+* preview-first scene move, split, and merge within and across chapters
 * batch chapter metadata updates
 * chapter search and query
 * project reports
 * derived project index rebuild and search
 * folder import for existing manuscript projects
 * story idea capture for future books
-* snapshots with checkpoint and git based modes
+* snapshots with checkpoint and git based modes, exact preview-first restore, automatic backup, and interruption recovery
 * planning board notes, layout, visual board view, and promotion
 * element, alias, relation, and appears in tracking
 * nonfiction section and screenplay scene workflow helpers
@@ -73,22 +77,69 @@ This first build includes:
 * compile profiles for print, ebook, submission, and research paper output
 * citation aware research compile settings with bibliography controls
 * wider Textual TUI views for manuscript, corkboard cards, source links, board canvas, characters, research, notes, story ideas, and elements
+* editable chapter and scene text in the TUI with explicit save behavior
 * richer TUI chapter metadata quick actions for status, label, point of view, and word target
 * snapshot restore and diff helpers
 * editor launch helpers for chapters, parts, and search results
 * conference schedule import and session checklist automation
-* optional AI summary command for chapter review
+* optional LanguageTool grammar and style checks in the CLI and TUI
+* optional read-only AI summary, rewrite, outline, focused review, metadata, brainstorming, and project-query commands
+* ordered, automatically backed up project-format migrations
 
-This build does not yet include venue specific bibliography styles, scene reordering, or richer drag based board editing.
+This build does not yet include venue specific bibliography styles, richer scene metadata, or drag based board editing. Word round trips are experimental and require real host validation before production use.
+
+## Desktop writing
+
+From a repository checkout:
+
+```powershell
+python -m pip install -e ".[desktop]"
+openscribe desktop
+openscribe desktop --project "C:\Writing\My Novel"
+```
+
+Create or open a project, add chapters and scenes, and select them in the binder. Research, character, and note views are read only. The editor keeps drafts when navigating. Local recovery drafts are written every second and on navigation. `Ctrl+S` saves with a checkpoint; a changed disk baseline blocks saving instead of overwriting newer work. Reload discards a draft only after confirmation. Quit offers Save, Discard, and Cancel.
+
+The chapter editor allows prose edits while keeping scene headings unchanged. Use scene commands for structural changes. Do not delete or replace IDs in an external editor. Missing IDs can be repaired explicitly with `openscribe migrate repair`; duplicate IDs must be resolved manually.
+
+Proofread runs local LanguageTool in the background. Select a finding and replacement, preview it, then apply it to the draft. Undo reverses the replacement. Any intervening text change invalidates the suggestion. Export, Checkpoint, Restore, Word export, and Word import are available from the toolbar overflow when the window is narrow.
+
+This is an alpha interface. Keep an independent backup. Draft recovery is not a guarantee against losing the last second of typing after an abrupt failure.
+
+## Experimental Word round trips
+
+Ordinary `compile --format docx` remains one way. Use the distinct round-trip path:
+
+```powershell
+openscribe word export --output build\roundtrip.docx
+openscribe word import build\roundtrip.docx
+openscribe word import build\roundtrip.docx --apply
+```
+
+Export writes tagged content controls and a private baseline under `.openscribe/word-roundtrip/`. Use a new output filename for every export. Edit inside the existing controls. Import previews changes, preserves current Markdown-only edits, and blocks conflicting edits, missing or duplicate controls, structural changes, and unresolved tracked changes. Apply checks the preview baseline again and installs a validated staged result with a backup. Markdown remains canonical. Rich Word formatting, drawings, tables, and arbitrary DOCX import are not supported.
+
+For the task-pane prototype, use a fixed local port and a locally trusted certificate valid for `127.0.0.1`:
+
+```powershell
+openscribe word bridge --port 8765 --certificate C:\Certificates\localhost.crt --key C:\Certificates\localhost.key --manifest build\openscribe-addin.xml
+```
+
+Sideload the generated manifest in Windows desktop Word using your approved Office add-in process. Enter the session token printed by the running bridge into the pane. Preview and Apply are separate actions. The pane communicates only with the selected local project; Microsoft supplies the Office JavaScript runtime. The bridge does not install or trust certificates for you. Without a certificate, it supports local HTTP diagnostics but does not generate a task-pane manifest.
+
+Real Word UI and certificate/sideload validation remain unverified. See [VL-004](VALIDATION.md#vl-004-real-word-and-desktop-ui-validation-is-incomplete) and [ADR-006](docs/decisions/ADR-006-experimental-word-round-trip-availability.md).
 
 ## Requirements
 
 You need:
 
-* Python 3.11 or newer
+* Python 3.11, 3.12, or 3.13
 * PowerShell on Windows if you want to follow the examples exactly
 
 You do not need any AI provider, API key, or AI SDK setup to use the normal project, CLI, or TUI features.
+
+## Validation
+
+Use the commands and change-class matrix in [VALIDATION.md](./VALIDATION.md).
 
 ## Install
 
@@ -146,6 +197,39 @@ openscribe tui
 If you only want the writing tool, you can stop there.
 You can ignore the rest of the AI section completely.
 
+## LanguageTool proofreading
+
+`openscribe` can send one chapter at a time to a LanguageTool compatible `/v2/check` endpoint and display grammar, spelling, and style findings. It does not apply replacements or change manuscript files.
+
+The default is disabled and points to a local server:
+
+```yaml
+proofreading:
+  enabled: true
+  endpoint: http://127.0.0.1:8081/v2/check
+  language: en-US
+  timeout_seconds: 30
+```
+
+Start a self hosted server by following the [official LanguageTool HTTP server guide](https://dev.languagetool.org/http-server), then run:
+
+```powershell
+openscribe proofread chapter "The Beginning"
+openscribe proofread chapter "The Beginning" --language en-GB
+```
+
+Local loopback endpoints can use HTTP. Nonlocal endpoints must use HTTPS and require explicit approval for every command:
+
+```powershell
+openscribe proofread chapter "The Beginning" --allow-data-transfer
+```
+
+Before an approved hosted request, `openscribe` reports the endpoint and number of chapter characters being sent. The free public LanguageTool endpoint is intentionally rejected because its [published access policy](https://dev.languagetool.org/public-http-api) prohibits automated requests. Use a local server or a licensed hosted endpoint instead.
+
+Inside `openscribe tui`, select a chapter or scene and press `Ctrl+G` to check in the background. Use `Ctrl+J` and `Ctrl+K` to navigate findings, `Ctrl+Shift+R` to preview the first suggestion, `Ctrl+Shift+A` to apply that preview to the draft, and `Ctrl+Shift+I` to ignore a finding. `Ctrl+Z` undoes a replacement. Changed text invalidates a preview. The TUI runs local endpoints only. Hosted endpoints require the CLI disclosure flow with `--allow-data-transfer`.
+
+This integration uses the LanguageTool HTTP API. It does not copy or distribute LanguageTool source code. See the [LanguageTool repository](https://github.com/languagetool-org/languagetool) for its server, source, and license details. The self hosted server does not include LanguageTool's cloud only AI rules.
+
 ## Research workflow
 
 If you are using `openscribe` for papers or conference work:
@@ -190,11 +274,26 @@ That guide covers:
 * project config examples
 * troubleshooting
 
-Current AI command:
+Current AI commands:
 
 ```powershell
-openscribe ai summarize "The Beginning"
+openscribe ai summarize "The Beginning" --allow-data-transfer
+openscribe ai rewrite "The Beginning" --allow-data-transfer
+openscribe ai outline "The Beginning" --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus pacing --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus continuity --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus pov --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus prose --allow-data-transfer
+openscribe ai metadata "The Beginning" --allow-data-transfer
+openscribe ai brainstorm "The Beginning" --question "What could fail next?" --allow-data-transfer
+openscribe ai query "Where was the ledger last seen?" --allow-data-transfer
 ```
+
+For hosted providers, `openscribe` refuses to send manuscript text unless that
+command includes `--allow-data-transfer`. Before each request, it reports the
+provider, model, and number of characters being sent. Only a loopback endpoint
+is exempt, regardless of the provider name. A nonlocal OpenAI-compatible endpoint
+requires HTTPS and the flag. These commands print suggestions and never write them to manuscript files.
 
 ## AI architecture
 
@@ -211,17 +310,19 @@ The design is simple:
 That keeps the AI layer replaceable.
 It also means the same command surface can work across multiple vendors.
 
-### Recommended command layout
+### Command layout
 
 Keep AI features separate from the core writing commands.
 
-Good examples:
+Available commands:
 
 * `openscribe ai summarize`
 * `openscribe ai rewrite`
 * `openscribe ai outline`
 * `openscribe ai analyze`
 * `openscribe ai brainstorm`
+* `openscribe ai metadata`
+* `openscribe ai query`
 
 ### Safe behavior
 
@@ -451,20 +552,9 @@ ai:
   model: mistral-large-latest
 ```
 
-## Recommended build order for AI
+## Remaining AI work
 
-Do not build every AI feature at once.
-
-Use this order:
-
-1. `ai summarize`
-2. `ai rewrite`
-3. `ai outline`
-4. `ai analyze`
-5. board aware prompts
-6. element aware prompts
-
-That keeps the AI layer useful without letting it overtake the writing workflow.
+Board-aware and element-aware prompts remain deferred. The current command set scopes every request to one chapter or the assembled project manuscript and keeps all output read only.
 
 ## Adding more providers to the codebase
 
@@ -543,6 +633,8 @@ Use this for saved user defined project templates.
 `.openscribe/index/`
 
 Use this for the derived project index built from manuscript, note, research, and element data.
+The index stores a SHA-256 source manifest. Search stops and asks for a rebuild
+after any indexed source is edited, added, or deleted.
 
 `.openscribe/snapshots/`
 
@@ -623,6 +715,7 @@ Example:
 ```markdown
 ---
 title: The Beginning
+chapter_id: chapter-8f2c486b47e149f7a26dc2b3df3244fb
 status: draft
 label: default
 synopsis: Hero meets mentor for the first time.
@@ -632,7 +725,21 @@ notes: Tighten the middle scene.
 ---
 
 Marcus stepped off the train into rain and diesel smoke.
+
+## Station Platform
+<!-- openscribe-scene-id: scene-2f507e2f0ea04adca93644188df1ac66 -->
+
+The last train pulled away.
 ```
+
+`chapter_id` is generated once and stays stable when a chapter is renamed,
+moved, or renumbered. Board relationships store this ID. Reading a project does
+not assign or migrate identities. Use `openscribe migrate status`, followed by
+`openscribe migrate apply` for an older format or `openscribe migrate repair` for
+missing identities in a current-format project. Both mutation paths create a checkpoint. Metadata commands preserve
+frontmatter fields they do not recognize.
+
+Scene IDs are stored in HTML comments immediately after scene headings. They remain stable when scenes move, split, or merge and are removed from reading and compile output. Do not copy one scene ID onto another scene.
 
 ### Frontmatter fields
 
@@ -670,8 +777,7 @@ Internal notes for revision, continuity, or reminders.
 
 ## Writing in your editor
 
-`openscribe` creates the files.
-You still write the actual manuscript in your editor of choice.
+`openscribe` creates the files. You can write in the TUI or use an editor of your choice.
 
 A common pattern is:
 
@@ -679,6 +785,8 @@ A common pattern is:
 2. open `manuscript\part-xx-...\ch-xx-....md` in VS Code
 3. write below the frontmatter
 4. keep the metadata updated as the draft changes
+
+For integrated editing, run `openscribe tui`, select a chapter or scene, edit the middle pane, and press `Ctrl+S`. Chapter editing hides internal scene ID comments. It refuses heading renames or reorders that would make identity ambiguous. Use the scene commands for structural changes.
 
 ## Viewing the outline
 
@@ -966,7 +1074,7 @@ openscribe tui
 The current TUI has three areas:
 
 * binder tree on the left
-* chapter preview in the middle
+* chapter or scene editor and proofreading findings in the middle
 * metadata summary on the right
 
 What it does:
@@ -974,9 +1082,13 @@ What it does:
 * reads the part and chapter structure from `manuscript/`
 * reads board canvas, corkboard cards, source links, character, research, notes, story idea, and element content into the same browser
 * includes a search box for filtering chapters, sources, board notes, and library content
-* lets you select a chapter from the binder tree
+* lets you select and edit a chapter or scene from the binder tree
 * lets you select a part node to inspect part metadata
-* shows the chapter body in the preview pane
+* hides internal scene ID comments while editing chapter text
+* saves canonical chapter or scene text only when you press `Ctrl+S`, with a checkpoint and stale-file check
+* preserves drafts across navigation and writes local recovery drafts every second
+* runs configured local LanguageTool proofreading with `Ctrl+G`
+* displays action and proofreading failures beside the active text
 * shows chapter status, label, synopsis, point of view, notes, word target, and linked sources in the right panel
 * shows part metadata, story idea metadata, element metadata, source note metadata, progress goals, and compile defaults in the right panel
 * lets you move board notes with keyboard controls and save new positions immediately
@@ -993,6 +1105,8 @@ Current keys:
 
 * `q` quits the app
 * `Ctrl+F` focuses the search box
+* `Ctrl+S` saves the selected chapter or scene text
+* `Ctrl+G` runs the configured local LanguageTool check
 * `Ctrl+Arrow keys` move the selected board note
 * `v` toggles the selected board note visibility
 * `b` applies board auto layout
@@ -1004,8 +1118,7 @@ Current keys:
 * `p` promotes the selected board note into a chapter
 * `c` runs compile with project defaults
 
-This is still a lightweight interface.
-It is strongest for navigation, review, and board positioning.
+This is still a lightweight authoring interface. It does not provide rich text formatting or drag based manuscript reordering. Proofreading replacements require a preview and a separate apply action; they are never automatic.
 
 ## Command reference
 
@@ -1060,6 +1173,27 @@ Adds a scene heading inside a chapter file.
 ```powershell
 openscribe new scene "Cold Open" --chapter "The Beginning"
 openscribe new scene "County Road" --chapter "Arrival" --body "Eli sees the porch men again."
+```
+
+### `openscribe scene move`, `split`, and `merge`
+
+Preview structural scene changes by default. Add `--apply` only after reviewing the unified diff. Applied changes create an automatic checkpoint.
+
+```powershell
+openscribe scene move "Cold Open" --chapter "The Beginning" --position 2
+openscribe scene move "Cold Open" --chapter "The Beginning" --to-chapter "The Turn" --position 1 --apply
+openscribe scene split "Cold Open" --chapter "The Beginning" --at-text "The phone rang" --new-title "The Call" --apply
+openscribe scene merge "Cold Open" --with "The Call" --chapter "The Beginning" --apply
+```
+
+### `openscribe migrate status` and `apply`
+
+Project loading does not migrate files automatically. Inspect and explicitly apply the ordered, backed-up migration path. Current-format projects with missing IDs or legacy board links can use the separate repair command.
+
+```powershell
+openscribe migrate status
+openscribe migrate apply
+openscribe migrate repair
 ```
 
 ### `openscribe new section`
@@ -1279,11 +1413,17 @@ openscribe snapshot diff before-rewrite
 
 ### `openscribe snapshot restore`
 
-Restores files from a saved snapshot.
+Previews an exact restore from a saved snapshot. No files change without
+`--apply`.
 
 ```powershell
 openscribe snapshot restore before-rewrite
+openscribe snapshot restore before-rewrite --apply
 ```
+
+An applied restore first creates an automatic checkpoint. It then restores the
+saved managed files and removes managed files that were created after the
+snapshot.
 
 ### `openscribe workflow screenplay-scene`
 
@@ -1561,6 +1701,23 @@ Opens the Textual interface.
 openscribe tui
 ```
 
+### `openscribe proofread chapter`
+
+Runs a read-only LanguageTool check. Hosted endpoints require `--allow-data-transfer`.
+
+```powershell
+openscribe proofread chapter "The Beginning"
+```
+
+### `openscribe ai`
+
+Runs read-only manuscript review and suggestion tasks. Use `openscribe ai --help` for the full command list. Hosted providers require `--allow-data-transfer` on every invocation.
+
+```powershell
+openscribe ai analyze "The Beginning" --focus pacing --allow-data-transfer
+openscribe ai query "Which clues remain unresolved?" --allow-data-transfer
+```
+
 ## Example session
 
 This is a full example from an empty folder.
@@ -1586,6 +1743,7 @@ openscribe board promote note-001 --part Opening --chapter "Ledger clue"
 openscribe idea add "The Flood Ledger" --premise "A county clerk finds a ledger that predicts deaths."
 openscribe element add character "Eli Harper" --notes "Main point of view"
 openscribe snapshot save "after-outline"
+openscribe proofread chapter "Arrival"
 openscribe compile
 openscribe compile --format pdf
 openscribe compile --format epub
@@ -1633,26 +1791,14 @@ A simple pattern:
 You can also record snapshots from inside `openscribe`:
 
 * `openscribe snapshot save "label"` creates a checkpoint archive
-* `openscribe snapshot save "label" --mode git` records the current git commit and dirty state
+* `openscribe snapshot save "label" --mode git` records the current git commit and dirty state and includes a restorable archive
+* `openscribe snapshot restore "label"` previews an exact restore
+* `openscribe snapshot restore "label" --apply` creates a backup and applies it
 
 ## Current limitations
 
-Right now:
-
-* the TUI can now handle several chapter metadata quick actions, but full freeform metadata editing is still CLI first
-* word counts only reflect the chapter body text
-* part storage still uses numbered folder names on disk
-* chapter ordering is based on numbered filenames and folders
-* scene support is heading based and does not yet have separate scene metadata
-* compile currently exports to Word, PDF, and EPUB only
-* compile profiles are present, but formatting depth is still intentionally simple
-* bibliography output and citation insertion exist, but venue specific styles are still shallow
-* element appears in tracking is derived from text matches and aliases
+See [TECH-DEBT.md](./TECH-DEBT.md) for current compromises and [assessment.md](./assessment.md) for their effect on repository health.
 
 ## Roadmap
 
-Planned next:
-
-* venue specific bibliography styles
-* deeper conference revision workflows and schedule transforms
-* stronger scene metadata and scene reordering
+See [future-upgrades.md](./future-upgrades.md). The current milestone adds shared editing protection, a desktop writing workflow, actionable local proofreading, and an experimental Word round-trip implementation. Real Word host validation, independent review, and broader manual accessibility testing remain release gates.

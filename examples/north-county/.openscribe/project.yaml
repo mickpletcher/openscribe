@@ -1,6 +1,6 @@
 title: North County
 author: Mick
-version: 1
+version: 3
 template: fiction
 compile:
   default_format: docx
@@ -24,3 +24,8 @@ ai:
   enabled: false
   provider: openai
   model: gpt-4.1
+proofreading:
+  enabled: false
+  endpoint: http://127.0.0.1:8081/v2/check
+  language: en-US
+  timeout_seconds: 30

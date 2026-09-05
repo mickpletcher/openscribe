@@ -7,15 +7,22 @@ The base writing workflow does not need AI.
 
 ## What AI can do now
 
-The current CLI supports:
+The current CLI supports read-only summary, rewrite, outline, pacing, continuity, point-of-view, prose, metadata, brainstorming, and project-query tasks.
 
-* `openscribe ai summarize "Chapter Title"`
+```powershell
+openscribe ai summarize "Chapter Title"
+openscribe ai rewrite "Chapter Title"
+openscribe ai outline "Chapter Title"
+openscribe ai analyze "Chapter Title" --focus pacing
+openscribe ai analyze "Chapter Title" --focus continuity
+openscribe ai analyze "Chapter Title" --focus pov
+openscribe ai analyze "Chapter Title" --focus prose
+openscribe ai metadata "Chapter Title"
+openscribe ai brainstorm "Chapter Title" --question "What could fail next?"
+openscribe ai query "Which clues remain unresolved?"
+```
 
-This reads the chapter body and returns:
-
-* a short overview paragraph
-* five concise bullet points
-* one revision risk to review next
+The commands print model output. They do not change manuscript or metadata files.
 
 ## Base install vs AI install
 
@@ -54,6 +61,20 @@ To enable AI:
 ## Cloud providers
 
 These options use hosted APIs and usually require an account plus an API key.
+The complete selected chapter body, or the complete assembled manuscript for `ai query`, is sent to the configured provider. Review
+that provider's current data handling and retention terms before use.
+
+Hosted requests require explicit approval on every command:
+
+```powershell
+openscribe ai summarize "The Beginning" --allow-data-transfer
+openscribe ai analyze "The Beginning" --focus continuity --allow-data-transfer
+openscribe ai query "Which clues remain unresolved?" --allow-data-transfer
+```
+
+Without `--allow-data-transfer`, the command stops before loading a provider
+SDK or making a network request. The CLI reports the hosted provider, model,
+and character count before an approved request.
 
 ### OpenAI
 
@@ -187,7 +208,7 @@ $env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="http://localhost:1234/v1"
 An internal server on your network might look like:
 
 ```powershell
-$env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="http://ai-gateway.contoso.local:8000/v1"
+$env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="https://ai-gateway.example.test/v1"
 $env:OPENAI_COMPATIBLE_LOCAL_API_KEY="your_internal_token"
 ```
 
@@ -196,8 +217,10 @@ $env:OPENAI_COMPATIBLE_LOCAL_API_KEY="your_internal_token"
 Once the project config and environment variables are set:
 
 ```powershell
-openscribe ai summarize "The Beginning"
+openscribe ai summarize "The Beginning" --allow-data-transfer
 ```
+
+Omit `--allow-data-transfer` only when the configured endpoint is loopback, such as `http://127.0.0.1:1234/v1`. A private-network or hosted destination still leaves this machine and requires HTTPS plus explicit transfer consent, even with the `openai-compatible-local` provider label.
 
 ## Troubleshooting
 

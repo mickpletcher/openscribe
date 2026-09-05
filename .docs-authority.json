@@ -1,0 +1,82 @@
+{
+  "standardVersion": "2.2",
+  "tier": "1",
+  "lifecycleMode": "Adoption",
+  "sourcePaths": [
+    "src",
+    "tests",
+    "pyproject.toml",
+    ".github/workflows"
+  ],
+  "maxDriftDays": 30,
+  "responsibilities": {
+    "Project overview": {
+      "authority": "README.md",
+      "class": "living"
+    },
+    "Current assessment": {
+      "authority": "assessment.md",
+      "class": "living"
+    },
+    "Architecture": {
+      "authority": "Not required at this tier",
+      "class": "living"
+    },
+    "Change history": {
+      "authority": "changelog.md",
+      "class": "living"
+    },
+    "Defect tracking": {
+      "authority": "Not required at this tier",
+      "class": "living"
+    },
+    "Technical debt": {
+      "authority": "TECH-DEBT.md",
+      "class": "living"
+    },
+    "Deferred improvements": {
+      "authority": "future-upgrades.md",
+      "class": "living"
+    },
+    "Validation": {
+      "authority": "VALIDATION.md",
+      "class": "living"
+    },
+    "Operations": {
+      "authority": "Not required at this tier",
+      "class": "living"
+    },
+    "Requirement traceability": {
+      "authority": "Not required at this tier",
+      "class": "living"
+    },
+    "Agreed scope": {
+      "authority": "Not required at this tier",
+      "class": "contractual"
+    },
+    "Agreed design": {
+      "authority": "Not required at this tier",
+      "class": "contractual"
+    },
+    "Scope amendments": {
+      "authority": "Not required at this tier",
+      "class": "contractual"
+    },
+    "Decision history": {
+      "authority": "docs/decisions/README.md",
+      "class": "derived"
+    },
+    "Resolved history": {
+      "authority": "completed-upgrades.md",
+      "class": "derived"
+    },
+    "Development rules": {
+      "authority": "PROJECT-STANDARD.md",
+      "class": "governance"
+    },
+    "Agent rules": {
+      "authority": "AGENTS.md",
+      "class": "governance"
+    }
+  }
+}
