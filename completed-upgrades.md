@@ -129,3 +129,8 @@ Tracked record of roadmap items that shipped.
 * implemented experimental tagged DOCX export, local baselines, three-way import review, tracked-change refusal, checkpointed apply, index refresh, a loopback bridge, and an Office task-pane prototype
 * retained real Word, native accessibility, and independent-review gates under VL-004 and VL-006; FU-004 remains open
 * resolved TD-004's missing scan configuration with dependency audit, Bandit, and reviewed-baseline secret scanning in CI; new hosted runs remain unverified
+
+### Main-branch integration evidence
+
+* passed all nine jobs in hosted CI run 33974973049 across Windows, Ubuntu, and macOS before squash merging PR 1
+* resolved the hosted-CI portion of VL-006; independent Class 4 review remains a release gate

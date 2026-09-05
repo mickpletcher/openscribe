@@ -37,4 +37,4 @@ Before the first public release or claiming broad terminal and accessibility sup
 
 **Estimated effort:** Medium
 
-TD-004's missing scan configuration is resolved by the security job in `.github/workflows/ci.yml`. This is a configuration claim, not evidence of a hosted run. See the appended resolution in `completed-upgrades.md` and the hosted-validation gate in `VALIDATION.md`.
+TD-004's missing scan configuration is resolved by the security job in `.github/workflows/ci.yml`. The job passed in hosted CI run 33974973049 on 2026-09-05. See the appended resolution in `completed-upgrades.md`.

@@ -126,7 +126,7 @@ openscribe word bridge --port 8765 --certificate C:\Certificates\localhost.crt -
 
 Sideload the generated manifest in Windows desktop Word using your approved Office add-in process. Enter the session token printed by the running bridge into the pane. Preview and Apply are separate actions. The pane communicates only with the selected local project; Microsoft supplies the Office JavaScript runtime. The bridge does not install or trust certificates for you. Without a certificate, it supports local HTTP diagnostics but does not generate a task-pane manifest.
 
-Real Word UI and certificate/sideload validation remain unverified. See [VL-004](VALIDATION.md#vl-004-real-word-and-desktop-ui-validation-is-incomplete) and [ADR-006](docs/decisions/ADR-006-experimental-word-round-trip-availability.md).
+Real Word UI and certificate/sideload validation remain unverified. See [VL-004](VALIDATION.md#vl-004-native-desktop-and-real-word-interoperability-are-unverified) and [ADR-006](docs/decisions/ADR-006-experimental-word-round-trip-availability.md).
 
 ## Requirements
 

@@ -1,5 +1,34 @@
 # changelog
 
+## 2026-09-05
+
+### Safe daily writing and recovery
+
+* preserved unsaved drafts across navigation and added explicit Save, Discard, and Cancel decisions
+* shared stale-baseline conflict checks, automatic checkpoints, backups, and journaled saves across the TUI, desktop, and Word import
+* completed rollback journals with validated terminal states, nested empty-directory preservation, and cross-process project locks
+* moved identity repair and migration out of ordinary reads and refused ambiguous scene restructuring instead of guessing identity
+* made hosted AI consent depend on the actual destination endpoint
+
+### Authoring surfaces and proofreading
+
+* added an optional PySide6 desktop binder, editor, search, reference, export, checkpoint, and restore workflow
+* added background local LanguageTool checks with finding navigation, ignore, replacement preview, separate apply, stale-text refusal, and undo
+* added preview-first scene move, split, and merge commands plus read-only AI review, rewrite, outline, metadata, brainstorming, and project-query commands
+
+### Experimental Word round trips
+
+* added tagged DOCX export, local baselines, three-way import review, tracked-change refusal, checkpointed apply, and index refresh
+* added an authenticated project-bound loopback bridge and packaged Office task-pane prototype
+* retained real Word save and reopen, certificate and sideload, native accessibility, physical power-loss, and independent-review release gates
+
+### Cross-platform validation and integration
+
+* expanded CI to Windows, Ubuntu, and macOS with Python 3.11 through 3.13 coverage, package smoke, dependency audit, Bandit, secret scanning, documentation checks, and Node task-pane tests
+* corrected link detection for platform path aliases while continuing to reject actual symlinks and junctions
+* made editor launching and CLI path tests portable across supported operating systems
+* passed all nine jobs in hosted CI run 33974973049 and squash merged PR 1
+
 ## 2026-09-04
 
 ### Living documentation adoption

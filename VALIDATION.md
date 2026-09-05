@@ -213,15 +213,15 @@ Risk: filesystem behavior or an uncooperative external writer can exceed the rec
 
 Follow-up: perform disposable VM power-cut and filesystem recovery drills before making a power-loss atomicity claim. Keep independent manuscript backups.
 
-### VL-006: Independent Class 4 review and new hosted CI runs remain release gates
+### VL-006: Independent Class 4 review remains a release gate
 
-Requirement: independent review of identity, transaction, and local-bridge trust boundaries; hosted validation of the changed CI matrix.
+Requirement: independent review of identity, transaction, and local-bridge trust boundaries.
 
-Reason: no independent reviewer is available in this task. The workflow is configured locally; these changes have not been published or run on hosted Windows, Linux, or macOS runners.
+Reason: no independent reviewer was available for the Class 4 implementation. Hosted CI completed successfully on Windows, Ubuntu, and macOS in run 33974973049 on 2026-09-05, so hosted validation is no longer part of this waiver.
 
-Risk: local tests and the implementing agent's own review can miss platform and architecture defects.
+Risk: the implementing agent's own review can miss identity, recovery, and local-bridge architecture defects.
 
-Follow-up: obtain a separate reviewer and run the changed workflow on all configured runners before release. This waiver does not imply approval to publish changes.
+Follow-up: obtain a separate reviewer before release.
 
 ### VL-001: Hosted AI providers use mocked contracts
 

@@ -1,79 +1,81 @@
 # Repository Assessment
 
-**Last full assessment:** 2026-09-04
-**Assessed at commit:** `367294c` plus the current uncommitted working tree
-**Basis:** Repository inspection; Python 3.11 through 3.13 pytest runs; Python 3.11 coverage; Ruff; source and wheel build; installed-wheel CLI smoke; sample-index integrity check; dependency audit; medium-and-higher security scan; living-document compliance check
+**Last full assessment:** 2026-09-05
+**Assessed source at commit:** `d7800a2`
+**Basis:** Repository inspection; local Python 3.11 through 3.13 pytest runs; hosted Windows, Ubuntu, and macOS CI; coverage; Ruff; Node task-pane tests; source and wheel build; installed-wheel CLI smoke; sample-index integrity; dependency audit; Bandit; secret scan; living-document compliance
 **Assessed by:** Codex
 
 ## Executive Summary
 
-`openscribe` is an active Tier 1 pre-release alpha with a coherent file-first design and a broad working CLI. The current working tree addresses the identified metadata, relationship, restore, schema, index, TUI, CI, hosted-AI disclosure, and LanguageTool transfer risks. Local tests, lint, packaging, CLI smoke, dependency audit, medium-and-higher static security analysis, and documentation compliance pass. Hosted CI, live external-provider contracts, automated security scanning, manual TUI review, and a restore drill against a copy of a real project remain unverified or waived.
+`openscribe` is an active Tier 1 pre-release alpha with a local-first Markdown and YAML data model. The six reported data-integrity defects are fixed. Authoring now uses recoverable drafts, external-edit conflict checks, explicit identity migration and repair, terminal restore states, cross-process locking, and destination-based AI consent. The project also has an optional desktop editor, actionable LanguageTool review, and an experimental identity-preserving Word round trip.
+
+The full local and hosted validation suites pass. The project is substantially safer for daily writing, but it should not be the only copy of a manuscript. Physical power-loss behavior, native accessibility, real Word save and reopen behavior, licensed hosted LanguageTool compatibility, and independent Class 4 review remain unverified.
 
 ## Agent Handoff
 
-- The main branch contains uncommitted product-integrity and documentation-standard changes. Preserve them and stage only intended paths.
-- Chapter identity is `chapter_id`, not filename, title, slug, part, or order. Metadata writes must preserve unknown fields. Evidence: `src/openscribe/project.py:128-151`, `src/openscribe/project.py:961-1005`.
-- Board chapter relationships store chapter IDs. Legacy references migrate during board load. Evidence: `src/openscribe/board.py:34-41`, `src/openscribe/board.py:240-260`.
-- Snapshot restore previews by default. Applied restore creates a checkpoint, stages replacement, removes post-snapshot managed files, and rolls back process failures. It is not power-loss atomic. Evidence: `src/openscribe/snapshots.py:124-151`, `src/openscribe/snapshots.py:339-404`, `TECH-DEBT.md#td-002-snapshot-restore-is-not-power-loss-atomic`.
-- Index freshness depends on source hashes. Do not restore modification-time checks. Evidence: `src/openscribe/index.py:102-140`.
-- Hosted AI commands require explicit data-transfer approval. Do not bypass that boundary. Evidence: `src/openscribe/ai.py:30-66`, `src/openscribe/cli.py:1195-1231`.
-- LanguageTool proofreading is read only and local by default. Nonlocal endpoints require HTTPS and explicit data-transfer approval, and the free public endpoint is rejected for automated use. Do not remove those controls or add silent manuscript replacements. Evidence: `src/openscribe/proofreading.py:62-169`, `src/openscribe/cli.py:1208-1264`.
-- Resolve documentation responsibilities through `PROJECT-STANDARD.md` before creating or editing project documentation.
+- Ordinary reads must not rewrite project data. Persisted-format changes go through explicit, checkpointed migrations or repair commands. Evidence: `src/openscribe/migrations.py`, `src/openscribe/project.py`.
+- Chapter and scene relationships use immutable IDs. Ambiguous scene restructuring is refused instead of guessing identity from titles or positions. Evidence: `src/openscribe/project.py`, `src/openscribe/word.py`.
+- TUI, desktop, and Word import saves share baseline conflict detection, backups, and journaled replacement behavior. Recoverable drafts protect unsaved navigation and quit paths. Evidence: `src/openscribe/editing.py`, `src/openscribe/tui.py`, `src/openscribe/desktop.py`.
+- Restore journals have validated terminal states and project-scoped locks. Process-interruption tests cover both replacement boundaries. Do not claim physical power-loss atomicity. Evidence: `src/openscribe/snapshots.py`, `src/openscribe/locking.py`, `VALIDATION.md#vl-005-physical-power-loss-durability-is-not-proven`.
+- Hosted AI and LanguageTool requests require disclosure and explicit transfer approval based on the actual endpoint. Local loopback use remains the default. Evidence: `src/openscribe/ai.py`, `src/openscribe/network.py`, `src/openscribe/proofreading.py`.
+- Word import, the loopback bridge, and the task pane are experimental. Keep real Word host validation and independent review as release gates. Evidence: `docs/decisions/ADR-006-experimental-word-round-trip-availability.md`, `VALIDATION.md#vl-004-native-desktop-and-real-word-interoperability-are-unverified`.
+- Resolve documentation responsibilities through `PROJECT-STANDARD.md`. Update `assessment.md` only on `main`; use and consolidate `changelog.d/` fragments on feature branches.
 
 ## Living Documentation Compliance
 
-Generated by `scripts/docs-check.ps1` on 2026-09-04.
+Generated by `scripts/docs-check.ps1` on 2026-09-05.
 
 | Responsibility | Authority | Last updated | Status |
 |---|---|---|---|
-| Project overview | README.md | uncommitted | Current |
-| Current assessment | assessment.md | uncommitted | Current |
+| Project overview | README.md | 2026-09-05 | Current |
+| Current assessment | assessment.md | 2026-09-05 | Current |
 | Architecture | Not required at this tier |  | Not required |
-| Change history | changelog.md | uncommitted | Current |
+| Change history | changelog.md | 2026-09-05 | Current |
 | Defect tracking | Not required at this tier |  | Not required |
-| Technical debt | TECH-DEBT.md | uncommitted | Current |
-| Deferred improvements | future-upgrades.md | uncommitted | Current |
-| Validation | VALIDATION.md | uncommitted | Current |
+| Technical debt | TECH-DEBT.md | 2026-09-05 | Current |
+| Deferred improvements | future-upgrades.md | 2026-09-05 | Current |
+| Validation | VALIDATION.md | 2026-09-05 | Current |
 | Operations | Not required at this tier |  | Not required |
 | Requirement traceability | Not required at this tier |  | Not required |
 | Agreed scope | Not required at this tier |  | Not required |
 | Agreed design | Not required at this tier |  | Not required |
 | Scope amendments | Not required at this tier |  | Not required |
-| Decision history | Not required at this tier |  | Not required |
-| Resolved history | completed-upgrades.md | uncommitted | Current |
-| Development rules | PROJECT-STANDARD.md | uncommitted | Current |
-| Agent rules | AGENTS.md | uncommitted | Current |
+| Decision history | docs/decisions/README.md | 2026-09-05 | Current |
+| Resolved history | completed-upgrades.md | 2026-09-05 | Current |
+| Development rules | PROJECT-STANDARD.md | 2026-09-05 | Current |
+| Agent rules | AGENTS.md | 2026-09-05 | Current |
 
 ## Current Health
 
-- Build: PASS on 2026-09-04. `uv run --isolated --python 3.13 --with build python -m build` exited `0` and produced one source distribution and one wheel.
-- Tests: PASS on 2026-09-04. Python 3.11 collected 74 tests: 74 passed, 0 failed, 0 skipped. Coverage was 85.43 percent. Python 3.12 and 3.13 each passed the same 74 tests with 0 failures and 0 skipped.
-- Lint: PASS on 2026-09-04. `uvx ruff check src tests` exited `0` with no findings.
-- CLI smoke: PASS on 2026-09-04. The installed wheel returned top-level help with exit `0`.
-- Documentation: PASS on 2026-09-04. `pwsh -NoProfile -File scripts/docs-check.ps1 -FailOnGap -Markdown` exited `0` with no missing, invalid, or review rows.
-- Hosted CI: Not assessed. The workflow exists in the uncommitted working tree and has not run on GitHub. Evidence: `.github/workflows/ci.yml:1-56`.
-- Security: PARTIAL on 2026-09-04. `uvx bandit -r src -q -ll` exited `0` with no medium or high findings. A full-severity run found 12 existing low-severity process-launch warnings. Automated security scanning remains unconfigured. See TD-004.
-- Dependencies: PASS on 2026-09-04. `pip-audit` exited `0` with no known third-party dependency vulnerabilities; the local `openscribe` package was skipped because it is not published on PyPI. Automated dependency scanning remains unconfigured. See TD-004.
-- Standing waivers: 4. See VL-001 through VL-003 in `VALIDATION.md`, plus TD-004 in `TECH-DEBT.md`.
+- Hosted CI: PASS on 2026-09-05. [Run 33974973049](https://github.com/mickpletcher/openscribe/actions/runs/33974973049) completed all nine documentation, lint, security, package, Windows, Ubuntu, and macOS jobs successfully.
+- Tests: PASS on 2026-09-05. Isolated local Python 3.11 and 3.12 runs each reported 141 passed, 0 failed, and 1 skipped. Python 3.13 reported 141 passed, 0 failed, 1 skipped, and 86.73 percent coverage. The local skip records that the current Windows account cannot create a directory symlink. Hosted Windows Python 3.11 through 3.13, Ubuntu Python 3.13, and macOS Python 3.13 each reported 142 passed, 0 failed, and 0 skipped, with 86.73 to 86.77 percent coverage.
+- Word task pane: PASS on 2026-09-05. `node --test tests/word_addin.test.cjs` exited `0` with 8 passed, 0 failed, and 0 skipped.
+- Lint: PASS on 2026-09-05. `uv run --python 3.13 --extra dev python -m ruff check src tests scripts/check-secrets.py` exited `0` with no findings.
+- Build and CLI smoke: PASS on 2026-09-05. The isolated package build exited `0` and produced one source distribution and one wheel. The installed wheel passed five CLI smoke checks.
+- Security and dependencies: PASS on 2026-09-05. The dependency audit found no known third-party vulnerabilities; the local unpublished package was skipped. Bandit found no medium-or-higher issues. The reviewed-baseline secret scan found 0 unreviewed findings.
+- Documentation: PASS on 2026-09-05. `pwsh -NoProfile -File scripts/docs-check.ps1 -FailOnGap -Markdown` exited `0` with no missing, invalid, or review rows.
+- Native application validation: Not assessed beyond headless Qt and synthetic OOXML tests. See VL-004 through VL-006 in `VALIDATION.md`.
 
 ## Standing Waivers
 
 - Hosted AI provider compatibility is covered by mocked contracts only. See `VALIDATION.md#vl-001-hosted-ai-providers-use-mocked-contracts`.
 - TUI interaction validation is headless and does not prove visual rendering or accessibility. See `VALIDATION.md#vl-002-tui-validation-is-headless`.
-- LanguageTool API compatibility is covered by mocked contracts only. No local server was available for the synthetic contract smoke test. See `VALIDATION.md#vl-003-languagetool-remote-compatibility-uses-a-mocked-contract`.
-- Dedicated dependency, secret, and security analysis is not configured. See `TECH-DEBT.md#td-004-automated-security-and-dependency-scanning-is-absent`.
+- Licensed hosted LanguageTool compatibility is covered by mocked contracts only. See `VALIDATION.md#vl-003-licensed-hosted-languagetool-compatibility-is-unverified`.
+- Native desktop accessibility and real Word interoperability are unverified. See `VALIDATION.md#vl-004-native-desktop-and-real-word-interoperability-are-unverified`.
+- Physical power-loss durability is not proven. See `VALIDATION.md#vl-005-physical-power-loss-durability-is-not-proven`.
+- Independent Class 4 review remains a release gate. See `VALIDATION.md#vl-006-independent-class-4-review-remains-a-release-gate`.
 
 ## Current Capabilities
 
-The package exposes one `openscribe` CLI entry point and a Textual TUI over a Markdown and YAML project store. It supports project and manuscript structure, planning data, search and reporting, snapshots, import, DOCX/PDF/EPUB export, research workflows, optional provider-backed summaries, and read-only chapter proofreading through a LanguageTool-compatible HTTP endpoint. The authoritative user-facing capability and command inventory is in `README.md`. Evidence: `pyproject.toml:38-39`, `src/openscribe/cli.py`, `src/openscribe/project.py`, `src/openscribe/compile.py`, `src/openscribe/proofreading.py`.
+The package provides a PySide6 desktop authoring application, a Textual TUI, and a CLI over the same Markdown and YAML project store. It supports project and manuscript structure, stable chapter and scene identity, planning boards, research and notes, search and reporting, exact snapshot restore, DOCX, PDF, and EPUB export, local-first LanguageTool review, optional disclosed AI review, and experimental tagged Word export and import through a project-bound local bridge. The authoritative command and usage inventory is in `README.md`.
 
 ## Known Issues and Risks
 
-The largest remaining integrity risk is future persisted-format evolution without a general ordered migration framework. Restore is protected against ordinary process failures but still has a power-loss window across multiple managed paths. TUI and external-provider assurance remains narrower than the core CLI suite. The LanguageTool adapter has not been tested against a running server. The new CI workflow has no hosted execution evidence yet. See TD-001 through TD-004 and VL-001 through VL-003.
+Native desktop and TUI accessibility are not manually verified. Real Word can rewrite OOXML in ways synthetic fixtures do not reproduce, and task-pane sideloading and certificate handling have not completed a live round trip. Process termination recovery does not prove behavior during physical power loss, storage-cache loss, OneDrive conflicts, or edits from tools that ignore the project lock. Hosted provider contracts remain mocked. Keep independent backups and do not remove the experimental Word label.
 
 ## Technical Debt Summary
 
-Three debt entries are open: one High and two Medium. One additional Medium entry is Accepted and carries a standing waiver. See `TECH-DEBT.md`.
+One Medium technical-debt entry remains open: TD-003 for incomplete native TUI interaction and accessibility coverage. The remaining release limitations are recorded as VL-001 through VL-006 in `VALIDATION.md`.
 
 ## Recently Changed
 
@@ -81,12 +83,12 @@ See `changelog.md`.
 
 ## Current Priorities
 
-1. Resolve TD-001 before FU-001 introduces scene identity and new persisted metadata.
-2. Complete hosted CI, a disposable real-project restore drill, and the synthetic local LanguageTool contract smoke before starting FU-002.
-3. Implement FU-001 and FU-002 scene workflows.
-4. Continue with FU-003 AI review commands under the existing disclosure boundary.
-5. Define FU-004 Word round-trip identity and conflict behavior before building an add-in.
+1. Complete an independent review of identity, recovery, conflict, and local-bridge trust boundaries.
+2. Run the documented synthetic manuscript round trip in supported desktop Word, including save, reopen, conflict, tracked-change, certificate, and task-pane cases.
+3. Perform native desktop and TUI accessibility and terminal-size checks, plus disposable VM power-cut recovery drills.
+4. Run the synthetic LanguageTool contract smoke against a self-hosted server and retain mocked-only status for licensed hosted endpoints.
+5. Decide the persisted format for FU-001 richer scene metadata before expanding scene planning workflows.
 
 ## Repository Limitations
 
-This repository is a local installable tool, not a deployed service. There is no client agreement, acceptance authority, runtime operations responsibility, or contractual traceability requirement at Tier 1. Architecture, defect tracking, operations, decision history, and contractual authorities are intentionally not required at this tier. Evidence: `PROJECT-STANDARD.md`, `.docs-authority.json`.
+This repository is a local installable tool, not a deployed service. There is no client agreement, acceptance authority, runtime operations responsibility, or contractual traceability requirement at Tier 1. Architecture, defect tracking, operations, and contractual authorities are intentionally not required. Decision history is maintained under `docs/decisions/`. Evidence: `PROJECT-STANDARD.md`, `.docs-authority.json`.
