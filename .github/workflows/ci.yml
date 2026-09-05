@@ -48,7 +48,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check src tests
+      - run: python -m ruff check src tests scripts/check-secrets.py scripts/check_markdown_links.py
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
@@ -91,4 +91,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python scripts/check_markdown_links.py
       - run: pwsh -File scripts/docs-check.ps1 -FailOnGap

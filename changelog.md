@@ -2,6 +2,16 @@
 
 ## 2026-09-05
 
+### Novice documentation
+
+* replaced the oversized README with a concise product and documentation landing page
+* rewrote the Windows getting-started path with clone, installation, desktop, project, save, checkpoint, export, and expected-result steps
+* corrected project initialization examples to use explicit destination paths
+* added dedicated desktop, safety and recovery, troubleshooting, and complete CLI guides
+* changed the sample project guide to use read-only inspection before requiring a copied working project
+* added executable first-project, research-project, and read-only sample documentation tests
+* added local Markdown target and heading-anchor validation to CI
+
 ### Safe daily writing and recovery
 
 * preserved unsaved drafts across navigation and added explicit Save, Discard, and Cancel decisions

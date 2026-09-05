@@ -8,9 +8,10 @@ This file defines how to prove changes to `openscribe`. It is a procedure, not a
 
 Use for Class 2 internal changes and as the minimum for Class 3 work:
 
-1. Ruff against source and tests.
+1. Ruff against source, tests, and Python validation scripts.
 2. The full pytest suite in the active supported Python environment.
 3. CLI help smoke test.
+4. Local Markdown target and heading-anchor validation.
 
 ### Integration
 
@@ -34,6 +35,7 @@ Use for dependency, packaging, architecture, security, release, or broad data-mo
 7. Living-document compliance check.
 8. Repository secret scan and Word task-pane contract tests.
 9. Mounted desktop interaction tests for desktop changes; real Word validation before claiming Word interoperability.
+10. Executable novice workflow and local documentation-link checks.
 
 ## Environment Requirements
 
@@ -59,7 +61,7 @@ python -m pip install -e ".[dev]"
 ### Ruff
 
 ```powershell
-python -m ruff check src tests
+python -m ruff check src tests scripts/check-secrets.py scripts/check_markdown_links.py
 ```
 
 Expected exit code: `0`.
@@ -157,6 +159,17 @@ Expected exit code: `0`.
 Expected output: one row for every mapped responsibility and no `MISSING`, `INVALID`, or `REVIEW` status.
 Typical runtime: under 10 seconds.
 
+### Novice documentation checks
+
+```powershell
+python scripts/check_markdown_links.py
+python -m pytest tests/test_documentation.py tests/test_getting_started.py -q
+```
+
+Expected exit code: `0` for each command.
+Expected output: every local Markdown target and heading anchor resolves, and every documented beginner workflow passes against a disposable project or copied sample.
+Typical runtime: under 30 seconds after dependencies are installed.
+
 ### Dependency audit
 
 ```powershell
@@ -251,7 +264,7 @@ Follow-up: test a licensed hosted endpoint only with explicit approval, isolated
 
 | Change type | Class | Unit | Integration | Security | Smoke |
 |---|---:|---|---|---|---|
-| Documentation only | 1 | No | No | No | Documentation check |
+| Documentation only | 1 | Beginner workflow tests | No | No | Link and documentation checks |
 | Internal refactor | 2 | Yes | As needed | No | CLI |
 | Test-only change | 2 | Changed tests | As needed | No | As needed |
 | Bug fix | 3 | Yes | Affected workflows | As needed | CLI and affected surface |

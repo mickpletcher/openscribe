@@ -1,107 +1,175 @@
-# North County example project
+# North County sample project
 
-This folder is a checked in sample `openscribe` project.
+North County is a complete synthetic OpenScribe project. It contains no private manuscript data.
 
-Use it when you want to see:
+Use it to inspect project structure and try commands without creating a project from scratch.
 
-* the folder layout
-* project config
-* chapter frontmatter
-* manuscript ordering
-* supporting notes outside the manuscript
+## Before using the sample
+
+Complete [Getting started](../../getting-started.md) and activate the OpenScribe Python environment.
+
+The checked-in sample is part of the source repository. Start with read-only commands. Copy it before trying commands that save, move, restore, import, or create files.
 
 ## What is included
 
-This example includes:
+- project configuration under `.openscribe`
+- one planning board
+- one element record
+- one manuscript part with two chapters and scene headings
+- a character note
+- a research note
+- revision notes
+- a story idea
+- compile defaults
 
-* `.openscribe/project.yaml`
-* one board data file under `.openscribe/boards/`
-* one element data file under `.openscribe/elements/`
-* one manuscript part
-* one `part.yaml` part metadata file
-* two chapter files
-* one character note
-* one research note
-* one revision note
-* one story idea note
+## Inspect the sample without changing it
 
-The sample project config also includes compile defaults you can edit to test template, profile, and export behavior.
-It also includes scene headings inside the sample chapters so scene level support has real data to inspect.
-You can also save user templates from this project and reuse them when you initialize another one.
-
-## How to inspect it
-
-From the repo root:
+From the OpenScribe source folder:
 
 ```powershell
 Set-Location .\examples\north-county
-py -3.11 -m openscribe outline
-py -3.11 -m openscribe report project
-py -3.11 -m openscribe index rebuild
-py -3.11 -m openscribe index search station
-py -3.11 -m openscribe find chapters --text station
-py -3.11 -m openscribe find scenes --text station
-py -3.11 -m openscribe outliner
-py -3.11 -m openscribe outliner --status draft
-py -3.11 -m openscribe move chapter "Town Hall" --position 1
-py -3.11 -m openscribe compile --profile submission
-py -3.11 -m openscribe workflow source-note "County Archive" --type archive --author "Stewart County" --year 1987
-py -3.11 -m openscribe workflow citation-pack --style Chicago
-py -3.11 -m openscribe workflow cite --chapter "Arrival" --scene "Bus Stop" --source "County Archive" --style Chicago
-py -3.11 -m openscribe workflow conference-schedule-import .\energyconf-schedule.csv --venue "EnergyConf"
-py -3.11 -m openscribe set compile-research --citation-style Chicago --include-bibliography --bibliography-title "Works Cited"
-py -3.11 -m openscribe set goals --draft-word-target 85000 --session-word-target 1200 --deadline 2026-09-01
-py -3.11 -m openscribe board note add "Sheriff rumor" --body "A deputy hints the sheriff knew about the ledger." --group plot
-py -3.11 -m openscribe board note list
-py -3.11 -m openscribe board chapter add note-001 "Arrival"
-py -3.11 -m openscribe board layout auto
-py -3.11 -m openscribe board view
-py -3.11 -m openscribe idea list
-py -3.11 -m openscribe show idea "The Flood Ledger"
-py -3.11 -m openscribe element add character "Eli Harper" --notes "Primary point of view"
-py -3.11 -m openscribe element appears-in Eli
-py -3.11 -m openscribe snapshot save "sample-checkpoint"
-py -3.11 -m openscribe snapshot diff sample-checkpoint
-py -3.11 -m openscribe snapshot restore sample-checkpoint
-py -3.11 -m openscribe snapshot restore sample-checkpoint --apply
-py -3.11 -m openscribe proofread chapter "Arrival"
-py -3.11 -m openscribe open chapter "Arrival"
-py -3.11 -m openscribe template save "north-county-custom"
-py -3.11 -m openscribe read
-py -3.11 -m openscribe status
-py -3.11 -m openscribe tui
+python -m openscribe outline
+python -m openscribe status
+python -m openscribe outliner
+python -m openscribe read
+python -m openscribe report project
+python -m openscribe find chapters --text station
+python -m openscribe find scenes --text station
 ```
 
-Inside the TUI you can now use the search box to filter chapters, sources, board notes, and library content.
-Select a chapter or scene to edit it. Press `Ctrl+S` to save and `Ctrl+G` to run the configured local LanguageTool check.
-You can inspect part metadata, open the board canvas section, review corkboard cards, browse source links, use keyboard board note movement with saved positions, and cycle selected chapter metadata from the keyboard.
+These commands do not change manuscript, settings, or planning data. OpenScribe may create an ignored `.openscribe\.write.lock` coordination file.
 
-The board commands store freeform planning notes under `.openscribe/boards/`.
+Expected highlights include:
 
-The element commands store element, alias, and relation data under `.openscribe/elements/`.
+- project title `North County`
+- part title `Opening`
+- chapters `Arrival` and `The Call`
+- a `Bus Stop` scene
+- matches for `station`
 
-The source note and citation workflows store nonfiction research support files under `research/sources/` and `research/`.
-Citation insertion can target the whole chapter or a named scene section.
-Conference schedule import can generate session overview and checklist files from a schedule export.
-
-The goal and deadline settings live in `.openscribe/project.yaml` and show up in `report project` and the TUI.
-
-The story idea commands store structured new book ideas under `notes/story-ideas/`.
-
-The snapshot commands store checkpoint and git based snapshot records under `.openscribe/snapshots/`.
-Restore previews by default. `--apply` creates an automatic backup, restores the exact managed state, and removes managed files that were not in the snapshot.
-
-The template commands store saved user templates under `.openscribe/templates/`.
-
-The proofreading command requires a running LanguageTool server and `proofreading.enabled: true` in `.openscribe/project.yaml`. It reports suggestions without editing the chapter.
-
-Scene restructuring previews a unified diff unless `--apply` is present:
+Return to the source folder when finished:
 
 ```powershell
-py -3.11 -m openscribe scene move "Bus Stop" --chapter "Arrival" --position 2
-py -3.11 -m openscribe scene split "Bus Stop" --chapter "Arrival" --at-text "Eli" --new-title "The Decision"
+Set-Location ..\..\
 ```
 
-The move commands renumber parts and chapters so manuscript order stays stable on disk.
+## Make a safe working copy
 
-You can also open the Markdown files directly in your editor and compare them with the command output.
+Run this from the OpenScribe source folder. Choose an unused destination path:
+
+```powershell
+$sampleCopy = Join-Path $env:USERPROFILE "Documents\OpenScribe\north-county-sample"
+New-Item -ItemType Directory -Force -Path (Split-Path $sampleCopy) | Out-Null
+Copy-Item -Recurse -LiteralPath .\examples\north-county -Destination $sampleCopy
+Set-Location $sampleCopy
+python -m openscribe status
+```
+
+If `north-county-sample` already exists, choose a different name. Do not overwrite a prior working copy that contains writing you want to keep.
+
+All remaining examples in this guide change the copied project.
+
+Rebuild and search the copied index:
+
+```powershell
+python -m openscribe index rebuild
+python -m openscribe index search station
+```
+
+## Open the copied project
+
+Desktop:
+
+```powershell
+python -m openscribe desktop --project .
+```
+
+Terminal interface:
+
+```powershell
+python -m openscribe tui
+```
+
+Select chapters and scenes in the binder. Use `Ctrl+S` to save. See the [desktop guide](../../docs/desktop-guide.md) for the full workflow.
+
+## Try a checkpoint and restore preview
+
+```powershell
+python -m openscribe snapshot save "sample-checkpoint"
+python -m openscribe snapshot list
+python -m openscribe snapshot diff "sample-checkpoint"
+python -m openscribe snapshot restore "sample-checkpoint"
+```
+
+The restore command is a preview because `--apply` is absent.
+
+## Try project changes
+
+Add a board note:
+
+```powershell
+python -m openscribe board note add "Sheriff rumor" --body "A deputy hints that the sheriff knew about the ledger." --group plot
+python -m openscribe board note list
+python -m openscribe board layout auto
+python -m openscribe board view
+```
+
+Add an element:
+
+```powershell
+python -m openscribe element add character "Nora Bell" --notes "County archivist"
+python -m openscribe element list
+python -m openscribe element appears-in "Eli Harper"
+```
+
+Add a source note and citation files:
+
+```powershell
+python -m openscribe workflow source-note "County Archive" --type archive --author "Example Author" --year 1987
+python -m openscribe workflow citation-pack --style Chicago
+```
+
+## Preview scene structure changes
+
+These commands show a diff without changing the project:
+
+```powershell
+python -m openscribe scene move "Bus Stop" --chapter "Arrival" --position 2
+python -m openscribe scene split "Bus Stop" --chapter "Arrival" --at-text "Eli" --new-title "The Decision"
+```
+
+Add `--apply` only in the copied project and only after reviewing the preview.
+
+## Export the copied manuscript
+
+```powershell
+python -m openscribe compile --format docx
+python -m openscribe compile --format pdf
+python -m openscribe compile --format epub
+Get-ChildItem -LiteralPath .\build
+```
+
+The exported files appear under `build`.
+
+## LanguageTool
+
+The sample configuration contains proofreading settings, but the feature requires a running LanguageTool-compatible server and `proofreading.enabled: true`.
+
+After configuring a local server:
+
+```powershell
+python -m openscribe proofread chapter "Arrival"
+```
+
+The CLI reports findings without changing the chapter. See [Troubleshooting](../../docs/troubleshooting.md#languagetool-does-not-connect).
+
+## Files worth opening
+
+- `.openscribe\project.yaml` shows project and compile settings.
+- `manuscript\part-01-opening\part.yaml` shows part metadata.
+- `manuscript\part-01-opening\ch-01-arrival.md` shows chapter frontmatter and scene identity.
+- `.openscribe\boards` shows planning-board storage.
+- `.openscribe\elements` shows element storage.
+- `characters`, `research`, and `notes` show supporting Markdown files.
+
+Do not copy or edit chapter IDs or scene identity comments by hand. See [Safety and recovery](../../docs/safety-and-recovery.md).
