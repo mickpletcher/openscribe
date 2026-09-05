@@ -195,6 +195,19 @@ def test_session_save_has_a_checkpoint(tmp_path):
     assert "Saved writing" in chapter.path.read_text(encoding="utf-8")
 
 
+def test_managed_symlink_is_refused_when_supported(tmp_path):
+    root = make_project(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked = root / "research" / "linked"
+    try:
+        linked.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("The test account cannot create a directory symlink.")
+    with pytest.raises(ValueError, match="symbolic links or junctions"):
+        snapshots.create_snapshot(root, "linked path refusal")
+
+
 @pytest.mark.parametrize("choice", ["save", "discard"])
 def test_tui_quit_save_and_discard_are_explicit(tmp_path, choice):
     root = make_project(tmp_path)

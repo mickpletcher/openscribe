@@ -334,7 +334,7 @@ def test_story_idea_commands(tmp_path: Path, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0
-    assert "notes\\story-ideas\\the-flood-ledger.md" in result.stdout
+    assert "notes/story-ideas/the-flood-ledger.md" in result.stdout.replace("\\", "/")
 
     result = runner.invoke(app, ["idea", "list"])
     assert result.exit_code == 0
@@ -374,7 +374,7 @@ def test_template_scene_index_and_snapshot_commands(tmp_path: Path, monkeypatch)
 
     result = runner.invoke(app, ["index", "rebuild"])
     assert result.exit_code == 0
-    assert ".openscribe\\index\\project-index.yaml" in result.stdout
+    assert ".openscribe/index/project-index.yaml" in result.stdout.replace("\\", "/")
 
     result = runner.invoke(app, ["index", "show"])
     assert result.exit_code == 0
@@ -383,7 +383,7 @@ def test_template_scene_index_and_snapshot_commands(tmp_path: Path, monkeypatch)
 
     result = runner.invoke(app, ["snapshot", "save", "before-rewrite"])
     assert result.exit_code == 0
-    assert ".openscribe\\snapshots\\" in result.stdout
+    assert ".openscribe/snapshots/" in result.stdout.replace("\\", "/")
 
     result = runner.invoke(app, ["snapshot", "list"])
     assert result.exit_code == 0
@@ -416,7 +416,7 @@ def test_custom_template_import_and_workflow_commands(tmp_path: Path, monkeypatc
 
     result = runner.invoke(app, ["template", "save", "screenplay-custom"])
     assert result.exit_code == 0
-    assert ".openscribe\\templates\\screenplay-custom.yaml" in result.stdout
+    assert ".openscribe/templates/screenplay-custom.yaml" in result.stdout.replace("\\", "/")
 
     source_folder = tmp_path / "existing-manuscript"
     (source_folder / "act-one").mkdir(parents=True)
@@ -575,12 +575,12 @@ def test_nonfiction_source_and_citation_workflows(tmp_path: Path, monkeypatch) -
         ],
     )
     assert result.exit_code == 0
-    assert "research\\sources\\river-ledger-study.md" in result.stdout
+    assert "research/sources/river-ledger-study.md" in result.stdout.replace("\\", "/")
 
     result = runner.invoke(app, ["workflow", "citation-pack", "--style", "Chicago"])
     assert result.exit_code == 0
     assert "Created citation tracking files:" in result.stdout
-    assert "research\\source-usage-map.md" in result.stdout
+    assert "research/source-usage-map.md" in result.stdout.replace("\\", "/")
 
     source_path = tmp_path / "research" / "sources" / "river-ledger-study.md"
     citation_log_path = tmp_path / "research" / "citation-log.md"
@@ -1118,7 +1118,7 @@ def test_research_compile_settings_add_bibliography(tmp_path: Path, monkeypatch)
 def test_open_helpers_use_editor_targets(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     opened: list[str] = []
-    monkeypatch.setattr("openscribe.project.os.startfile", lambda path: opened.append(path))
+    monkeypatch.setattr("openscribe.cli.open_in_editor", lambda path: opened.append(str(path)))
 
     assert runner.invoke(app, ["init", "North County"]).exit_code == 0
     assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0

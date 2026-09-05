@@ -6,6 +6,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -1688,7 +1690,14 @@ def resolve_editor_target(
 
 
 def open_in_editor(path: Path) -> None:
-    os.startfile(str(path))
+    if os.name == "nt":
+        os.startfile(str(path))
+        return
+    command = ["open" if sys.platform == "darwin" else "xdg-open", str(path)]
+    try:
+        subprocess.Popen(command)
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Could not find the platform editor launcher '{command[0]}'.") from exc
 
 
 def scene_report(root: Path, *, text: str | None = None) -> dict[str, Any]:

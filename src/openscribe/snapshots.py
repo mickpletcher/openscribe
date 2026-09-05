@@ -61,7 +61,7 @@ def recover_interrupted_restores(root: Path) -> None:
     if not transaction_parent.exists():
         return
     for transaction_root in sorted(transaction_parent.glob(".restore-transaction-*")):
-        _reject_link(transaction_root)
+        _reject_link(transaction_root, boundary=root)
         if not transaction_root.is_dir():
             continue
         journal_path = transaction_root / "journal.yaml"
@@ -247,7 +247,7 @@ def _write_checkpoint_archive(root: Path, archive_path: Path) -> None:
     with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
         for relative_path in MANAGED_PATHS:
             path = root / relative_path
-            _reject_link(path)
+            _reject_link(path, boundary=root)
             if not path.exists():
                 continue
             if path.is_file():
@@ -255,8 +255,7 @@ def _write_checkpoint_archive(root: Path, archive_path: Path) -> None:
                 continue
             archive.writestr(relative_path.rstrip("/") + "/", b"")
             for child in path.rglob("*"):
-                if child.is_symlink() or getattr(child, "is_junction", lambda: False)():
-                    raise ValueError("Snapshots cannot include symbolic links or junctions.")
+                _reject_link(child, boundary=root)
                 if child.is_dir():
                     archive.writestr(child.relative_to(root).as_posix() + "/", b"")
                 if child.is_file() and not child.is_symlink():
@@ -371,14 +370,14 @@ def _current_file_bytes(root: Path) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     for relative_path in MANAGED_PATHS:
         path = root / relative_path
-        _reject_link(path)
+        _reject_link(path, boundary=root)
         if not path.exists():
             continue
         if path.is_file():
             files[relative_path] = path.read_bytes()
             continue
         for child in path.rglob("*"):
-            _reject_link(child)
+            _reject_link(child, boundary=root)
             if child.is_file() and not child.is_symlink():
                 child_path = str(child.relative_to(root)).replace("\\", "/")
                 files[child_path] = child.read_bytes()
@@ -419,7 +418,7 @@ def _apply_exact_snapshot(
     for relative_path in paths:
         _validate_snapshot_relative_path(relative_path)
         target = root / relative_path
-        _reject_link(target)
+        _reject_link(target, boundary=root)
         staged = stage_root / relative_path
         operations.append(
             {
@@ -455,10 +454,10 @@ def _apply_exact_snapshot(
 
 def _rollback_restore_transaction(root: Path, transaction_root: Path, journal: dict[str, Any]) -> None:
     _validate_journal(journal)
-    _reject_link(transaction_root)
+    _reject_link(transaction_root, boundary=root)
     for operation in journal["operations"]:
         for parent in (root, transaction_root / "stage", transaction_root / "old"):
-            _reject_link(parent / operation["path"])
+            _reject_link(parent / operation["path"], boundary=root if parent == root else transaction_root)
     operations = journal.get("operations", [])
     if not isinstance(operations, list):
         raise RuntimeError(f"Restore transaction operations are invalid: {transaction_root / 'journal.yaml'}")
@@ -534,9 +533,26 @@ def _validate_journal(journal: Any) -> None:
             raise RuntimeError("Restore transaction existence fields must be booleans.")
 
 
-def _reject_link(path: Path) -> None:
-    if path.is_symlink() or path.resolve() != path.absolute():
-        raise ValueError("Managed project paths cannot be symbolic links or junctions.")
+def _reject_link(path: Path, *, boundary: Path) -> None:
+    path = path.absolute()
+    boundary = boundary.absolute()
+    try:
+        path.relative_to(boundary)
+    except ValueError as exc:
+        raise ValueError("Managed project paths must remain under the project root.") from exc
+    candidate = path
+    while candidate != boundary:
+        junction = getattr(candidate, "is_junction", lambda: False)()
+        try:
+            reparse_tag = getattr(candidate.lstat(), "st_reparse_tag", 0)
+        except FileNotFoundError:
+            reparse_tag = 0
+        if candidate.is_symlink() or junction or reparse_tag in {
+            getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003),
+            getattr(stat, "IO_REPARSE_TAG_SYMLINK", 0xA000000C),
+        }:
+            raise ValueError("Managed project paths cannot be symbolic links or junctions.")
+        candidate = candidate.parent
 
 
 def _managed_parent(relative_path: str) -> str:

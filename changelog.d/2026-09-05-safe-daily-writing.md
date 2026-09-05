@@ -9,6 +9,7 @@
 - Add background LanguageTool checks with explicit replacement previews, stale-text refusal, ignore, and undo.
 - Implement experimental Word export baselines, content controls, conflict preview, safe apply, authenticated local bridge, and packaged task-pane assets.
 - Extend CI with cross-platform smoke coverage, dependency/security/secret checks, and documentation checks.
+- Make link detection tolerate platform path aliases while still refusing actual symlinks and junctions; make CLI path tests and editor launching portable.
 - Record real Word UI, physical power-loss, and independent-review limitations. Do not describe these as passed release gates.
 
 ## Main-branch assessment correction required at integration
