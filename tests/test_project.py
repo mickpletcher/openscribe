@@ -170,7 +170,7 @@ def test_project_migration_rejects_newer_format(tmp_path: Path) -> None:
         plan_project_migration(root)
 
 
-def test_loading_an_old_project_runs_registered_migrations(tmp_path: Path) -> None:
+def test_loading_an_old_project_requires_explicit_migration(tmp_path: Path) -> None:
     root = init_project(tmp_path, "North County")
     create_part(root, "Opening")
     chapter_path = create_chapter(root, "Arrival", part="Opening")
@@ -187,9 +187,14 @@ def test_loading_an_old_project_runs_registered_migrations(tmp_path: Path) -> No
     config["version"] = 1
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 
-    loaded = load_project_config(root)
-
-    assert loaded["version"] == 3
+    before = chapter_path.read_bytes()
+    snapshots_before = list_snapshots(root)
+    with pytest.raises(MigrationError, match="explicitly apply"):
+        load_project_config(root)
+    assert chapter_path.read_bytes() == before
+    assert list_snapshots(root) == snapshots_before
+    migrate_project(root)
+    assert load_project_config(root)["version"] == 3
     chapter = list_chapters(root)[0]
     assert chapter.chapter_id.startswith("chapter-")
     assert chapter.scenes[0].scene_id.startswith("scene-")
@@ -212,12 +217,12 @@ def test_failed_project_migration_restores_exact_managed_state(tmp_path: Path, m
     }
 
     def fail_after_write(_root: Path) -> None:
-        chapter_path.write_text("corrupted migration output", encoding="utf-8")
+        (_root / chapter_path.relative_to(root)).write_text("corrupted migration output", encoding="utf-8")
         raise RuntimeError("injected migration failure")
 
     monkeypatch.setattr("openscribe.project.ensure_scene_ids", fail_after_write)
 
-    with pytest.raises(MigrationError, match="automatic backup was restored"):
+    with pytest.raises(MigrationError, match="automatic backup was created"):
         migrate_project(root)
 
     after = {
@@ -314,6 +319,12 @@ def test_board_chapter_links_migrate_to_stable_ids_and_survive_reorder(tmp_path:
     board["notes"][0]["chapter_links"] = [second_path.stem]
     board_path.write_text(yaml.safe_dump(board, sort_keys=False), encoding="utf-8")
 
+    from openscribe.migrations import repair_project_identities
+
+    before = board_path.read_bytes()
+    assert list_notes(root)[0].chapter_links == [second_path.stem]
+    assert board_path.read_bytes() == before
+    repair_project_identities(root)
     assert list_notes(root)[0].chapter_links == [chapter_id]
     reorder_chapter(root, "Departure", 1)
     reordered = next(chapter for chapter in list_chapters(root) if chapter.title == "Departure")

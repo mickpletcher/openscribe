@@ -32,6 +32,8 @@ Use for dependency, packaging, architecture, security, release, or broad data-mo
 5. Dependency vulnerability audit.
 6. Medium-and-higher Python security scan.
 7. Living-document compliance check.
+8. Repository secret scan and Word task-pane contract tests.
+9. Mounted desktop interaction tests for desktop changes; real Word validation before claiming Word interoperability.
 
 ## Environment Requirements
 
@@ -40,6 +42,9 @@ Use for dependency, packaging, architecture, security, release, or broad data-mo
 - Python 3.11, 3.12, and 3.13 for the supported-version matrix.
 - `uv` for isolated multi-version and wheel checks.
 - Project development dependencies from `.[dev]`.
+- Node.js 22 or later for task-pane contract tests.
+- Set `UV_LINK_MODE=copy` if the Windows filesystem cannot create uv cache hardlinks.
+- Set `QT_QPA_PLATFORM=offscreen` for headless Qt tests. Native desktop review is a separate gate.
 
 ## Setup
 
@@ -155,7 +160,7 @@ Typical runtime: under 10 seconds.
 ### Dependency audit
 
 ```powershell
-uv run --isolated --python 3.13 --extra dev --with pip-audit pip-audit
+uv run --isolated --python 3.13 --extra dev --extra ai --with pip-audit pip-audit
 ```
 
 Expected exit code: `0`.
@@ -172,7 +177,51 @@ Expected exit code: `0`.
 Expected output: no medium-or-higher findings.
 Typical runtime: under one minute.
 
+### Desktop and Word checks
+
+```powershell
+python -m pytest tests/test_desktop.py tests/test_safety.py tests/test_recovery_process.py tests/test_word.py tests/test_word_bridge.py -q
+node --test tests/word_addin.test.cjs
+python -m openscribe desktop --help
+python -m openscribe word --help
+uv run --isolated --python 3.13 --with detect-secrets python scripts/check-secrets.py
+```
+
+Expected exit code: `0` for each command. The secret scan compares exact path, detector, and value hash against reviewed false positives in `.secrets.baseline`. It does not verify credentials over the network. New findings fail the check; no file or detector is excluded wholesale.
+
+Use synthetic manuscripts for real Word validation. Export, open in Word, edit, save, close, reopen, preview, and apply. Verify byte-preserved unrelated Markdown, identity retention, conflict refusal, tracked-change refusal, rollback, and index freshness. Sideload the task-pane manifest using an approved Office process and a locally trusted certificate; test wrong origin/token, stale preview, document changes between preview and apply, and slice cleanup. Do not use an only copy of real writing.
+
 ## Known Validation Limitations
+
+### VL-004: Native desktop and real Word interoperability are unverified
+
+Requirement: native authoring, accessibility, real Word save/reopen, and task-pane sideload validation.
+
+Reason: automated Qt tests are headless. The live Word inspection could launch and read the start page, but keyboard input timed out and window activation failed during recovery. Computer-use safety rules stopped further native interaction. No document round trip or live task-pane session was completed.
+
+Risk: Word can rewrite package structures and the native host can expose rendering, focus, or certificate defects that synthetic fixtures do not cover. Word features remain experimental.
+
+Follow-up: complete the synthetic native validation procedure above on supported desktop Word before claiming interoperability or release readiness.
+
+### VL-005: Physical power-loss durability is not proven
+
+Requirement: recovery after abrupt physical power loss across supported filesystems.
+
+Reason: child-process termination tests exercise both replacement boundaries, not storage-controller caches, power loss, OneDrive synchronization, or external editors that ignore the project lock.
+
+Risk: filesystem behavior or an uncooperative external writer can exceed the recovery guarantees demonstrated by process tests.
+
+Follow-up: perform disposable VM power-cut and filesystem recovery drills before making a power-loss atomicity claim. Keep independent manuscript backups.
+
+### VL-006: Independent Class 4 review and new hosted CI runs remain release gates
+
+Requirement: independent review of identity, transaction, and local-bridge trust boundaries; hosted validation of the changed CI matrix.
+
+Reason: no independent reviewer is available in this task. The workflow is configured locally; these changes have not been published or run on hosted Windows, Linux, or macOS runners.
+
+Risk: local tests and the implementing agent's own review can miss platform and architecture defects.
+
+Follow-up: obtain a separate reviewer and run the changed workflow on all configured runners before release. This waiver does not imply approval to publish changes.
 
 ### VL-001: Hosted AI providers use mocked contracts
 

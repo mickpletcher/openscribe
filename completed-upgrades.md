@@ -110,3 +110,22 @@ Tracked record of roadmap items that shipped.
 * added richer TUI quick actions for chapter label, point of view, and word target updates
 * added conference schedule import for `csv`, `tsv`, `json`, and `yaml`
 * added automated session schedule and checklist file generation from imported conference data
+
+## 2026-09-05
+
+### Recovery, editing, and privacy corrections
+
+* added terminal rollback states, full journal prevalidation, empty-directory preservation, and cross-process project locks
+* added child-process termination coverage at both manuscript replacement boundaries; physical power-loss behavior remains unverified under VL-005
+* removed identity assignment and board migration from ordinary reads; explicit migration and repair stage changes behind a checkpoint
+* refused ambiguous scene identity changes in chapter editing and retained Markdown hard breaks during explicit identity repair
+* added shared stale-baseline checks, checkpointed editor saves, recoverable drafts, and Save, Discard, and Cancel navigation controls
+* made AI consent depend on the actual destination rather than the provider label
+
+### Authoring surfaces and experimental Word support
+
+* added an optional PySide6 authoring window with binder, draft editor, research views, scene movement, compile, checkpoint, and restore actions
+* completed FU-012 with background local LanguageTool checks, finding navigation, ignore, replacement preview, separate apply, stale-text refusal, and undo in the TUI and desktop
+* implemented experimental tagged DOCX export, local baselines, three-way import review, tracked-change refusal, checkpointed apply, index refresh, a loopback bridge, and an Office task-pane prototype
+* retained real Word, native accessibility, and independent-review gates under VL-004 and VL-006; FU-004 remains open
+* resolved TD-004's missing scan configuration with dependency audit, Bandit, and reviewed-baseline secret scanning in CI; new hosted runs remain unverified

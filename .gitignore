@@ -219,6 +219,9 @@ __marimo__/
 #File Exclusions
 **/.openscribe/snapshots/
 **/.openscribe/word-roundtrip/
+**/.openscribe/drafts/
+**/.openscribe/.write.lock
+**/.openscribe/.restore-transaction-*/
 openscribe.code-workspace
 .streamlit/secrets.toml
 github-social-preview.jpg

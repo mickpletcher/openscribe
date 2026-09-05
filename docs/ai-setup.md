@@ -208,7 +208,7 @@ $env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="http://localhost:1234/v1"
 An internal server on your network might look like:
 
 ```powershell
-$env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="http://ai-gateway.contoso.local:8000/v1"
+$env:OPENAI_COMPATIBLE_LOCAL_BASE_URL="https://ai-gateway.example.test/v1"
 $env:OPENAI_COMPATIBLE_LOCAL_API_KEY="your_internal_token"
 ```
 
@@ -220,7 +220,7 @@ Once the project config and environment variables are set:
 openscribe ai summarize "The Beginning" --allow-data-transfer
 ```
 
-Omit `--allow-data-transfer` when using `openai-compatible-local`.
+Omit `--allow-data-transfer` only when the configured endpoint is loopback, such as `http://127.0.0.1:1234/v1`. A private-network or hosted destination still leaves this machine and requires HTTPS plus explicit transfer consent, even with the `openai-compatible-local` provider label.
 
 ## Troubleshooting
 

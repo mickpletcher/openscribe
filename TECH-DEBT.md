@@ -12,10 +12,12 @@
 
 - `src/openscribe/tui.py`
 - `tests/test_tui.py`
+- `tests/test_safety.py`
+- `tests/test_desktop.py`
 
 **Description**
 
-Mounted tests cover search, keyboard metadata actions, board movement, promotion, chapter and scene editing, local proofreading, hosted proofreading refusal, and visible compile failures. Many selection, rendering, filtering, accessibility, and terminal-size paths remain uncovered.
+Mounted tests cover search, keyboard metadata actions, board movement, promotion, chapter and scene editing, recovery drafts, local proofreading, hosted proofreading refusal, and visible failures. The desktop has Qt interaction tests. Native rendering, accessibility, and the full range of terminal sizes remain unverified. See VL-002 and VL-004 in `VALIDATION.md`.
 
 **Why it exists**
 
@@ -35,37 +37,4 @@ Before the first public release or claiming broad terminal and accessibility sup
 
 **Estimated effort:** Medium
 
-### TD-004: Automated security and dependency scanning is absent
-
-**Status:** Accepted
-**Severity:** Medium
-**Area:** Supply chain and static analysis
-**Introduced/Discovered:** 2026-09-04
-**Standing waiver:** Yes
-
-**Related files**
-
-- `.github/workflows/ci.yml`
-- `pyproject.toml`
-
-**Description**
-
-CI runs tests, Ruff, package builds, and CLI smoke tests. It does not run a dependency vulnerability audit, secret scanner, or security-focused static analyzer.
-
-**Why it exists**
-
-The first CI baseline focused on compatibility and packaging.
-
-**Impact**
-
-Known vulnerable dependencies or accidentally committed credentials may not be detected automatically.
-
-**Recommended resolution**
-
-Add a dependency audit, repository secret scan, and a Python security analyzer with reviewed suppression rules.
-
-**Fix trigger**
-
-Before the first public release or enabling hosted AI in a published build.
-
-**Estimated effort:** Small
+TD-004's missing scan configuration is resolved by the security job in `.github/workflows/ci.yml`. This is a configuration claim, not evidence of a hosted run. See the appended resolution in `completed-upgrades.md` and the hosted-validation gate in `VALIDATION.md`.

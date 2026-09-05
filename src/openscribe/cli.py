@@ -5,6 +5,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
@@ -135,6 +136,7 @@ workflow_app = typer.Typer(help="Format specific workflow helpers.")
 move_app = typer.Typer(help="Reordering workflows.")
 scene_app = typer.Typer(help="Previewable scene restructuring workflows.")
 migrate_app = typer.Typer(help="Project format migration workflows.")
+word_app = typer.Typer(help="Previewable local Word round trips.")
 open_app = typer.Typer(help="Open project files in your editor.")
 app.add_typer(new_app, name="new")
 app.add_typer(ai_app, name="ai")
@@ -154,6 +156,72 @@ app.add_typer(workflow_app, name="workflow")
 app.add_typer(move_app, name="move")
 app.add_typer(scene_app, name="scene")
 app.add_typer(migrate_app, name="migrate")
+app.add_typer(word_app, name="word")
+
+
+@word_app.command("export")
+def word_export(output: Path = typer.Option(..., "--output")) -> None:
+    from openscribe.word import export_word
+
+    try:
+        console.print(f"Round-trip export: {export_word(project_root(), output)}")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@word_app.command("bridge")
+def word_bridge(
+    port: int = typer.Option(0, "--port", min=0, max=65535),
+    certificate: Path | None = typer.Option(None, "--certificate"),
+    key: Path | None = typer.Option(None, "--key"),
+    manifest: Path | None = typer.Option(None, "--manifest", help="Write a sideload manifest for an HTTPS bridge."),
+) -> None:
+    from openscribe.word_bridge import WordBridge, write_addin_manifest
+
+    try:
+        with WordBridge(project_root(), port, certificate=certificate, key=key) as bridge:
+            if manifest:
+                write_addin_manifest(bridge, manifest)
+            console.print(f"Local Word bridge: {bridge.origin}")
+            console.print(f"Session token: {bridge.token}")
+            console.print("Keep this token private. Ctrl+C stops the bridge. The task pane requires HTTPS.")
+            bridge.serve_forever()
+    except KeyboardInterrupt:
+        console.print("Word bridge stopped.")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@word_app.command("import")
+def word_import(document: Path, apply: bool = typer.Option(False, "--apply")) -> None:
+    from openscribe.word import apply_word_import, preview_word_import
+
+    root = project_root()
+    try:
+        plan = preview_word_import(root, document.read_bytes())
+        for review in plan.reviews:
+            console.print(f"{review.identity}: {review.status}")
+        console.print(f"Unresolved tracked changes: {plan.tracked_changes}")
+        if plan.diff:
+            console.print(Syntax(plan.diff, "diff"))
+        for warning in plan.warnings:
+            console.print(warning)
+        if apply:
+            backup = apply_word_import(root, plan)
+            console.print(f"Applied. Backup: {backup}" if backup else "No changes to apply.")
+        else:
+            console.print("Preview only. Use --apply after reviewing the changes.")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@app.command("desktop")
+def desktop(project: Path | None = typer.Option(None, "--project", help="Project folder to open.")) -> None:
+    try:
+        from openscribe.desktop import launch
+    except ImportError as exc:
+        raise typer.BadParameter("Install the desktop extra: pip install 'openscribe[desktop]'.") from exc
+    launch(project)
 app.add_typer(open_app, name="open")
 board_app.add_typer(board_note_app, name="note")
 board_app.add_typer(board_link_app, name="link")
@@ -999,6 +1067,18 @@ def migrate_apply() -> None:
         f"Migrated project from v{result.plan.current_version} to v{result.plan.target_version}. "
         f"Backup: {result.backup_path.relative_to(root) if result.backup_path else 'none'}"
     )
+
+
+@migrate_app.command("repair")
+def migrate_repair() -> None:
+    from openscribe.migrations import repair_project_identities
+
+    root = project_root()
+    try:
+        backup = repair_project_identities(root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(f"Repaired missing IDs and legacy board links. Backup: {backup.relative_to(root)}")
 
 
 @idea_app.command("list")

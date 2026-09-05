@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any, ClassVar
 
 from rich.syntax import Syntax
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Input, Static, TextArea, Tree
+from textual.screen import ModalScreen
+from textual.widgets import Button, Footer, Header, Input, Static, TextArea, Tree
 
 from openscribe.board import (
     auto_layout,
@@ -19,6 +22,7 @@ from openscribe.board import (
     set_note_hidden,
 )
 from openscribe.compile import compile_project
+from openscribe.editing import EditSession
 from openscribe.elements import get_element, list_element_records
 from openscribe.index import index_is_current
 from openscribe.project import (
@@ -41,17 +45,28 @@ from openscribe.project import (
     manuscript_goal_stats,
     source_link_map,
     strip_scene_markers,
-    update_chapter_body,
     update_chapter_metadata,
-    update_scene_body,
 )
 from openscribe.proofreading import (
     LanguageToolError,
     check_text,
     line_and_column,
     load_languagetool_settings,
+    preview_replacement,
     requires_data_transfer_consent,
 )
+
+
+class UnsavedDialog(ModalScreen[str]):
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Unsaved writing remains. Save it before closing?")
+            yield Button("Save all and quit", id="save", variant="primary")
+            yield Button("Discard drafts and quit", id="discard")
+            yield Button("Keep writing", id="cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id or "cancel")
 
 
 class OpenScribeApp(App[None]):
@@ -120,6 +135,11 @@ class OpenScribeApp(App[None]):
         Binding("ctrl+f", "focus_search", "Search", priority=True),
         Binding("ctrl+s", "save_editor", "Save", priority=True),
         Binding("ctrl+g", "proofread_editor", "Proofread", priority=True),
+        Binding("ctrl+j", "next_finding", "Next finding", priority=True),
+        Binding("ctrl+k", "previous_finding", "Previous finding", priority=True),
+        Binding("ctrl+shift+r", "preview_suggestion", "Preview suggestion", priority=True),
+        Binding("ctrl+shift+a", "apply_suggestion", "Apply suggestion", priority=True),
+        Binding("ctrl+shift+i", "ignore_finding", "Ignore finding", priority=True),
         Binding("ctrl+left", "move_board_note(-2,0)", "Board left", priority=True),
         Binding("ctrl+right", "move_board_note(2,0)", "Board right", priority=True),
         Binding("ctrl+up", "move_board_note(0,-1)", "Board up", priority=True),
@@ -167,6 +187,12 @@ class OpenScribeApp(App[None]):
         self.source_lookup: dict[str, SourceDocument] = {}
         self.current_node_data: Any = None
         self.last_error = ""
+        self.sessions: dict[tuple[str, str | None], EditSession] = {}
+        self.active_session: EditSession | None = None
+        self.proofreading_text = ""
+        self.findings = []
+        self.finding_index = 0
+        self.suggestion_preview = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -186,9 +212,13 @@ class OpenScribeApp(App[None]):
         self.query_one("#editor", TextArea).display = False
         self.query_one("#proofreading", Static).display = False
         self._rebuild_tree()
+        self.set_interval(1, self._remember_editor)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        self._apply_selection(event.node.data)
+        try:
+            self._apply_selection(event.node.data)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "search-box":
@@ -205,6 +235,7 @@ class OpenScribeApp(App[None]):
             "focus_search",
             "proofread_editor",
             "save_editor",
+            "next_finding", "previous_finding", "preview_suggestion", "apply_suggestion", "ignore_finding",
         }:
             return None
         if isinstance(self.focused, Input) and action in self.MUTATING_ACTIONS:
@@ -212,22 +243,12 @@ class OpenScribeApp(App[None]):
         return True
 
     def action_save_editor(self) -> None:
-        editor = self.query_one("#editor", TextArea)
         try:
-            if isinstance(self.current_node_data, str) and self.current_node_data in self.chapter_lookup:
-                chapter = self.chapter_lookup[self.current_node_data]
-                update_chapter_body(self.root, chapter.chapter_id, editor.text)
-                selection: Any = chapter.path.as_posix()
-            elif isinstance(self.current_node_data, dict) and self.current_node_data.get("kind") == "scene":
-                update_scene_body(
-                    self.root,
-                    str(self.current_node_data["chapter_id"]),
-                    str(self.current_node_data["scene_id"]),
-                    editor.text,
-                )
-                selection = dict(self.current_node_data)
-            else:
+            if self.active_session is None:
                 return
+            self._remember_editor()
+            self.active_session.save()
+            selection = self.current_node_data
             self.chapters = list_chapters(self.root)
             self.chapter_lookup = {item.path.as_posix(): item for item in self.chapters}
             self._rebuild_tree()
@@ -236,11 +257,42 @@ class OpenScribeApp(App[None]):
         except (OSError, RuntimeError, ValueError) as exc:
             self._show_error(exc)
 
-    def action_proofread_editor(self) -> None:
+    def _remember_editor(self) -> None:
+        if self.active_session is not None:
+            self.active_session.text = self.query_one("#editor", TextArea).text
+            try:
+                self.active_session.stash()
+            except (OSError, RuntimeError, ValueError) as exc:
+                self._show_error(exc)
+
+    def action_quit(self) -> None:
+        self._remember_editor()
+        if any(session.dirty for session in self.sessions.values()):
+            self.push_screen(UnsavedDialog(), self._finish_quit)
+        else:
+            self.exit()
+
+    def _finish_quit(self, choice: str) -> None:
+        if choice == "cancel":
+            return
+        try:
+            for session in self.sessions.values():
+                if choice == "save":
+                    session.save()
+                elif choice == "discard":
+                    session.discard()
+            self.exit()
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error(exc)
+
+    @work(exclusive=True)
+    async def action_proofread_editor(self) -> None:
         if not self._is_editor_selection():
             return
         editor = self.query_one("#editor", TextArea)
         proofreading = self.query_one("#proofreading", Static)
+        checked_text = editor.text
+        checked_session = self.active_session
         try:
             settings = load_languagetool_settings(self.config)
             if requires_data_transfer_consent(settings):
@@ -248,7 +300,15 @@ class OpenScribeApp(App[None]):
                     "Hosted proofreading is blocked in the TUI. Use `openscribe proofread chapter "
                     "<chapter> --allow-data-transfer` after reviewing the disclosure."
                 )
-            result = check_text(editor.text, settings)
+            proofreading.update("Checking text with local LanguageTool...")
+            result = await asyncio.to_thread(check_text, checked_text, settings)
+            if self.active_session is not checked_session or editor.text != checked_text:
+                proofreading.update("Text or selection changed. Run proofreading again for current text.")
+                return
+            self.proofreading_text = checked_text
+            self.findings = list(result.issues)
+            self.finding_index = 0
+            self.suggestion_preview = None
             lines = [f"LanguageTool {result.software_version} | {result.language} | Findings: {len(result.issues)}"]
             for issue in result.issues:
                 line, column = line_and_column(editor.text, issue.offset)
@@ -262,6 +322,64 @@ class OpenScribeApp(App[None]):
             proofreading.display = True
         except (LanguageToolError, OSError, RuntimeError, ValueError) as exc:
             self._show_error(exc)
+
+    def action_next_finding(self) -> None:
+        self._select_finding(1)
+
+    def action_previous_finding(self) -> None:
+        self._select_finding(-1)
+
+    def _select_finding(self, direction: int) -> None:
+        if self.findings:
+            self.finding_index = (self.finding_index + direction) % len(self.findings)
+            issue = self.findings[self.finding_index]
+            self.suggestion_preview = None
+            self.query_one("#proofreading", Static).update(
+                f"Finding {self.finding_index + 1}/{len(self.findings)}: {issue.message}\n"
+                f"Suggestions: {', '.join(issue.replacements)}\n"
+                "Ctrl+Shift+R previews the first suggestion. Ctrl+Shift+A applies the preview."
+            )
+
+    def action_preview_suggestion(self) -> None:
+        if not self.findings:
+            return
+        issue = self.findings[self.finding_index]
+        if not issue.replacements:
+            return
+        try:
+            preview = preview_replacement(self.proofreading_text, issue, issue.replacements[0])
+            preview.apply(self.query_one("#editor", TextArea).text)
+            self.suggestion_preview = preview
+            self.query_one("#proofreading", Static).update(Syntax(preview.diff, "diff"))
+        except LanguageToolError as exc:
+            self.suggestion_preview = None
+            self._show_error(exc)
+
+    def action_apply_suggestion(self) -> None:
+        if self.suggestion_preview is None:
+            return
+        editor = self.query_one("#editor", TextArea)
+        try:
+            preview = self.suggestion_preview
+            preview.apply(editor.text)
+            start = line_and_column(editor.text, preview.offset)
+            end = line_and_column(editor.text, preview.offset + preview.length)
+            editor.replace(preview.replacement, (start[0] - 1, start[1] - 1), (end[0] - 1, end[1] - 1))
+            self.findings = []
+            self.suggestion_preview = None
+            self._remember_editor()
+            self.query_one("#proofreading", Static).update("Suggestion applied to draft. Ctrl+Z undoes; Ctrl+S saves.")
+        except LanguageToolError as exc:
+            self._show_error(exc)
+
+    def action_ignore_finding(self) -> None:
+        if self.findings:
+            self.findings.pop(self.finding_index)
+            self.finding_index = 0
+            self.suggestion_preview = None
+            self._select_finding(0)
+            if not self.findings:
+                self.query_one("#proofreading", Static).update("No remaining findings in this check.")
 
     def action_move_board_note(self, dx: int, dy: int) -> None:
         if not isinstance(self.current_node_data, dict) or self.current_node_data.get("kind") != "board-note":
@@ -394,6 +512,10 @@ class OpenScribeApp(App[None]):
         self.notify(self.last_error, title="Action failed", severity="error")
 
     def _apply_selection(self, node_data: Any) -> None:
+        self._remember_editor()
+        self.active_session = None
+        self.findings = []
+        self.suggestion_preview = None
         self.current_node_data = node_data
         if not node_data:
             return
@@ -478,14 +600,14 @@ class OpenScribeApp(App[None]):
             scene = next((item for item in chapter.scenes if item.scene_id == str(node_data["scene_id"])), None)
             if scene is None:
                 return
-            self._show_editor(scene.body)
+            self._show_editor(scene.body, chapter.chapter_id, scene.scene_id)
             metadata.update(self._scene_summary(chapter, scene))
             return
 
         if node_data not in self.chapter_lookup:
             return
         chapter = self.chapter_lookup[node_data]
-        self._show_editor(strip_scene_markers(chapter.body))
+        self._show_editor(strip_scene_markers(chapter.body), chapter.chapter_id)
         metadata.update(self._chapter_summary(self.root, chapter))
 
     def _show_preview_mode(self) -> None:
@@ -493,9 +615,13 @@ class OpenScribeApp(App[None]):
         self.query_one("#preview", Static).display = True
         self.query_one("#proofreading", Static).display = False
 
-    def _show_editor(self, text: str) -> None:
+    def _show_editor(self, text: str, chapter_id: str, scene_id: str | None = None) -> None:
+        key = (chapter_id, scene_id)
+        if key not in self.sessions:
+            self.sessions[key] = EditSession.open(self.root, chapter_id, scene_id)
+        self.active_session = self.sessions[key]
         editor = self.query_one("#editor", TextArea)
-        editor.load_text(text)
+        editor.load_text(self.active_session.text)
         editor.display = True
         self.query_one("#preview", Static).display = False
         proofreading = self.query_one("#proofreading", Static)

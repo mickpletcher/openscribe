@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import ipaddress
 import json
 from dataclasses import dataclass
@@ -121,7 +122,7 @@ def check_text(
     software_data = payload.get("software", {})
     warnings_data = payload.get("warnings", {})
     return ProofreadingResult(
-        issues=tuple(_parse_issue(item) for item in matches),
+        issues=tuple(_normalize_issue(text, _parse_issue(item)) for item in matches),
         language=str(language_data.get("code", selected_language))
         if isinstance(language_data, dict)
         else selected_language,
@@ -136,6 +137,52 @@ def line_and_column(text: str, offset: int) -> tuple[int, int]:
     bounded_offset = min(max(offset, 0), len(text))
     prefix = text[:bounded_offset]
     return prefix.count("\n") + 1, len(prefix.rsplit("\n", 1)[-1]) + 1
+
+
+def _normalize_issue(text: str, issue: ProofreadingIssue) -> ProofreadingIssue:
+    boundaries = {0: 0}
+    units = 0
+    for index, character in enumerate(text):
+        units += 2 if ord(character) > 0xFFFF else 1
+        boundaries[units] = index + 1
+    end = issue.offset + issue.length
+    if issue.offset not in boundaries or end not in boundaries:
+        raise LanguageToolError("LanguageTool returned an invalid UTF-16 text range.")
+    start = boundaries[issue.offset]
+    issue.length = boundaries[end] - start
+    issue.offset = start
+    return issue
+
+
+@dataclass(frozen=True, slots=True)
+class ReplacementPreview:
+    before: str
+    after: str
+    offset: int
+    length: int
+    replacement: str
+
+    @property
+    def diff(self) -> str:
+        return "\n".join(difflib.unified_diff(
+            self.before.splitlines(), self.after.splitlines(), fromfile="before", tofile="suggestion", lineterm=""
+        ))
+
+    def apply(self, current: str) -> str:
+        if current != self.before:
+            raise LanguageToolError("Text changed after proofreading. Run the check again before applying a suggestion.")
+        return self.after
+
+
+def preview_replacement(text: str, issue: ProofreadingIssue, replacement: str) -> ReplacementPreview:
+    if replacement not in issue.replacements:
+        raise LanguageToolError("Choose one of this finding's replacement suggestions.")
+    if issue.offset < 0 or issue.length < 0 or issue.offset + issue.length > len(text):
+        raise LanguageToolError("The finding points outside the checked text.")
+    return ReplacementPreview(
+        text, text[:issue.offset] + replacement + text[issue.offset + issue.length:],
+        issue.offset, issue.length, replacement,
+    )
 
 
 def _validate_endpoint(endpoint: str) -> bool:

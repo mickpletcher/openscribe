@@ -2,7 +2,7 @@
 
 This development plan defines a local first Word editing path while keeping Markdown as the canonical manuscript.
 
-The design is intentionally separate from the current one way DOCX compile path. It does not claim that the Office add-in or import pipeline is implemented.
+The design is separate from ordinary one-way DOCX compile. An experimental implementation now exists in `src/openscribe/word.py`, `word_bridge.py`, and `word_addin/`. Package and local bridge tests exist; real Word host validation remains open under VL-004 in `VALIDATION.md`. See ADR-006 for the staged availability decision. This does not claim production Word compatibility.
 
 See:
 

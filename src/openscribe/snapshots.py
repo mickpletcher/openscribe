@@ -14,6 +14,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 import yaml
 
+from openscribe.locking import project_locked
 from openscribe.project import SNAPSHOTS_DIR, slugify
 from openscribe.schema import atomic_write_text, load_yaml, validate_snapshot_metadata
 
@@ -23,6 +24,7 @@ MANAGED_PATHS = (
     ".openscribe/boards",
     ".openscribe/elements",
     ".openscribe/index",
+    ".openscribe/word-roundtrip",
     "manuscript",
     "characters",
     "research",
@@ -53,11 +55,13 @@ def snapshots_path(root: Path) -> Path:
     return root / SNAPSHOTS_DIR
 
 
+@project_locked
 def recover_interrupted_restores(root: Path) -> None:
     transaction_parent = root / ".openscribe"
     if not transaction_parent.exists():
         return
     for transaction_root in sorted(transaction_parent.glob(".restore-transaction-*")):
+        _reject_link(transaction_root)
         if not transaction_root.is_dir():
             continue
         journal_path = transaction_root / "journal.yaml"
@@ -65,18 +69,20 @@ def recover_interrupted_restores(root: Path) -> None:
             _cleanup_restore_transaction(transaction_root)
             continue
         journal = load_yaml(journal_path, default={})
-        if not isinstance(journal, dict):
-            raise RuntimeError(f"Restore transaction journal is invalid: {journal_path}")
+        _validate_journal(journal)
         state = str(journal.get("state", "")).strip().lower()
-        if state == "committed":
+        if state in {"committed", "rolled_back"}:
             _cleanup_restore_transaction(transaction_root)
             continue
         if state != "applying":
             raise RuntimeError(f"Restore transaction has unknown state '{state}': {journal_path}")
         _rollback_restore_transaction(root, transaction_root, journal)
+        journal["state"] = "rolled_back"
+        atomic_write_text(journal_path, yaml.safe_dump(journal, sort_keys=False))
         _cleanup_restore_transaction(transaction_root)
 
 
+@project_locked
 def create_snapshot(root: Path, label: str, mode: str = "checkpoint") -> Path:
     normalized_mode = mode.strip().lower()
     if normalized_mode not in {"checkpoint", "git"}:
@@ -130,6 +136,7 @@ def list_snapshots(root: Path) -> list[dict[str, Any]]:
     return records
 
 
+@project_locked
 def preview_snapshot_restore(root: Path, snapshot_ref: str) -> RestorePreview:
     snapshot_dir = _resolve_snapshot(root, snapshot_ref)
     metadata = _load_snapshot_metadata(snapshot_dir)
@@ -147,7 +154,9 @@ def preview_snapshot_restore(root: Path, snapshot_ref: str) -> RestorePreview:
     )
 
 
+@project_locked
 def restore_snapshot(root: Path, snapshot_ref: str) -> RestoreResult:
+    recover_interrupted_restores(root)
     snapshot_dir = _resolve_snapshot(root, snapshot_ref)
     metadata = _load_snapshot_metadata(snapshot_dir)
     preview = preview_snapshot_restore(root, snapshot_ref)
@@ -158,6 +167,7 @@ def restore_snapshot(root: Path, snapshot_ref: str) -> RestoreResult:
     try:
         _apply_exact_snapshot(root, snapshot_files, present_paths)
     except Exception as exc:
+        recover_interrupted_restores(root)
         backup_metadata = _load_snapshot_metadata(backup_path)
         backup_files, backup_present_paths = _snapshot_contents(root, backup_path, backup_metadata)
         try:
@@ -237,6 +247,7 @@ def _write_checkpoint_archive(root: Path, archive_path: Path) -> None:
     with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
         for relative_path in MANAGED_PATHS:
             path = root / relative_path
+            _reject_link(path)
             if not path.exists():
                 continue
             if path.is_file():
@@ -244,6 +255,10 @@ def _write_checkpoint_archive(root: Path, archive_path: Path) -> None:
                 continue
             archive.writestr(relative_path.rstrip("/") + "/", b"")
             for child in path.rglob("*"):
+                if child.is_symlink() or getattr(child, "is_junction", lambda: False)():
+                    raise ValueError("Snapshots cannot include symbolic links or junctions.")
+                if child.is_dir():
+                    archive.writestr(child.relative_to(root).as_posix() + "/", b"")
                 if child.is_file() and not child.is_symlink():
                     archive.write(
                         child,
@@ -292,7 +307,7 @@ def _snapshot_contents(
             raise FileNotFoundError(f"Snapshot archive '{archive_path.name}' was not found.")
         files, archive_directories = _archive_file_bytes(archive_path)
         metadata_paths = {str(path) for path in metadata.get("managed_paths", []) if str(path) in MANAGED_PATHS}
-        return files, metadata_paths or archive_directories
+        return files, metadata_paths | archive_directories
 
     if str(metadata.get("mode", "")).strip().lower() == "git":
         commit = str(metadata.get("commit", "")).strip()
@@ -306,12 +321,18 @@ def _snapshot_contents(
 def _archive_file_bytes(archive_path: Path) -> tuple[dict[str, bytes], set[str]]:
     files: dict[str, bytes] = {}
     present_paths: set[str] = set()
+    seen: set[str] = set()
     with ZipFile(archive_path, "r") as archive:
         for info in archive.infolist():
             relative_path = _validate_snapshot_relative_path(info.filename)
+            normalized = relative_path.rstrip("/").casefold()
+            if normalized in seen:
+                raise ValueError("Snapshot archive contains duplicate paths.")
+            seen.add(normalized)
             managed_path = _managed_parent(relative_path)
             present_paths.add(managed_path)
             if info.is_dir():
+                present_paths.add(relative_path.rstrip("/"))
                 continue
             files[relative_path] = archive.read(info)
     return files, present_paths
@@ -350,22 +371,27 @@ def _current_file_bytes(root: Path) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     for relative_path in MANAGED_PATHS:
         path = root / relative_path
+        _reject_link(path)
         if not path.exists():
             continue
         if path.is_file():
             files[relative_path] = path.read_bytes()
             continue
         for child in path.rglob("*"):
+            _reject_link(child)
             if child.is_file() and not child.is_symlink():
                 child_path = str(child.relative_to(root)).replace("\\", "/")
                 files[child_path] = child.read_bytes()
     return files
 
 
+@project_locked
 def _apply_exact_snapshot(
     root: Path,
     files: dict[str, bytes],
     present_paths: set[str],
+    *,
+    paths: tuple[str, ...] = MANAGED_PATHS,
 ) -> None:
     transaction_root = Path(tempfile.mkdtemp(prefix=".restore-transaction-", dir=root / ".openscribe"))
     stage_root = transaction_root / "stage"
@@ -374,10 +400,11 @@ def _apply_exact_snapshot(
     old_root.mkdir()
 
     for managed_path in present_paths:
-        if managed_path not in MANAGED_PATHS:
+        if not any(managed_path == path or managed_path.startswith(path + "/") for path in paths):
             raise ValueError(f"Snapshot contains unsupported managed path '{managed_path}'.")
         stage_path = stage_root / managed_path
-        if managed_path == ".openscribe/project.yaml":
+        _validate_snapshot_relative_path(managed_path)
+        if managed_path in files:
             stage_path.parent.mkdir(parents=True, exist_ok=True)
         else:
             stage_path.mkdir(parents=True, exist_ok=True)
@@ -389,8 +416,10 @@ def _apply_exact_snapshot(
         target.write_bytes(content)
 
     operations: list[dict[str, Any]] = []
-    for relative_path in MANAGED_PATHS:
+    for relative_path in paths:
+        _validate_snapshot_relative_path(relative_path)
         target = root / relative_path
+        _reject_link(target)
         staged = stage_root / relative_path
         operations.append(
             {
@@ -418,14 +447,18 @@ def _apply_exact_snapshot(
         atomic_write_text(journal_path, yaml.safe_dump(journal, sort_keys=False))
     except Exception:
         _rollback_restore_transaction(root, transaction_root, journal)
+        journal["state"] = "rolled_back"
+        atomic_write_text(journal_path, yaml.safe_dump(journal, sort_keys=False))
+        _cleanup_restore_transaction(transaction_root)
         raise
     _cleanup_restore_transaction(transaction_root)
 
-    for directory in ("manuscript", "characters", "research", "notes"):
-        (root / directory).mkdir(parents=True, exist_ok=True)
-
-
 def _rollback_restore_transaction(root: Path, transaction_root: Path, journal: dict[str, Any]) -> None:
+    _validate_journal(journal)
+    _reject_link(transaction_root)
+    for operation in journal["operations"]:
+        for parent in (root, transaction_root / "stage", transaction_root / "old"):
+            _reject_link(parent / operation["path"])
     operations = journal.get("operations", [])
     if not isinstance(operations, list):
         raise RuntimeError(f"Restore transaction operations are invalid: {transaction_root / 'journal.yaml'}")
@@ -433,8 +466,7 @@ def _rollback_restore_transaction(root: Path, transaction_root: Path, journal: d
         if not isinstance(operation, dict):
             raise RuntimeError(f"Restore transaction operation is invalid: {transaction_root / 'journal.yaml'}")
         relative_path = str(operation.get("path", ""))
-        if relative_path not in MANAGED_PATHS:
-            raise RuntimeError(f"Restore transaction contains unsupported path '{relative_path}'.")
+        _validate_snapshot_relative_path(relative_path)
         target = root / relative_path
         staged = transaction_root / "stage" / relative_path
         old = transaction_root / "old" / relative_path
@@ -470,12 +502,41 @@ def _cleanup_restore_transaction(transaction_root: Path) -> None:
 
 
 def _validate_snapshot_relative_path(value: str) -> str:
-    normalized = value.replace("\\", "/").strip("/")
+    normalized = value.replace("\\", "/")
     path = PurePosixPath(normalized)
-    if not normalized or path.is_absolute() or ".." in path.parts:
+    if (
+        not normalized or path.is_absolute() or ".." in path.parts or ":" in normalized
+        or any(part.rstrip(" .") != part for part in path.parts)
+        or any(part in {"", ".", ".."} for part in normalized.rstrip("/").split("/"))
+    ):
         raise ValueError(f"Unsafe snapshot path '{value}'.")
     _managed_parent(normalized)
     return normalized
+
+
+def _validate_journal(journal: Any) -> None:
+    if not isinstance(journal, dict) or type(journal.get("version")) is not int or journal.get("version") != 1:
+        raise RuntimeError("Restore transaction journal has an invalid version or structure.")
+    if journal.get("state") not in {"applying", "committed", "rolled_back"}:
+        raise RuntimeError("Restore transaction journal has an unknown state.")
+    operations = journal.get("operations")
+    if not isinstance(operations, list) or not operations:
+        raise RuntimeError("Restore transaction operations are invalid.")
+    paths: list[str] = []
+    for operation in operations:
+        if not isinstance(operation, dict) or not isinstance(operation.get("path"), str):
+            raise RuntimeError("Restore transaction operation is invalid.")
+        path = _validate_snapshot_relative_path(operation["path"]).casefold()
+        if any(path == other or path.startswith(other + "/") or other.startswith(path + "/") for other in paths):
+            raise RuntimeError("Restore transaction contains duplicate or overlapping paths.")
+        paths.append(path)
+        if any(type(operation.get(key)) is not bool for key in ("target_existed", "staged_existed")):
+            raise RuntimeError("Restore transaction existence fields must be booleans.")
+
+
+def _reject_link(path: Path) -> None:
+    if path.is_symlink() or path.resolve() != path.absolute():
+        raise ValueError("Managed project paths cannot be symbolic links or junctions.")
 
 
 def _managed_parent(relative_path: str) -> str:

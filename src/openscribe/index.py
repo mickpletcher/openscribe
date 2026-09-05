@@ -7,6 +7,7 @@ from typing import Any
 import yaml
 
 from openscribe.elements import list_element_records
+from openscribe.locking import project_locked
 from openscribe.project import (
     INDEX_DIR,
     AuxiliaryDocument,
@@ -24,6 +25,7 @@ def index_path(root: Path) -> Path:
     return root / INDEX_DIR / INDEX_FILE
 
 
+@project_locked
 def rebuild_project_index(root: Path) -> Path:
     chapters = list_chapters(root)
     ideas = list_story_ideas(root)

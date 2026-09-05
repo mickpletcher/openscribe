@@ -1,13 +1,13 @@
 # openscribe
 
-Open source CLI and TUI writing environment for long form projects
+Open source desktop, CLI, and TUI writing environment for long form projects
 
 ## Current Status
 
 - Status: Active pre-release alpha
 - Version: 0.1.0
 - Project tier: 1
-- Primary technologies: Python, Typer, Textual, Markdown, and YAML
+- Primary technologies: Python, PySide6, Typer, Textual, Markdown, and YAML
 
 For current repository health, see [assessment.md](./assessment.md).
 
@@ -23,7 +23,7 @@ The files under `specs/` are development milestone plans. They are not contractu
 
 `openscribe` is a writing tool for books and other long form work.
 It stores everything as plain Markdown files with YAML frontmatter.
-You can work from the command line, open the Textual interface, or edit files directly in your editor.
+You can use the optional desktop writing app, the command line, the Textual interface, or an external editor.
 
 The source files stay readable without the app.
 That matters if you want your manuscript under git, want full control of backups, or want to move between tools later.
@@ -86,7 +86,47 @@ This first build includes:
 * optional read-only AI summary, rewrite, outline, focused review, metadata, brainstorming, and project-query commands
 * ordered, automatically backed up project-format migrations
 
-This build does not yet include venue specific bibliography styles, richer scene metadata, Word round-trip import, or drag based board editing.
+This build does not yet include venue specific bibliography styles, richer scene metadata, or drag based board editing. Word round trips are experimental and require real host validation before production use.
+
+## Desktop writing
+
+From a repository checkout:
+
+```powershell
+python -m pip install -e ".[desktop]"
+openscribe desktop
+openscribe desktop --project "C:\Writing\My Novel"
+```
+
+Create or open a project, add chapters and scenes, and select them in the binder. Research, character, and note views are read only. The editor keeps drafts when navigating. Local recovery drafts are written every second and on navigation. `Ctrl+S` saves with a checkpoint; a changed disk baseline blocks saving instead of overwriting newer work. Reload discards a draft only after confirmation. Quit offers Save, Discard, and Cancel.
+
+The chapter editor allows prose edits while keeping scene headings unchanged. Use scene commands for structural changes. Do not delete or replace IDs in an external editor. Missing IDs can be repaired explicitly with `openscribe migrate repair`; duplicate IDs must be resolved manually.
+
+Proofread runs local LanguageTool in the background. Select a finding and replacement, preview it, then apply it to the draft. Undo reverses the replacement. Any intervening text change invalidates the suggestion. Export, Checkpoint, Restore, Word export, and Word import are available from the toolbar overflow when the window is narrow.
+
+This is an alpha interface. Keep an independent backup. Draft recovery is not a guarantee against losing the last second of typing after an abrupt failure.
+
+## Experimental Word round trips
+
+Ordinary `compile --format docx` remains one way. Use the distinct round-trip path:
+
+```powershell
+openscribe word export --output build\roundtrip.docx
+openscribe word import build\roundtrip.docx
+openscribe word import build\roundtrip.docx --apply
+```
+
+Export writes tagged content controls and a private baseline under `.openscribe/word-roundtrip/`. Use a new output filename for every export. Edit inside the existing controls. Import previews changes, preserves current Markdown-only edits, and blocks conflicting edits, missing or duplicate controls, structural changes, and unresolved tracked changes. Apply checks the preview baseline again and installs a validated staged result with a backup. Markdown remains canonical. Rich Word formatting, drawings, tables, and arbitrary DOCX import are not supported.
+
+For the task-pane prototype, use a fixed local port and a locally trusted certificate valid for `127.0.0.1`:
+
+```powershell
+openscribe word bridge --port 8765 --certificate C:\Certificates\localhost.crt --key C:\Certificates\localhost.key --manifest build\openscribe-addin.xml
+```
+
+Sideload the generated manifest in Windows desktop Word using your approved Office add-in process. Enter the session token printed by the running bridge into the pane. Preview and Apply are separate actions. The pane communicates only with the selected local project; Microsoft supplies the Office JavaScript runtime. The bridge does not install or trust certificates for you. Without a certificate, it supports local HTTP diagnostics but does not generate a task-pane manifest.
+
+Real Word UI and certificate/sideload validation remain unverified. See [VL-004](VALIDATION.md#vl-004-real-word-and-desktop-ui-validation-is-incomplete) and [ADR-006](docs/decisions/ADR-006-experimental-word-round-trip-availability.md).
 
 ## Requirements
 
@@ -186,7 +226,7 @@ openscribe proofread chapter "The Beginning" --allow-data-transfer
 
 Before an approved hosted request, `openscribe` reports the endpoint and number of chapter characters being sent. The free public LanguageTool endpoint is intentionally rejected because its [published access policy](https://dev.languagetool.org/public-http-api) prohibits automated requests. Use a local server or a licensed hosted endpoint instead.
 
-Inside `openscribe tui`, select a chapter or scene and press `Ctrl+G` to show findings beside the editor. The TUI runs local endpoints only. For a hosted endpoint, it shows the disclosure path and requires you to use the CLI with `--allow-data-transfer`.
+Inside `openscribe tui`, select a chapter or scene and press `Ctrl+G` to check in the background. Use `Ctrl+J` and `Ctrl+K` to navigate findings, `Ctrl+Shift+R` to preview the first suggestion, `Ctrl+Shift+A` to apply that preview to the draft, and `Ctrl+Shift+I` to ignore a finding. `Ctrl+Z` undoes a replacement. Changed text invalidates a preview. The TUI runs local endpoints only. Hosted endpoints require the CLI disclosure flow with `--allow-data-transfer`.
 
 This integration uses the LanguageTool HTTP API. It does not copy or distribute LanguageTool source code. See the [LanguageTool repository](https://github.com/languagetool-org/languagetool) for its server, source, and license details. The self hosted server does not include LanguageTool's cloud only AI rules.
 
@@ -251,8 +291,9 @@ openscribe ai query "Where was the ledger last seen?" --allow-data-transfer
 
 For hosted providers, `openscribe` refuses to send manuscript text unless that
 command includes `--allow-data-transfer`. Before each request, it reports the
-provider, model, and number of characters being sent. The local provider does
-not require this flag. These commands print suggestions and never write them to manuscript files.
+provider, model, and number of characters being sent. Only a loopback endpoint
+is exempt, regardless of the provider name. A nonlocal OpenAI-compatible endpoint
+requires HTTPS and the flag. These commands print suggestions and never write them to manuscript files.
 
 ## AI architecture
 
@@ -692,8 +733,10 @@ The last train pulled away.
 ```
 
 `chapter_id` is generated once and stays stable when a chapter is renamed,
-moved, or renumbered. Board relationships store this ID. Existing projects are
-migrated when chapters and boards are loaded. Metadata commands preserve
+moved, or renumbered. Board relationships store this ID. Reading a project does
+not assign or migrate identities. Use `openscribe migrate status`, followed by
+`openscribe migrate apply` for an older format or `openscribe migrate repair` for
+missing identities in a current-format project. Both mutation paths create a checkpoint. Metadata commands preserve
 frontmatter fields they do not recognize.
 
 Scene IDs are stored in HTML comments immediately after scene headings. They remain stable when scenes move, split, or merge and are removed from reading and compile output. Do not copy one scene ID onto another scene.
@@ -743,7 +786,7 @@ A common pattern is:
 3. write below the frontmatter
 4. keep the metadata updated as the draft changes
 
-For integrated editing, run `openscribe tui`, select a chapter or scene, edit the middle pane, and press `Ctrl+S`. Chapter editing hides the internal scene ID comments and restores the matching IDs when it saves.
+For integrated editing, run `openscribe tui`, select a chapter or scene, edit the middle pane, and press `Ctrl+S`. Chapter editing hides internal scene ID comments. It refuses heading renames or reorders that would make identity ambiguous. Use the scene commands for structural changes.
 
 ## Viewing the outline
 
@@ -1042,7 +1085,8 @@ What it does:
 * lets you select and edit a chapter or scene from the binder tree
 * lets you select a part node to inspect part metadata
 * hides internal scene ID comments while editing chapter text
-* saves chapter or scene text only when you press `Ctrl+S`
+* saves canonical chapter or scene text only when you press `Ctrl+S`, with a checkpoint and stale-file check
+* preserves drafts across navigation and writes local recovery drafts every second
 * runs configured local LanguageTool proofreading with `Ctrl+G`
 * displays action and proofreading failures beside the active text
 * shows chapter status, label, synopsis, point of view, notes, word target, and linked sources in the right panel
@@ -1074,7 +1118,7 @@ Current keys:
 * `p` promotes the selected board note into a chapter
 * `c` runs compile with project defaults
 
-This is still a lightweight authoring interface. It does not yet provide rich text formatting, drag based manuscript reordering, or automatic proofreading replacements.
+This is still a lightweight authoring interface. It does not provide rich text formatting or drag based manuscript reordering. Proofreading replacements require a preview and a separate apply action; they are never automatic.
 
 ## Command reference
 
@@ -1144,11 +1188,12 @@ openscribe scene merge "Cold Open" --with "The Call" --chapter "The Beginning" -
 
 ### `openscribe migrate status` and `apply`
 
-Project loading runs registered migrations automatically. These commands let you inspect or deliberately run the same ordered, backed-up migration path.
+Project loading does not migrate files automatically. Inspect and explicitly apply the ordered, backed-up migration path. Current-format projects with missing IDs or legacy board links can use the separate repair command.
 
 ```powershell
 openscribe migrate status
 openscribe migrate apply
+openscribe migrate repair
 ```
 
 ### `openscribe new section`
@@ -1756,4 +1801,4 @@ See [TECH-DEBT.md](./TECH-DEBT.md) for current compromises and [assessment.md](.
 
 ## Roadmap
 
-See [future-upgrades.md](./future-upgrades.md). Immutable scene identity, safe scene restructuring, scoped AI review, and the Word round-trip design are complete. The next Word step is the implementation defined in [specs/004-word-round-trip](./specs/004-word-round-trip/README.md).
+See [future-upgrades.md](./future-upgrades.md). The current milestone adds shared editing protection, a desktop writing workflow, actionable local proofreading, and an experimental Word round-trip implementation. Real Word host validation, independent review, and broader manual accessibility testing remain release gates.

@@ -26,16 +26,16 @@ When scene-level planning becomes a higher priority than the remaining TUI and r
 **Estimated effort:** Large
 **Dependencies:** Immutable scene IDs
 
-### FU-004: Build Word round-trip integration
+### FU-004: Validate and harden Word round-trip integration
 
-**Status:** Proposed
+**Status:** In progress
 **Priority:** Medium
 **Area:** Microsoft Word integration
 **Origin:** Internal
 
 **Opportunity**
 
-Implement the accepted development design in `specs/004-word-round-trip/`, including content-control identity, three-way conflict detection, preview, backup, tracked-change refusal, and a desktop local bridge.
+Validate the experimental OOXML importer, local bridge, and task pane against real supported desktop Word hosts before claiming production interoperability. The implemented safety design is described in `specs/004-word-round-trip/` and ADR-006.
 
 **Potential benefit**
 
@@ -43,11 +43,11 @@ Writers can use Word without making DOCX the canonical store.
 
 **Why deferred**
 
-The design is complete. The OOXML package layer, importer, local bridge, Office task pane, and real Word validation are not built.
+The package layer, importer, bridge, and task pane are implemented. Real Word save/reopen, task-pane sideload, certificate, accessibility, and independent Class 4 review gates remain open. See VL-004 and VL-006 in `VALIDATION.md`.
 
 **Trigger**
 
-After the round-trip implementation receives its own Class 4 review and test fixtures.
+Before removing the experimental label or using the workflow on an only copy of a manuscript.
 
 **Estimated effort:** Large
 **Dependencies:** `specs/004-word-round-trip/`, stable chapter and scene IDs, snapshot recovery
@@ -180,7 +180,7 @@ External package trust and update rules are not defined.
 After the template schema is versioned and trust rules are documented.
 
 **Estimated effort:** Medium
-**Dependencies:** TD-001
+**Dependencies:** Versioned template schema and documented external-package trust rules
 
 ### FU-010: Add milestones and revision phases
 
@@ -233,29 +233,3 @@ When a specific venue or journal exposes a reproducible gap.
 
 **Estimated effort:** Medium
 **Dependencies:** None
-
-### FU-012: Add actionable LanguageTool review controls
-
-**Status:** Proposed
-**Priority:** Medium
-**Area:** Proofreading and TUI
-**Origin:** User
-
-**Opportunity**
-
-Add finding navigation, ignore controls, and previewable replacement actions to the existing TUI findings panel.
-
-**Potential benefit**
-
-Writers can review prose without leaving the authoring interface while Markdown remains the source of truth.
-
-**Why deferred**
-
-The TUI now displays local findings and visibly refuses hosted transfer. Applying suggestions still needs an explicit diff and recovery design plus broader interaction coverage.
-
-**Trigger**
-
-After TD-003 is reduced and a previewable suggestion-application design is reviewed.
-
-**Estimated effort:** Medium
-**Dependencies:** TD-003, current TUI proofreading panel

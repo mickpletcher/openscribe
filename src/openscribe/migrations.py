@@ -7,7 +7,8 @@ from typing import Any
 
 import yaml
 
-from openscribe.schema import atomic_write_text, load_yaml, require_mapping
+from openscribe.locking import project_locked
+from openscribe.schema import atomic_write_text, load_yaml, require_mapping, validate_project_config
 
 
 class MigrationError(RuntimeError):
@@ -60,6 +61,7 @@ def plan_project_migration(root: Path) -> MigrationPlan:
 
     config_path = root / PROJECT_DIR / PROJECT_FILE
     config = require_mapping(load_yaml(config_path, default={}), f"Project config '{config_path}'")
+    validate_project_config(config, f"Project config '{config_path}'")
     current_version = _project_version(config)
     if current_version > CURRENT_PROJECT_VERSION:
         raise MigrationError(
@@ -78,37 +80,48 @@ def plan_project_migration(root: Path) -> MigrationPlan:
     return MigrationPlan(current_version, CURRENT_PROJECT_VERSION, tuple(steps))
 
 
+@project_locked
 def migrate_project(root: Path) -> MigrationResult:
+    from openscribe.editing import transform_project
     from openscribe.project import PROJECT_DIR, PROJECT_FILE
-    from openscribe.snapshots import create_snapshot, restore_snapshot
 
     plan = plan_project_migration(root)
     if not plan.steps:
         return MigrationResult(plan, None)
 
-    backup_path = create_snapshot(
-        root,
-        f"automatic backup before migration v{plan.current_version} to v{plan.target_version}",
-    )
-    config_path = root / PROJECT_DIR / PROJECT_FILE
-    try:
+    def apply_steps(stage: Path) -> None:
+        config_path = stage / PROJECT_DIR / PROJECT_FILE
         for step in plan.steps:
-            step.apply(root)
+            step.apply(stage)
             config = require_mapping(load_yaml(config_path, default={}), f"Project config '{config_path}'")
             config["version"] = step.to_version
             atomic_write_text(config_path, yaml.safe_dump(config, sort_keys=False))
+
+    try:
+        backup_path, _ = transform_project(
+            root, f"automatic backup before migration v{plan.current_version} to v{plan.target_version}", apply_steps,
+            allow_legacy=True,
+        )
     except Exception as exc:
-        try:
-            restore_snapshot(root, backup_path.name)
-        except Exception as rollback_exc:
-            raise MigrationError(
-                f"Project migration failed and rollback also failed. Backup: {backup_path}. "
-                f"Migration error: {exc}. Rollback error: {rollback_exc}."
-            ) from rollback_exc
         raise MigrationError(
-            f"Project migration failed and the automatic backup was restored. Backup: {backup_path}. {exc}"
+            f"Project migration failed. An automatic backup was created before staging. {exc}"
         ) from exc
     return MigrationResult(plan, backup_path)
+
+
+@project_locked
+def repair_project_identities(root: Path) -> Path:
+    from openscribe.board import migrate_chapter_links
+    from openscribe.editing import transform_project
+    from openscribe.project import ensure_chapter_ids, ensure_scene_ids, load_project_config
+
+    load_project_config(root)
+    def repair(stage: Path) -> None:
+        ensure_chapter_ids(stage)
+        ensure_scene_ids(stage)
+        migrate_chapter_links(stage)
+
+    return transform_project(root, "automatic backup before explicit identity repair", repair)[0]
 
 
 def _project_version(config: dict[str, Any]) -> int:

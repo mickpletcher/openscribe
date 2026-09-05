@@ -162,7 +162,8 @@ def test_hosted_provider_requires_explicit_data_transfer_consent() -> None:
         summarize_text("Private manuscript", settings, "chapter")
 
 
-def test_local_provider_does_not_require_data_transfer_consent() -> None:
+def test_local_provider_does_not_require_data_transfer_consent(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_COMPATIBLE_LOCAL_BASE_URL", "http://127.0.0.1:1234/v1")
     settings = AISettings(
         enabled=True,
         provider="openai-compatible-local",

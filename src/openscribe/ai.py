@@ -4,6 +4,8 @@ import importlib
 import os
 from dataclasses import dataclass
 
+from openscribe.network import local_endpoint
+
 HOSTED_PROVIDERS = frozenset({"openai", "azure-openai", "anthropic", "gemini", "mistral"})
 
 
@@ -28,6 +30,14 @@ def load_ai_settings(config: dict) -> AISettings:
 
 
 def requires_data_transfer_consent(settings: AISettings) -> bool:
+    if settings.provider.strip().lower() == "openai-compatible-local":
+        endpoint = os.environ.get("OPENAI_COMPATIBLE_LOCAL_BASE_URL", "")
+        if not endpoint:
+            raise AIConfigurationError("OPENAI_COMPATIBLE_LOCAL_BASE_URL is not set.")
+        try:
+            return not local_endpoint(endpoint)
+        except ValueError as exc:
+            raise AIConfigurationError(str(exc)) from exc
     return settings.provider.strip().lower() in HOSTED_PROVIDERS
 
 
@@ -60,7 +70,7 @@ def run_ai_task(
         raise AIConfigurationError("AI is disabled in .openscribe/project.yaml. Set ai.enabled to true first.")
 
     provider = settings.provider.strip().lower()
-    if provider in HOSTED_PROVIDERS and not allow_data_transfer:
+    if requires_data_transfer_consent(settings) and not allow_data_transfer:
         raise AIConfigurationError(
             f"This command sends the complete {context_label} text to the hosted "
             f"'{provider}' provider. Review the provider's data policy, then rerun "
