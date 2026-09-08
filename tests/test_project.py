@@ -363,6 +363,36 @@ def test_identity_repair_replaces_malformed_chapter_id_and_preserves_board_link(
     assert list_notes(root)[0].chapter_links == [repaired.chapter_id]
 
 
+def test_identity_repair_rejects_duplicate_malformed_chapter_ids_without_changes(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_part(root, "Ending")
+    chapter_paths = [
+        create_chapter(root, "Arrival", part="Opening"),
+        create_chapter(root, "Departure", part="Ending"),
+    ]
+    malformed_id = "legacy-1"
+    for chapter_path in chapter_paths:
+        metadata, body = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+        metadata["chapter_id"] = malformed_id
+        chapter_path.write_text(
+            f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+            encoding="utf-8",
+        )
+
+    add_note(root, "Ambiguous malformed link")
+    board_path = root / ".openscribe" / "boards" / "default.yaml"
+    board = yaml.safe_load(board_path.read_text(encoding="utf-8"))
+    board["notes"][0]["chapter_links"] = [malformed_id]
+    board_path.write_text(yaml.safe_dump(board, sort_keys=False), encoding="utf-8")
+    before = {path: path.read_bytes() for path in (*chapter_paths, board_path)}
+
+    with pytest.raises(SchemaValidationError, match="Duplicate chapter ID"):
+        repair_project_identities(root)
+
+    assert {path: path.read_bytes() for path in before} == before
+
+
 def test_duplicate_chapter_and_scene_aliases_require_immutable_ids(tmp_path: Path) -> None:
     root = init_project(tmp_path, "North County")
     create_part(root, "Opening")

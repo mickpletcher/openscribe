@@ -171,6 +171,7 @@ def ensure_chapter_ids(root: Path) -> dict[str, str]:
         return {}
 
     migrated: dict[str, str] = {}
+    seen_source_ids: set[str] = set()
     seen_ids: set[str] = set()
     for part_path in sorted(path for path in manuscript.iterdir() if path.is_dir()):
         for chapter_path in sorted(part_path.glob("*.md")):
@@ -178,8 +179,10 @@ def ensure_chapter_ids(root: Path) -> dict[str, str]:
             metadata, body = parse_frontmatter(text)
             validate_chapter_metadata(metadata, f"Chapter frontmatter in '{chapter_path}'")
             chapter_id = str(metadata.get("chapter_id", "")).strip()
-            if chapter_id and chapter_id in seen_ids:
-                raise SchemaValidationError("Duplicate chapter ID. Resolve the duplicate before migration.")
+            if chapter_id:
+                if chapter_id in seen_source_ids:
+                    raise SchemaValidationError("Duplicate chapter ID. Resolve the duplicate before migration.")
+                seen_source_ids.add(chapter_id)
             if not CHAPTER_ID_PATTERN.fullmatch(chapter_id):
                 previous_id = chapter_id
                 chapter_id = new_chapter_id()
@@ -190,6 +193,8 @@ def ensure_chapter_ids(root: Path) -> dict[str, str]:
                 )
                 if previous_id:
                     migrated[previous_id] = chapter_id
+            if chapter_id in seen_ids:
+                raise SchemaValidationError("Duplicate chapter ID. Resolve the duplicate before migration.")
             seen_ids.add(chapter_id)
     return migrated
 
