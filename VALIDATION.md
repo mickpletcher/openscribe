@@ -226,15 +226,15 @@ Risk: filesystem behavior or an uncooperative external writer can exceed the rec
 
 Follow-up: perform disposable VM power-cut and filesystem recovery drills before making a power-loss atomicity claim. Keep independent manuscript backups.
 
-### VL-006: Independent Class 4 review remains a release gate
+### VL-006: Independent Class 4 review completed with release blockers
 
 Requirement: independent review of identity, transaction, and local-bridge trust boundaries.
 
-Reason: no independent reviewer was available for the Class 4 implementation. Hosted CI completed successfully on Windows, Ubuntu, and macOS in run 33974973049 on 2026-09-05, so hosted validation is no longer part of this waiver.
+Evidence: an independent Claude review inspected the tracked repository at commit `c30fab7` on 2026-09-08. Codex then reproduced each reported defect locally. The review found four confirmed issues: malformed chapter IDs survive explicit repair; duplicate title references silently resolve to the first chapter or scene; legacy board-link migration silently resolves duplicate titles or slugs to the first chapter; and scene-operation apply accepts and overwrites a line-ending-only external edit.
 
-Risk: the implementing agent's own review can miss identity, recovery, and local-bridge architecture defects.
+Result: the independent-review requirement is satisfied, but the findings block release and use as the only copy of a manuscript. No confirmed defect was found in snapshot rollback, cross-process locking, the Word bridge trust boundary, Word three-way merge handling, or hosted-transfer consent gates.
 
-Follow-up: obtain a separate reviewer before release.
+Follow-up: fix the four confirmed findings, add regression tests, and repeat an independent review before release.
 
 ### VL-001: Hosted AI providers use mocked contracts
 
