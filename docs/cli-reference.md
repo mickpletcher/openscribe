@@ -94,13 +94,13 @@ Apply an ordered migration with an automatic checkpoint:
 openscribe migrate apply
 ```
 
-Explicitly add missing identities and update legacy board links:
+Explicitly replace missing or malformed identities and update legacy board links:
 
 ```powershell
 openscribe migrate repair
 ```
 
-Duplicate or ambiguous identities require manual review.
+Titles and slugs work only when they identify one chapter or scene. When a reference is ambiguous, OpenScribe refuses the command and reports the immutable IDs to use instead. Ambiguous legacy board links require manual review before migration or repair can finish.
 
 ## Manuscript structure
 
@@ -145,6 +145,8 @@ Movement renumbers storage names while immutable IDs preserve relationships.
 ## Scene structure
 
 Scene structure commands preview a unified diff by default. Add `--apply` only after reviewing it.
+
+Use the immutable chapter or scene ID when titles are duplicated. The preview records the exact source bytes. Any external change, including line-ending-only changes, makes the plan stale and requires another preview.
 
 Move a scene:
 

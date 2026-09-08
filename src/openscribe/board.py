@@ -38,12 +38,12 @@ def load_board(root: Path) -> dict[str, Any]:
     return board
 
 
-def migrate_chapter_links(root: Path) -> bool:
+def migrate_chapter_links(root: Path, repaired_ids: dict[str, str] | None = None) -> bool:
     path = board_path(root)
     if not path.exists():
         return False
     board = validate_board(load_yaml(path, default={"notes": []}), f"Board '{path}'")
-    changed = _migrate_chapter_links(root, board)
+    changed = _migrate_chapter_links(root, board, repaired_ids)
     if changed:
         save_board(root, board)
     return changed
@@ -246,19 +246,38 @@ def _next_note_id(board: dict[str, Any]) -> str:
     return f"note-{next_number:03d}"
 
 
-def _migrate_chapter_links(root: Path, board: dict[str, Any]) -> bool:
+def _migrate_chapter_links(
+    root: Path,
+    board: dict[str, Any],
+    repaired_ids: dict[str, str] | None = None,
+) -> bool:
     chapters = list_chapters(root)
-    references: dict[str, str] = {}
+    identities = {chapter.chapter_id.lower(): chapter.chapter_id for chapter in chapters}
+    references: dict[str, set[str]] = {}
     for chapter in chapters:
-        for reference in (chapter.chapter_id, chapter.slug, chapter.title, chapter.path.stem):
-            references.setdefault(reference.strip().lower(), chapter.chapter_id)
+        for reference in (chapter.slug, chapter.title, chapter.path.stem):
+            references.setdefault(reference.strip().lower(), set()).add(chapter.chapter_id)
+    for reference, chapter_id in (repaired_ids or {}).items():
+        references.setdefault(reference.strip().lower(), set()).add(chapter_id)
 
     changed = False
     for item in board.get("notes", []):
         original_links = [str(value) for value in item.get("chapter_links", [])]
         migrated_links: list[str] = []
         for value in original_links:
-            resolved = references.get(value.strip().lower(), value)
+            normalized = value.strip().lower()
+            resolved = identities.get(normalized)
+            if resolved is None and normalized in references:
+                matches = references[normalized]
+                if len(matches) > 1:
+                    choices = ", ".join(sorted(matches))
+                    raise ValueError(
+                        f"Legacy board chapter reference '{value}' is ambiguous. "
+                        f"Replace it with an immutable chapter ID: {choices}."
+                    )
+                resolved = next(iter(matches))
+            if resolved is None:
+                resolved = value
             if resolved not in migrated_links:
                 migrated_links.append(resolved)
         if migrated_links != original_links:

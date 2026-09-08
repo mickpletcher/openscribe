@@ -9,7 +9,7 @@ import yaml
 
 from openscribe.board import add_chapter_link, add_note, list_notes, render_board
 from openscribe.index import index_is_current, rebuild_project_index
-from openscribe.migrations import MigrationError, migrate_project, plan_project_migration
+from openscribe.migrations import MigrationError, migrate_project, plan_project_migration, repair_project_identities
 from openscribe.project import (
     add_scene,
     add_screenplay_scene,
@@ -18,6 +18,8 @@ from openscribe.project import (
     create_nonfiction_section,
     create_part,
     create_story_idea,
+    find_chapter,
+    find_scene,
     import_folder_project,
     init_project,
     init_project_from_template,
@@ -333,6 +335,94 @@ def test_board_chapter_links_migrate_to_stable_ids_and_survive_reorder(tmp_path:
 
     add_chapter_link(root, note.note_id, chapter_id)
     assert list_notes(root)[0].chapter_links == [chapter_id]
+
+
+def test_identity_repair_replaces_malformed_chapter_id_and_preserves_board_link(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    metadata, body = parse_frontmatter(chapter_path.read_text(encoding="utf-8"))
+    malformed_id = "chapter-not-valid"
+    metadata["chapter_id"] = malformed_id
+    chapter_path.write_text(
+        f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
+        encoding="utf-8",
+    )
+    add_note(root, "Linked clue")
+    board_path = root / ".openscribe" / "boards" / "default.yaml"
+    board = yaml.safe_load(board_path.read_text(encoding="utf-8"))
+    board["notes"][0]["chapter_links"] = [malformed_id]
+    board_path.write_text(yaml.safe_dump(board, sort_keys=False), encoding="utf-8")
+
+    backup = repair_project_identities(root)
+
+    repaired = list_chapters(root)[0]
+    assert backup.exists()
+    assert re.fullmatch(r"chapter-[a-f0-9]{32}", repaired.chapter_id)
+    assert repaired.chapter_id != malformed_id
+    assert list_notes(root)[0].chapter_links == [repaired.chapter_id]
+
+
+def test_duplicate_chapter_and_scene_aliases_require_immutable_ids(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_part(root, "Ending")
+    create_chapter(root, "Arrival", part="Opening")
+    create_chapter(root, "Arrival", part="Ending")
+    chapters = list_chapters(root)
+
+    with pytest.raises(ValueError, match=r"ambiguous.*immutable chapter ID"):
+        find_chapter(root, "Arrival")
+    assert find_chapter(root, chapters[0].chapter_id).path == chapters[0].path
+
+    add_scene(root, chapters[0].chapter_id, "Decision", "First choice.")
+    add_scene(root, chapters[0].chapter_id, "Decision", "Second choice.")
+    chapter = find_chapter(root, chapters[0].chapter_id)
+    with pytest.raises(ValueError, match=r"ambiguous.*immutable scene ID"):
+        find_scene(chapter, "Decision")
+    assert find_scene(chapter, chapter.scenes[0].scene_id).body == "First choice."
+
+
+@pytest.mark.parametrize("legacy_reference", ["Arrival", "ch-01-arrival"])
+def test_identity_repair_rejects_ambiguous_legacy_board_link_without_changes(
+    tmp_path: Path,
+    legacy_reference: str,
+) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    create_part(root, "Ending")
+    create_chapter(root, "Arrival", part="Opening")
+    create_chapter(root, "Arrival", part="Ending")
+    add_note(root, "Ambiguous link")
+    board_path = root / ".openscribe" / "boards" / "default.yaml"
+    board = yaml.safe_load(board_path.read_text(encoding="utf-8"))
+    board["notes"][0]["chapter_links"] = [legacy_reference]
+    board_path.write_text(yaml.safe_dump(board, sort_keys=False), encoding="utf-8")
+    before = board_path.read_bytes()
+
+    with pytest.raises(ValueError, match=r"ambiguous.*immutable chapter ID"):
+        repair_project_identities(root)
+
+    assert board_path.read_bytes() == before
+
+
+def test_scene_operation_rejects_line_ending_only_external_edit(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    add_scene(root, "Arrival", "Bus Stop", "Eli arrives.")
+    add_scene(root, "Arrival", "Town Hall", "Questions begin.")
+    chapter = list_chapters(root)[0]
+    operation = plan_reorder_scene(root, chapter.chapter_id, chapter.scenes[0].scene_id, 2)
+    chapter_path.write_bytes(chapter_path.read_bytes().replace(b"\n", b"\r\n"))
+    external = chapter_path.read_bytes()
+
+    with pytest.raises(ValueError, match="Scene plan is stale"):
+        apply_scene_operation(root, operation)
+
+    assert chapter_path.read_bytes() == external
+    refreshed = plan_reorder_scene(root, chapter.chapter_id, chapter.scenes[0].scene_id, 2)
+    assert apply_scene_operation(root, refreshed).exists()
 
 
 def test_create_story_idea_creates_structured_note(tmp_path: Path) -> None:

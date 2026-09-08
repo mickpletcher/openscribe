@@ -40,8 +40,8 @@ def _migrate_v1_to_v2(root: Path) -> None:
     from openscribe.board import migrate_chapter_links
     from openscribe.project import ensure_chapter_ids
 
-    ensure_chapter_ids(root)
-    migrate_chapter_links(root)
+    repaired_ids = ensure_chapter_ids(root)
+    migrate_chapter_links(root, repaired_ids)
 
 
 def _migrate_v2_to_v3(root: Path) -> None:
@@ -117,9 +117,9 @@ def repair_project_identities(root: Path) -> Path:
 
     load_project_config(root)
     def repair(stage: Path) -> None:
-        ensure_chapter_ids(stage)
+        repaired_ids = ensure_chapter_ids(stage)
         ensure_scene_ids(stage)
-        migrate_chapter_links(stage)
+        migrate_chapter_links(stage, repaired_ids)
 
     return transform_project(root, "automatic backup before explicit identity repair", repair)[0]
 

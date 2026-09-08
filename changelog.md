@@ -2,6 +2,13 @@
 
 ## 2026-09-08
 
+### Identity and scene-operation hardening
+
+* repaired malformed chapter IDs through the explicit checkpointed identity workflow and preserved board links to replaced IDs
+* rejected ambiguous chapter, scene, and legacy board references instead of selecting the first matching title or slug
+* made scene-operation preview baselines byte exact so line-ending-only external edits block apply
+* added regression coverage for repaired relationships, duplicate aliases, CLI selection, atomic migration refusal, and CRLF staleness
+
 ### Cross-platform index validation
 
 * normalized text line endings before hashing derived-index sources so unchanged sample files remain current across Windows and Unix checkouts

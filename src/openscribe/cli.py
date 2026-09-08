@@ -1078,7 +1078,7 @@ def migrate_repair() -> None:
         backup = repair_project_identities(root)
     except (OSError, RuntimeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
-    console.print(f"Repaired missing IDs and legacy board links. Backup: {backup.relative_to(root)}")
+    console.print(f"Repaired missing or malformed IDs and legacy board links. Backup: {backup.relative_to(root)}")
 
 
 @idea_app.command("list")

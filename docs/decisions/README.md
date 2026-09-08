@@ -9,3 +9,4 @@
 | ADR-005 | Shared editing and desktop authoring | Accepted | 2026-09-05 | Safe daily writing | None | None |
 | ADR-006 | Experimental Word round-trip availability | Accepted | 2026-09-05 | FU-004 | ADR-003 availability gate only | None |
 | ADR-007 | Graceful rejection of bounded Word bridge requests | Accepted | 2026-09-08 | Word bridge trust rejection handling | None | None |
+| ADR-008 | Strict identity references and byte-exact scene plans | Accepted | 2026-09-08 | Identity lookup, repair, board migration, and scene operations | None | None |

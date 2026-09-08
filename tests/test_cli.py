@@ -45,6 +45,24 @@ def test_outline_shows_literal_status_text(tmp_path: Path, monkeypatch) -> None:
     assert "Arrival [draft]" in result.stdout
 
 
+def test_cli_rejects_ambiguous_chapter_alias_and_accepts_id(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "part", "Ending"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Opening"]).exit_code == 0
+    assert runner.invoke(app, ["new", "chapter", "Arrival", "--part", "Ending"]).exit_code == 0
+
+    ambiguous = runner.invoke(app, ["show", "chapter", "Arrival"])
+    assert ambiguous.exit_code != 0
+    assert "ambiguous" in str(ambiguous.exception).lower()
+
+    chapter_id = list_chapters(tmp_path)[0].chapter_id
+    exact = runner.invoke(app, ["show", "chapter", chapter_id])
+    assert exact.exit_code == 0
+    assert "Arrival" in exact.stdout
+
+
 def test_compile_writes_docx_output(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 

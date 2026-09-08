@@ -136,7 +136,7 @@ openscribe migrate apply
 
 Migration creates an OpenScribe checkpoint before changing managed files.
 
-## Chapter or scene identity is missing
+## Chapter or scene identity is missing or malformed
 
 Run:
 
@@ -144,9 +144,11 @@ Run:
 openscribe migrate repair
 ```
 
-This explicitly adds missing identities and repairs legacy board links after creating a checkpoint.
+This explicitly replaces missing or malformed identities and repairs unambiguous legacy board links after creating a checkpoint.
 
-OpenScribe will not guess how to fix duplicate or ambiguous identities. Preserve the project and inspect the reported files manually.
+OpenScribe will not guess how to fix duplicate identities or board links that match multiple titles or slugs. Preserve the project, inspect the reported IDs, replace each ambiguous legacy link with the intended immutable chapter ID, and run the command again.
+
+If a normal command reports an ambiguous chapter or scene reference, rerun it with one of the immutable IDs listed in the error.
 
 ## Save says the chapter changed on disk
 

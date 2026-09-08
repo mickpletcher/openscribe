@@ -44,6 +44,7 @@ CONFERENCE_SESSIONS_DIR = "research/conferences/sessions"
 PRESENTATIONS_DIR = "notes/presentations"
 SOURCES_DIR = "research/sources"
 CURRENT_PROJECT_VERSION = 3
+CHAPTER_ID_PATTERN = re.compile(r"^chapter-[a-f0-9]{32}$")
 SCENE_ID_PATTERN = re.compile(r"^scene-[a-f0-9]{32}$")
 SCENE_MARKER_PATTERN = re.compile(
     r"^\r?\n<!--\s*openscribe-scene-id:\s*(scene-[a-f0-9]{32})\s*-->\s*(?:\r?\n)?",
@@ -179,14 +180,16 @@ def ensure_chapter_ids(root: Path) -> dict[str, str]:
             chapter_id = str(metadata.get("chapter_id", "")).strip()
             if chapter_id and chapter_id in seen_ids:
                 raise SchemaValidationError("Duplicate chapter ID. Resolve the duplicate before migration.")
-            if not chapter_id:
+            if not CHAPTER_ID_PATTERN.fullmatch(chapter_id):
+                previous_id = chapter_id
                 chapter_id = new_chapter_id()
                 metadata["chapter_id"] = chapter_id
                 atomic_write_text(
                     chapter_path,
                     f"---\n{yaml.safe_dump(metadata, sort_keys=False).strip()}\n---\n\n{body}",
                 )
-                migrated[chapter_path.stem] = chapter_id
+                if previous_id:
+                    migrated[previous_id] = chapter_id
             seen_ids.add(chapter_id)
     return migrated
 
@@ -1450,12 +1453,18 @@ def find_chapter(root: Path, chapter_ref: str) -> ChapterDocument:
     for chapter in chapters:
         if chapter.chapter_id.lower() == normalized:
             return chapter
-        if chapter.slug.lower() == normalized:
-            return chapter
-        if chapter.title.strip().lower() == normalized:
-            return chapter
-        if chapter.path.stem.lower() == normalized:
-            return chapter
+    matches = [
+        chapter
+        for chapter in chapters
+        if normalized in {chapter.slug.lower(), chapter.title.strip().lower(), chapter.path.stem.lower()}
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        choices = ", ".join(chapter.chapter_id for chapter in matches)
+        raise ValueError(
+            f"Chapter reference '{chapter_ref}' is ambiguous. Use an immutable chapter ID: {choices}."
+        )
     raise FileNotFoundError(f"Chapter '{chapter_ref}' was not found.")
 
 
@@ -1783,7 +1792,7 @@ def plan_reorder_scene(
 ) -> SceneOperation:
     source_chapter = find_chapter(root, chapter_ref)
     target_chapter = find_chapter(root, target_chapter_ref) if target_chapter_ref else source_chapter
-    source_text = source_chapter.path.read_text(encoding="utf-8")
+    source_text = source_chapter.path.read_bytes().decode("utf-8")
     source_metadata, source_body = parse_frontmatter(source_text)
     source_preamble, source_scenes = _parse_scene_layout(source_body)
     source_index = _find_scene_index(source_scenes, scene_ref)
@@ -1794,7 +1803,7 @@ def plan_reorder_scene(
         target_preamble = source_preamble
         target_scenes = source_scenes
     else:
-        target_text = target_chapter.path.read_text(encoding="utf-8")
+        target_text = target_chapter.path.read_bytes().decode("utf-8")
         target_metadata, target_body = parse_frontmatter(target_text)
         target_preamble, target_scenes = _parse_scene_layout(target_body)
 
@@ -1831,7 +1840,7 @@ def plan_split_scene(
     new_title: str,
 ) -> SceneOperation:
     chapter = find_chapter(root, chapter_ref)
-    original_text = chapter.path.read_text(encoding="utf-8")
+    original_text = chapter.path.read_bytes().decode("utf-8")
     metadata, body = parse_frontmatter(original_text)
     preamble, scenes = _parse_scene_layout(body)
     scene_index = _find_scene_index(scenes, scene_ref)
@@ -1868,7 +1877,7 @@ def plan_merge_scene(
 ) -> SceneOperation:
     chapter = find_chapter(root, chapter_ref)
     other_chapter = find_chapter(root, other_chapter_ref) if other_chapter_ref else chapter
-    original_text = chapter.path.read_text(encoding="utf-8")
+    original_text = chapter.path.read_bytes().decode("utf-8")
     metadata, body = parse_frontmatter(original_text)
     preamble, scenes = _parse_scene_layout(body)
     scene_index = _find_scene_index(scenes, scene_ref)
@@ -1880,7 +1889,7 @@ def plan_merge_scene(
         other_preamble = preamble
         other_scenes = scenes
     else:
-        other_text = other_chapter.path.read_text(encoding="utf-8")
+        other_text = other_chapter.path.read_bytes().decode("utf-8")
         other_metadata, other_body = parse_frontmatter(other_text)
         other_preamble, other_scenes = _parse_scene_layout(other_body)
     other_index = _find_scene_index(other_scenes, other_scene_ref)
@@ -1921,7 +1930,7 @@ def apply_scene_operation(root: Path, operation: SceneOperation) -> Path:
     edits = []
     for change in operation.changes:
         before = change.path.read_bytes()
-        if before.decode("utf-8").replace("\r\n", "\n") != change.before.replace("\r\n", "\n"):
+        if before != change.before.encode("utf-8"):
             raise ValueError("Scene plan is stale. Preview again before applying.")
         edits.append(FileEdit(change.path, before, change.after.encode("utf-8")))
     return apply_edits(root, tuple(edits), f"automatic backup before {operation.summary}")
@@ -2007,8 +2016,17 @@ def _chapter_text(metadata: dict[str, Any], body: str) -> str:
 def _find_scene_index(scenes: list[SceneDocument], scene_ref: str) -> int:
     normalized = scene_ref.strip().lower()
     for index, scene in enumerate(scenes):
-        if normalized in {scene.scene_id.lower(), scene.slug.lower(), scene.title.strip().lower()}:
+        if scene.scene_id.lower() == normalized:
             return index
+    matches = []
+    for index, scene in enumerate(scenes):
+        if normalized in {scene.slug.lower(), scene.title.strip().lower()}:
+            matches.append(index)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        choices = ", ".join(scenes[index].scene_id for index in matches)
+        raise ValueError(f"Scene reference '{scene_ref}' is ambiguous. Use an immutable scene ID: {choices}.")
     raise FileNotFoundError(f"Scene '{scene_ref}' was not found.")
 
 

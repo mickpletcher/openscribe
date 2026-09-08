@@ -26,13 +26,15 @@ Chapter frontmatter contains an immutable `chapter_id`. Scene headings are follo
 
 Do not manually change, copy, or delete those identities. OpenScribe uses them to preserve relationships across renames and reordering.
 
-If identities are missing, run:
+If identities are missing or malformed, run:
 
 ```powershell
 openscribe migrate repair
 ```
 
-The repair command creates a checkpoint first. Duplicate identities require manual review because OpenScribe cannot safely guess which record is correct.
+The repair command creates a checkpoint first. It replaces malformed IDs and preserves board links to those replaced values. Duplicate identities and ambiguous legacy title or slug links require manual review because OpenScribe cannot safely guess which record is correct.
+
+Titles and slugs are convenience references. They work only when one chapter or scene matches. If titles or slugs are duplicated, use the immutable IDs reported by the command.
 
 ## Unsaved drafts
 
@@ -81,6 +83,8 @@ openscribe snapshot list
 ```
 
 Checkpoints are stored inside the project. Copying the whole project to another device or backup location protects against device loss.
+
+Scene move, split, and merge previews remember the exact source bytes. If another tool changes the file after preview, even by changing only line endings, OpenScribe refuses apply. Preview again from the current file before continuing.
 
 ## Restore preview and apply
 

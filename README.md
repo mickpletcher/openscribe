@@ -115,6 +115,7 @@ OpenScribe protects writing in several ways:
 - snapshot restore previews changes before `--apply`
 - restore creates an automatic backup and uses a recovery journal
 - migrations and identity repair are explicit operations, not ordinary reads
+- duplicate chapter or scene titles require immutable IDs instead of ambiguous aliases
 - hosted AI and proofreading require a disclosure and explicit transfer approval
 
 These controls reduce risk. They do not replace an independent backup. Read [Safety and recovery](docs/safety-and-recovery.md) before using OpenScribe for important work.
