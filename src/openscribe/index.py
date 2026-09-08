@@ -19,6 +19,7 @@ from openscribe.project import (
 from openscribe.schema import atomic_write_text, load_yaml, validate_index
 
 INDEX_FILE = "project-index.yaml"
+TEXT_SOURCE_SUFFIXES = {".csv", ".json", ".md", ".markdown", ".tsv", ".txt", ".yaml", ".yml"}
 
 
 def index_path(root: Path) -> Path:
@@ -137,9 +138,16 @@ def _index_sources(root: Path) -> list[Path]:
 
 def _source_manifest(root: Path) -> dict[str, str]:
     return {
-        str(path.relative_to(root)).replace("\\", "/"): sha256(path.read_bytes()).hexdigest()
+        str(path.relative_to(root)).replace("\\", "/"): _source_hash(path)
         for path in _index_sources(root)
     }
+
+
+def _source_hash(path: Path) -> str:
+    content = path.read_bytes()
+    if path.suffix.lower() in TEXT_SOURCE_SUFFIXES:
+        content = content.replace(b"\r\n", b"\n")
+    return sha256(content).hexdigest()
 
 
 def _auxiliary_entries(root: Path, documents: list[AuxiliaryDocument]) -> list[dict[str, str]]:

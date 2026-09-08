@@ -1,5 +1,19 @@
 # changelog
 
+## 2026-09-08
+
+### Cross-platform index validation
+
+* normalized text line endings before hashing derived-index sources so unchanged sample files remain current across Windows and Unix checkouts
+* retained byte-for-byte hashing for binary research and project files
+* added regression coverage for CRLF and LF source equivalence
+* switched local package validation to uv's native build path so Developer Mode does not create an inaccessible nested environment with Microsoft Store Python
+
+### Word bridge rejection handling
+
+* made the loopback Word bridge close rejected requests cleanly after draining bounded bodies, preventing intermittent Windows socket aborts
+* repeated invalid token, origin, and host rejection checks to cover response delivery under Windows
+
 ## 2026-09-05
 
 ### Novice documentation

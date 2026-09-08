@@ -9,7 +9,7 @@ characters_count: 1
 research_count: 1
 notes_count: 1
 source_manifest:
-  .openscribe/boards/default.yaml: 63030fcc898032a922b2f35265fcaa4535405d5b6109d2f95b8d757e95c1b5c9
+  .openscribe/boards/default.yaml: 50d782962e0c26ad11d3c58e18df75995c27f0bfea8354283d0dd7ca999287f1
   .openscribe/elements/elements.yaml: 067cf79ca63aede985743080c2d870e17794c047480dcf6d3879e69256d68636
   .openscribe/project.yaml: da636ac38ccadb9fca9b7314ccfb62207f018a816d6bbad47c6ba48ba134dfde
   characters/eli-harper.md: 73bf20d6a4e78c6c1f35bb909282f0c11db6bce75fc8a0fc25e4544c4e9bbe5c

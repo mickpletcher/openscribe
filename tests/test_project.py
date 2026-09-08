@@ -443,6 +443,17 @@ def test_index_manifest_detects_changes_additions_and_deletions(tmp_path: Path) 
     assert not index_is_current(root)
 
 
+def test_index_manifest_ignores_platform_line_endings(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    create_part(root, "Opening")
+    chapter_path = create_chapter(root, "Arrival", part="Opening")
+    rebuild_project_index(root)
+
+    chapter_path.write_bytes(chapter_path.read_bytes().replace(b"\n", b"\r\n"))
+
+    assert index_is_current(root)
+
+
 def test_list_auxiliary_documents_reads_titles(tmp_path: Path) -> None:
     root = init_project(tmp_path, "North County")
     document_path = root / "research" / "field-notes.md"

@@ -93,11 +93,11 @@ Typical runtime: under 90 seconds per version after dependency caching.
 ### Source and wheel build
 
 ```powershell
-uv run --isolated --python 3.13 --with build python -m build
+uv build --python 3.13 --no-create-gitignore
 ```
 
 Expected exit code: `0`.
-Expected output: one source archive and one wheel under `dist/`.
+Expected output: one current source archive and one current wheel under `dist/`.
 Typical runtime: under two minutes after dependency caching.
 
 ### Installed-wheel CLI smoke test

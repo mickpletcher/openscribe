@@ -38,7 +38,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-    def _reply(self, status, payload, content_type="application/json"):
+    def _reply(self, status, payload, content_type="application/json", *, discard_request_body=False):
         body = json.dumps(payload).encode("utf-8") if content_type == "application/json" else payload
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -47,19 +47,44 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Access-Control-Allow-Origin", self.server.origin)
+        if discard_request_body:
+            self.send_header("Connection", "close")
+            self.close_connection = True
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
+        if discard_request_body:
+            self._discard_request_body()
+
+    def _discard_request_body(self):
+        if self.headers.get("Transfer-Encoding"):
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return
+        if size <= 0 or size > MAX_DOCX_BYTES:
+            return
+        remaining = size
+        try:
+            while remaining:
+                chunk = self.rfile.read(min(remaining, 64 * 1024))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except OSError:
+            pass
 
     def _authorized(self):
         if self.client_address[0] != "127.0.0.1" or self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}":
-            self._reply(403, {"error": "Invalid local host."})
+            self._reply(403, {"error": "Invalid local host."}, discard_request_body=True)
             return False
         if self.headers.get("Origin") != self.server.origin:
-            self._reply(403, {"error": "Unapproved origin."})
+            self._reply(403, {"error": "Unapproved origin."}, discard_request_body=True)
             return False
         provided = self.headers.get("Authorization", "")
         if not hmac.compare_digest(provided, "Bearer " + self.server.token):
-            self._reply(401, {"error": "A valid session token is required."})
+            self._reply(401, {"error": "A valid session token is required."}, discard_request_body=True)
             return False
         return True
 
@@ -88,7 +113,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
         if self.path not in {"/preview", "/apply"}:
-            self._reply(404, {"error": "Unknown route."})
+            self._reply(404, {"error": "Unknown route."}, discard_request_body=True)
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))

@@ -52,9 +52,10 @@ def test_bridge_preview_apply_and_replay_protection(tmp_path):
 
 def test_bridge_rejects_token_origin_host_size_and_project_injection(tmp_path):
     with running_bridge(tmp_path) as (bridge, payload):
-        assert request(bridge, "/preview", payload, token="wrong")[0] == 401
-        assert request(bridge, "/preview", payload, origin="https://unapproved.example.test")[0] == 403
-        assert request(bridge, "/preview", payload, extra={"Host": "unapproved.example.test"})[0] == 403
+        for _ in range(3):
+            assert request(bridge, "/preview", payload, token="wrong")[0] == 401
+            assert request(bridge, "/preview", payload, origin="https://unapproved.example.test")[0] == 403
+            assert request(bridge, "/preview", payload, extra={"Host": "unapproved.example.test"})[0] == 403
         assert request(bridge, "/preview", b"", extra={"Content-Length": str(21 * 1024 * 1024)})[0] == 413
         assert request(bridge, "/unknown", payload)[0] == 404
         assert request(bridge, "/apply", json.dumps({"root": "C:/outside"}))[0] == 400
