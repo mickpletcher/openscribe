@@ -2,23 +2,23 @@
 
 **Last full assessment:** 2026-09-05
 **Last targeted safety review:** 2026-09-08
-**Assessed source at commit:** `c30fab7`
-**Basis:** Repository inspection; local Python 3.11 through 3.13 pytest runs; hosted Windows, Ubuntu, and macOS CI; coverage; Ruff; Node task-pane tests; source and wheel build; installed-wheel CLI smoke; sample-index integrity; dependency audit; Bandit; secret scan; living-document compliance; independent Claude code review with local reproduction of every reported defect
+**Assessed source at commit:** `71a57b7`
+**Basis:** Repository inspection; local Python 3.11 through 3.13 pytest runs; hosted Windows, Ubuntu, and macOS CI; coverage; Ruff; Node task-pane tests; source and wheel build; installed-wheel CLI smoke; sample-index integrity; dependency audit; Bandit; secret scan; living-document compliance; three independent Claude review passes with local reproduction and correction of every confirmed defect
 **Assessed by:** Codex with an independent Claude reviewer
 
 ## Executive Summary
 
 `openscribe` is an active Tier 1 pre-release alpha with a local-first Markdown and YAML data model. The original six reported data-integrity defects are fixed. Authoring now uses recoverable drafts, external-edit conflict checks, explicit identity migration and repair, terminal restore states, cross-process locking, and destination-based AI consent. The project also has an optional desktop editor, actionable LanguageTool review, and an experimental identity-preserving Word round trip.
 
-The full local and hosted validation suites pass, but an independent review of commit `c30fab7` found four additional data-integrity defects that the tests did not cover. Malformed chapter IDs survive the documented repair command, duplicate title lookups and legacy board-link migration silently choose the first match, and scene operations do not treat a line-ending-only disk change as stale. The project should not be the only copy of a manuscript. Physical power-loss behavior, native accessibility, real Word save and reopen behavior, and licensed hosted LanguageTool compatibility also remain unverified.
+The four data-integrity defects found by the independent Class 4 review are fixed and independently re-reviewed. Commit `71a57b7` rejects malformed duplicate identities without changing live project files, and the reviewer found no remaining confirmed defect in the reviewed identity or conflict scope. OpenScribe can be used as a primary working copy with independent backups. It should not be the only copy of a manuscript because physical power-loss behavior, native accessibility, real Word save and reopen behavior, and licensed hosted LanguageTool compatibility remain unverified.
 
 ## Agent Handoff
 
 - Ordinary reads must not rewrite project data. Persisted-format changes go through explicit, checkpointed migrations or repair commands. Evidence: `src/openscribe/migrations.py`, `src/openscribe/project.py`.
-- Persisted chapter and scene relationships use immutable IDs. Until the current findings are fixed, use IDs instead of titles in CLI automation: malformed chapter IDs are not repaired, and duplicate title or slug lookups silently select the first match. Evidence: `src/openscribe/project.py`, `src/openscribe/migrations.py`, `src/openscribe/word.py`.
-- Legacy board chapter-link migration must not run against ambiguous duplicate titles or slugs. It currently selects the first chapter without warning. Evidence: `src/openscribe/board.py`.
+- Persisted chapter and scene relationships use immutable IDs. Titles and slugs resolve only when unique; ambiguous aliases fail and report the matching immutable IDs. Explicit repair replaces one malformed ID but rejects duplicate source IDs before staged changes are installed. Evidence: `src/openscribe/project.py`, `src/openscribe/migrations.py`, `src/openscribe/word.py`.
+- Legacy board chapter-link migration rejects ambiguous duplicate titles, slugs, and replaced IDs without installing partial changes. Evidence: `src/openscribe/board.py`, `src/openscribe/editing.py`.
 - TUI, desktop, and Word import saves share baseline conflict detection, backups, and journaled replacement behavior. Recoverable drafts protect unsaved navigation and quit paths. Evidence: `src/openscribe/editing.py`, `src/openscribe/tui.py`, `src/openscribe/desktop.py`.
-- Scene-operation apply currently normalizes CRLF and LF before its stale-plan comparison. A line-ending-only external edit is accepted and then overwritten. Evidence: `src/openscribe/project.py`.
+- Scene-operation apply compares the exact previewed UTF-8 bytes. A line-ending-only external edit makes the plan stale and blocks apply. Evidence: `src/openscribe/project.py`.
 - Restore journals have validated terminal states and project-scoped locks. Process-interruption tests cover both replacement boundaries. Do not claim physical power-loss atomicity. Evidence: `src/openscribe/snapshots.py`, `src/openscribe/locking.py`, `VALIDATION.md#vl-005-physical-power-loss-durability-is-not-proven`.
 - Hosted AI and LanguageTool requests require disclosure and explicit transfer approval based on the actual endpoint. Local loopback use remains the default. Evidence: `src/openscribe/ai.py`, `src/openscribe/network.py`, `src/openscribe/proofreading.py`.
 - Word import, the loopback bridge, and the task pane are experimental. The independent review found no confirmed bridge or Word merge defect, but real Word host validation remains a release gate. Evidence: `docs/decisions/ADR-006-experimental-word-round-trip-availability.md`, `VALIDATION.md#vl-004-native-desktop-and-real-word-interoperability-are-unverified`.
@@ -51,13 +51,13 @@ Generated by `scripts/docs-check.ps1` on 2026-09-08.
 ## Current Health
 
 - Hosted CI: PASS for commit `c30fab7` on 2026-09-08. [Run 34190490036](https://github.com/mickpletcher/openscribe/actions/runs/34190490036) completed all nine documentation, lint, security, package, Windows, Ubuntu, and macOS jobs successfully, including Python 3.11 through 3.13.
-- Tests: PASS on 2026-09-08. Isolated local Python 3.11, 3.12, and 3.13 runs each reported 149 passed, 0 failed, and 0 skipped. Python 3.13 coverage was 87.08 percent.
+- Tests: PASS on 2026-09-08. Isolated local Python 3.11, 3.12, and 3.13 runs each reported 156 passed, 0 failed, and 0 skipped. Python 3.13 coverage was 87.17 percent.
 - Word task pane: PASS on 2026-09-08. `node --test tests/word_addin.test.cjs` exited `0` with 8 passed, 0 failed, and 0 skipped. Rejected Word bridge requests passed 10 consecutive Windows response-delivery runs.
 - Lint: PASS on 2026-09-08. `python -m ruff check src tests scripts/check-secrets.py scripts/check_markdown_links.py` exited `0` with no findings.
 - Build and CLI smoke: PASS on 2026-09-08. `uv build --python 3.13 --no-create-gitignore` produced one source distribution and one wheel. The installed wheel and source checkout displayed the expected CLI, desktop, and Word help.
 - Security and dependencies: PASS on 2026-09-08. The dependency audit found no known third-party vulnerabilities; the unpublished local package was skipped because it is not on PyPI. Bandit found no medium-or-higher issues. The reviewed-baseline secret scan found 0 unreviewed findings.
 - Documentation: PASS on 2026-09-08. The living-document check reported no missing, invalid, or review rows. The link checker resolved 59 local links and heading anchors across 50 Markdown files, and all 6 executable beginner-workflow tests passed.
-- Independent safety review: FAIL on 2026-09-08 for commit `c30fab7`. Claude reported four findings, and Codex reproduced all four locally without changing tracked files: malformed chapter IDs remain invalid after repair; duplicate chapter and scene title lookups select the first match; duplicate-title legacy board links migrate to the first chapter ID; and a CRLF-only external change is accepted and overwritten by scene-operation apply. The reviewer found no confirmed defect in snapshot rollback, cross-process locking, the Word bridge trust boundary, Word three-way conflict handling, or hosted-transfer consent gates.
+- Independent safety review: PASS on 2026-09-08 for commit `71a57b7`. Claude verified all four original findings as resolved, reproduced duplicate malformed-ID refusal through both repair and v1-to-v2 migration, and found no new release blocker in the reviewed identity or conflict scope. The reviewer also found no confirmed defect in snapshot rollback, cross-process locking, the Word bridge trust boundary, Word three-way conflict handling, or hosted-transfer consent gates.
 - Native application validation: Not assessed beyond headless Qt and synthetic OOXML tests. See VL-004 through VL-006 in `VALIDATION.md`.
 
 ## Standing Limitations and Gates
@@ -67,7 +67,7 @@ Generated by `scripts/docs-check.ps1` on 2026-09-08.
 - Licensed hosted LanguageTool compatibility is covered by mocked contracts only. See `VALIDATION.md#vl-003-licensed-hosted-languagetool-compatibility-is-unverified`.
 - Native desktop accessibility and real Word interoperability are unverified. See `VALIDATION.md#vl-004-native-desktop-and-real-word-interoperability-are-unverified`.
 - Physical power-loss durability is not proven. See `VALIDATION.md#vl-005-physical-power-loss-durability-is-not-proven`.
-- The independent Class 4 review is complete, but its confirmed identity and conflict findings must be fixed and independently re-reviewed before release. See `VALIDATION.md#vl-006-independent-class-4-review-completed-with-release-blockers`.
+- The independent Class 4 identity and conflict review passed after remediation. See `VALIDATION.md#vl-006-independent-class-4-review-passed-after-remediation`.
 
 ## Current Capabilities
 
@@ -75,11 +75,11 @@ The package provides a PySide6 desktop authoring application, a Textual TUI, and
 
 ## Known Issues and Risks
 
-Malformed chapter IDs cannot currently be repaired through the documented command. Duplicate chapter or scene title lookups silently target the first match, and legacy board-link migration silently maps ambiguous titles or slugs to the first chapter. Scene-operation apply can overwrite a line-ending-only external edit. Native desktop and TUI accessibility are not manually verified. Real Word can rewrite OOXML in ways synthetic fixtures do not reproduce, and task-pane sideloading and certificate handling have not completed a live round trip. Process termination recovery does not prove behavior during physical power loss, storage-cache loss, OneDrive conflicts, or edits from tools that ignore the project lock. Hosted provider contracts remain mocked. Keep independent backups and do not remove the experimental Word label.
+Native desktop and TUI accessibility are not manually verified. Real Word can rewrite OOXML in ways synthetic fixtures do not reproduce, and task-pane sideloading and certificate handling have not completed a live round trip. Process termination recovery does not prove behavior during physical power loss, storage-cache loss, OneDrive conflicts, or edits from tools that ignore the project lock. Hosted provider contracts remain mocked. The identity helper is safe through its shipped checkpointed staging paths but is not internally atomic if a future caller bypasses those paths. Keep independent backups and do not remove the experimental Word label.
 
 ## Technical Debt Summary
 
-One Medium technical-debt entry remains open: TD-003 for incomplete native TUI interaction and accessibility coverage. Four confirmed safety defects from the 2026-09-08 independent review are tracked in this assessment until fixed. The remaining validation limitations and release gates are recorded as VL-001 through VL-006 in `VALIDATION.md`.
+One Medium technical-debt entry remains open: TD-003 for incomplete native TUI interaction and accessibility coverage. The remaining validation limitations and release gates are recorded as VL-001 through VL-005 in `VALIDATION.md`; VL-006 records the completed independent review and remediation evidence.
 
 ## Recently Changed
 
@@ -87,12 +87,11 @@ See `changelog.md`.
 
 ## Current Priorities
 
-1. Fix malformed chapter-ID repair and add a regression test proving the documented repair command restores a valid ID.
-2. Reject ambiguous chapter, scene, and legacy board-link references instead of silently selecting the first duplicate title or slug; add CLI and migration regression tests.
-3. Make scene-operation stale-plan checks byte-exact so line-ending-only external edits are rejected; add a regression test.
-4. Repeat the independent identity and conflict review after those fixes, then run the documented real desktop Word round trip.
-5. Perform native desktop and TUI accessibility and terminal-size checks, plus disposable VM power-cut recovery drills.
-6. Run the synthetic LanguageTool contract smoke against a self-hosted server and retain mocked-only status for licensed hosted endpoints.
+1. Run the documented synthetic real desktop Word round trip, task-pane sideload, certificate, and wrong-origin checks.
+2. Perform native desktop and TUI accessibility and terminal-size checks.
+3. Run disposable VM power-cut recovery drills before making any physical power-loss durability claim.
+4. Run the synthetic LanguageTool contract smoke against a self-hosted server and retain mocked-only status for licensed hosted endpoints.
+5. Keep identity repair behind the checkpointed staging wrapper if new repair entry points are added.
 
 ## Repository Limitations
 

@@ -5,9 +5,11 @@
 ### Identity and scene-operation hardening
 
 * repaired malformed chapter IDs through the explicit checkpointed identity workflow and preserved board links to replaced IDs
+* rejected duplicate malformed source IDs before any repaired relationship mapping can be installed
 * rejected ambiguous chapter, scene, and legacy board references instead of selecting the first matching title or slug
 * made scene-operation preview baselines byte exact so line-ending-only external edits block apply
 * added regression coverage for repaired relationships, duplicate aliases, CLI selection, atomic migration refusal, and CRLF staleness
+* passed an independent follow-up review of the identity and conflict remediations with no remaining confirmed blocker in that scope
 
 ### Cross-platform index validation
 

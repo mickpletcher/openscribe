@@ -226,15 +226,15 @@ Risk: filesystem behavior or an uncooperative external writer can exceed the rec
 
 Follow-up: perform disposable VM power-cut and filesystem recovery drills before making a power-loss atomicity claim. Keep independent manuscript backups.
 
-### VL-006: Independent Class 4 review completed with release blockers
+### VL-006: Independent Class 4 review passed after remediation
 
 Requirement: independent review of identity, transaction, and local-bridge trust boundaries.
 
-Evidence: an independent Claude review inspected the tracked repository at commit `c30fab7` on 2026-09-08. Codex then reproduced each reported defect locally. The review found four confirmed issues: malformed chapter IDs survive explicit repair; duplicate title references silently resolve to the first chapter or scene; legacy board-link migration silently resolves duplicate titles or slugs to the first chapter; and scene-operation apply accepts and overwrites a line-ending-only external edit.
+Evidence: an independent Claude review inspected commit `c30fab7` on 2026-09-08 and found four confirmed issues: malformed chapter IDs survived explicit repair; duplicate title references resolved to the first chapter or scene; legacy board-link migration resolved duplicate titles or slugs to the first chapter; and scene-operation apply accepted a line-ending-only external edit. Codex reproduced all four locally. A second review of remediation commit `122a127` confirmed three fixes and found one malformed duplicate-ID regression. Codex reproduced and fixed that regression. A final review of commit `71a57b7` ran 156 tests and adversarial repair and migration probes.
 
-Result: the independent-review requirement is satisfied, but the findings block release and use as the only copy of a manuscript. No confirmed defect was found in snapshot rollback, cross-process locking, the Word bridge trust boundary, Word three-way merge handling, or hosted-transfer consent gates.
+Result: all four original findings and the remediation regression are resolved. The reviewer found no new release blocker in the reviewed identity or conflict scope and lifted the review-specific release gate. No confirmed defect was found in snapshot rollback, cross-process locking, the Word bridge trust boundary, Word three-way merge handling, or hosted-transfer consent gates. The internal identity helper is not atomic when called directly, but every shipped call site runs it against a temporary staged copy and discards that copy on failure.
 
-Follow-up: fix the four confirmed findings, add regression tests, and repeat an independent review before release.
+Follow-up: keep every identity-repair entry point behind the checkpointed staging wrapper and repeat this review if that call boundary changes. VL-004 and VL-005 remain separate release limitations.
 
 ### VL-001: Hosted AI providers use mocked contracts
 

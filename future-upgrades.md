@@ -43,7 +43,7 @@ Writers can use Word without making DOCX the canonical store.
 
 **Why deferred**
 
-The package layer, importer, bridge, and task pane are implemented. The 2026-09-08 independent Class 4 review found no confirmed defect in the Word bridge or three-way merge logic, but it found separate identity and conflict release blockers that require remediation and re-review. Real Word save/reopen, task-pane sideload, certificate, and accessibility gates also remain open. See VL-004 and VL-006 in `VALIDATION.md`.
+The package layer, importer, bridge, and task pane are implemented. The 2026-09-08 independent Class 4 review found no confirmed defect in the Word bridge or three-way merge logic. Its separate identity and conflict findings were fixed and passed follow-up review at commit `71a57b7`. Real Word save/reopen, task-pane sideload, certificate, and accessibility gates remain open. See VL-004 and VL-006 in `VALIDATION.md`.
 
 **Trigger**
 
