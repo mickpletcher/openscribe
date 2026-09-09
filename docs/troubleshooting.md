@@ -4,7 +4,43 @@ Start with the section that matches the message or behavior you see.
 
 Do not delete project files, drafts, snapshots, or recovery journals just to clear an error.
 
-## Git or Python is not recognized
+## Windows blocks the installer
+
+OpenScribe release packages are not digitally signed yet. Windows can therefore show **Windows protected your PC** or list the publisher as **Unknown publisher**.
+
+Before continuing:
+
+1. download the setup file only from the [OpenScribe releases page](https://github.com/mickpletcher/openscribe/releases)
+2. download `SHA256SUMS.txt` from the same release
+3. compare the installer hash as described in [Getting started](../getting-started.md#step-2-check-the-download)
+
+If the hash matches, select **More info**, then **Run anyway**. Stop if the hash does not match.
+
+## The installer checksum does not match
+
+Delete the downloaded installer and `SHA256SUMS.txt`. Download both again from the same release.
+
+Do not run the setup file if the second comparison also fails. Report the release version and both calculated hashes without attaching the installer.
+
+## The installed desktop application does not open
+
+Try **OpenScribe** from the Start menu again. If it still does not open, read the startup log in PowerShell:
+
+```powershell
+Get-Content -LiteralPath "$env:LOCALAPPDATA\OpenScribe\openscribe-error.log"
+```
+
+If the file does not exist, reinstall the same release. Your writing projects are stored outside the application folder and are not removed by normal reinstall or uninstall operations.
+
+When reporting the problem, include the release version and error log, but remove private paths or manuscript text first.
+
+## The portable application does not open
+
+Extract the entire portable ZIP to a normal folder before running `OpenScribe.exe`. The `_internal` folder must remain beside the executable.
+
+Do not run the executable from inside the ZIP and do not copy `OpenScribe.exe` by itself.
+
+## Git or Python is not recognized during source installation
 
 Check:
 
@@ -42,6 +78,10 @@ If organizational policy still blocks activation, call the environment's Python 
 
 ## openscribe is not recognized
 
+For an installer installation, open **OpenScribe command line** from the Start menu. That shortcut defines the `openscribe` command for its PowerShell window.
+
+The remaining steps in this section apply to a source installation.
+
 Activate the environment from the OpenScribe source folder:
 
 ```powershell
@@ -61,7 +101,7 @@ If that fails, reinstall the project into the active environment:
 python -m pip install -e ".[desktop]"
 ```
 
-## The desktop application does not open
+## The source desktop application does not open
 
 Confirm the desktop dependency is installed:
 

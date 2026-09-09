@@ -1,0 +1,63 @@
+name: Windows package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install ".[packaging]"
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          if ($env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Release tag $env:GITHUB_REF_NAME does not match project version v$version."
+          }
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build portable package and installer
+        shell: pwsh
+        run: pwsh -File scripts/build-windows.ps1
+      - name: Test silent install, upgrade, and uninstall
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath artifacts -Filter "OpenScribe-Setup-*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Installer artifact was not created." }
+          pwsh -File scripts/test-windows-installer.ps1 -Installer $installer.FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openscribe-windows-${{ github.sha }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: openscribe-windows-${{ github.sha }}
+          path: artifacts
+      - name: Create prerelease and upload Windows packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" artifacts/* --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes --prerelease

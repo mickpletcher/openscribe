@@ -6,20 +6,22 @@ Complete [Getting started](../getting-started.md) first if OpenScribe is not ins
 
 ## Start the application
 
-Open PowerShell in the OpenScribe source folder, activate the environment, and launch the application:
+After using the Windows installer, open the Start menu, type `OpenScribe`, and select **OpenScribe**.
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-openscribe desktop
-```
-
-To open a known project immediately:
+To open a known project immediately, start **OpenScribe command line** and run:
 
 ```powershell
 openscribe desktop --project "C:\Users\YourName\Documents\OpenScribe\my-novel"
 ```
 
 Use your own project path. Do not copy the example username literally.
+
+Source installations use the activated Python environment:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+openscribe desktop
+```
 
 ## Understand the window
 

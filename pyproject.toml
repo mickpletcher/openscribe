@@ -24,6 +24,10 @@ dependencies = [
 
 [project.optional-dependencies]
 desktop = ["PySide6>=6.8"]
+packaging = [
+  "PyInstaller>=6.16",
+  "PySide6==6.10.3",
+]
 ai = [
   "anthropic>=0.57.1",
   "google-genai>=1.29.0",
@@ -41,6 +45,9 @@ dev = [
 
 [project.scripts]
 openscribe = "openscribe.cli:app"
+
+[project.gui-scripts]
+openscribe-desktop = "openscribe.desktop_launcher:run"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

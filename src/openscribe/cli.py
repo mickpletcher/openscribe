@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import typer
@@ -217,6 +219,14 @@ def word_import(document: Path, apply: bool = typer.Option(False, "--apply")) ->
 
 @app.command("desktop")
 def desktop(project: Path | None = typer.Option(None, "--project", help="Project folder to open.")) -> None:
+    if getattr(sys, "frozen", False):
+        packaged_desktop = Path(sys.executable).with_name("OpenScribe.exe")
+        if packaged_desktop.is_file():
+            arguments = [str(packaged_desktop)]
+            if project is not None:
+                arguments.extend(["--project", str(project)])
+            subprocess.Popen(arguments)
+            return
     try:
         from openscribe.desktop import launch
     except ImportError as exc:

@@ -2,6 +2,16 @@
 
 ## 2026-09-08
 
+### Windows installation packages
+
+* added a per-user Windows installer, Start menu shortcuts, optional desktop shortcut, uninstaller, and portable ZIP that require no separate Python installation
+* packaged the desktop application and CLI with deterministic PyInstaller specifications and excluded foreign ICU DLLs that can shadow the Windows runtime during builds
+* added packaged GUI, CLI, project creation, snapshot recovery, DOCX, PDF, EPUB, install, upgrade, shortcut, and uninstall smoke tests
+* routed `openscribe desktop` from the frozen CLI to the packaged desktop executable
+* added Windows package CI artifacts, SHA-256 checksums, and prerelease publication for version tags
+* bundled the OpenScribe license and collected license notices for every frozen runtime dependency
+* made the installer route the first novice setup path while retaining source installation instructions for developers
+
 ### Identity and scene-operation hardening
 
 * repaired malformed chapter IDs through the explicit checkpointed identity workflow and preserved board links to replaced IDs

@@ -38,3 +38,39 @@ Before the first public release or claiming broad terminal and accessibility sup
 **Estimated effort:** Medium
 
 TD-004's missing scan configuration is resolved by the security job in `.github/workflows/ci.yml`. The job passed in hosted CI run 33974973049 on 2026-09-05. See the appended resolution in `completed-upgrades.md`.
+
+### TD-005: Windows release packages are not digitally signed
+
+**Status:** Open
+**Severity:** Medium
+**Area:** Windows distribution
+**Introduced/Discovered:** 2026-09-08
+**Standing waiver:** No
+
+**Related files**
+
+- `.github/workflows/windows-package.yml`
+- `scripts/build-windows.ps1`
+- `packaging/openscribe.iss`
+
+**Description**
+
+The Windows setup executable and portable application are reproducible and checksummed, but their executable files do not carry an Authenticode signature.
+
+**Why it exists**
+
+The repository does not yet have a protected code-signing certificate or signing service.
+
+**Impact**
+
+Windows can show an unknown-publisher or SmartScreen warning. A checksum proves file integrity only after the user obtains a trusted checksum from the same release.
+
+**Recommended resolution**
+
+Use a protected CI signing identity. Sign the desktop executable, CLI executable, and installer. Verify signatures before release publication and test the signed installer on a clean Windows VM.
+
+**Fix trigger**
+
+Before the first public stable release.
+
+**Estimated effort:** Medium

@@ -14,22 +14,35 @@ This is alpha software. Keep an independent backup of your manuscript. Real Micr
 
 ## Start here
 
-If this is your first time using Python or OpenScribe, follow the [Windows getting-started guide](getting-started.md). It includes installation, project creation, writing, saving, exporting, and recovery.
+If this is your first time using OpenScribe, follow the [Windows getting-started guide](getting-started.md). The packaged installer does not require Python or Git.
 
 Choose the interface that fits your work:
 
 | Interface | Best for | Start command |
 |---|---|---|
-| Desktop | Most writers and first-time users | `openscribe desktop` |
-| TUI | Keyboard-focused terminal writing | `openscribe tui` |
-| CLI | Automation and detailed project management | `openscribe --help` |
+| Desktop | Most writers and first-time users | **OpenScribe** in the Start menu |
+| TUI | Keyboard-focused terminal writing | `openscribe tui` in **OpenScribe command line** |
+| CLI | Automation and detailed project management | `openscribe --help` in **OpenScribe command line** |
 | External editor | Direct Markdown editing in VSCode or another editor | `openscribe open chapter "Title"` |
 
 All interfaces use the same project files and safety rules.
 
 ## Install on Windows
 
-Install [Git for Windows](https://git-scm.com/download/win) and [Python 3.11 or newer](https://www.python.org/downloads/windows/) first.
+For a packaged release:
+
+1. Open the [OpenScribe releases page](https://github.com/mickpletcher/openscribe/releases).
+2. Download `OpenScribe-Setup-VERSION-x64.exe` and `SHA256SUMS.txt` from the release.
+3. Run the setup file. It installs for your Windows account and does not require administrator access.
+4. Open **OpenScribe** from the Start menu.
+
+The installer includes the desktop application and command-line tools. Python and Git are not required. Release packages are not digitally signed yet, so Windows may show an unrecognized-app warning. Confirm that the file came from this repository and that its SHA-256 value matches `SHA256SUMS.txt` before continuing.
+
+The portable ZIP is an alternative for users who do not want an installer. Extract the entire ZIP before opening `OpenScribe.exe`. Do not run it from inside the ZIP.
+
+### Install from source
+
+Use this route for development or when no packaged release is available. Install [Git for Windows](https://git-scm.com/download/win) and [Python 3.11 or newer](https://www.python.org/downloads/windows/) first.
 
 Then run these commands in PowerShell:
 
@@ -53,6 +66,8 @@ The easiest route is:
 ```powershell
 openscribe desktop
 ```
+
+With the packaged installer, open **OpenScribe** from the Start menu instead.
 
 Select **New project**, choose an empty folder, enter a title, add a chapter and scene, and start writing.
 
@@ -134,6 +149,7 @@ These controls reduce risk. They do not replace an independent backup. Read [Saf
 - optional local LanguageTool proofreading
 - optional AI review with explicit hosted-transfer consent
 - experimental tagged Word export and import
+- per-user Windows installer and portable Windows package
 
 ## Optional LanguageTool proofreading
 
@@ -229,11 +245,19 @@ python scripts/check_markdown_links.py
 pwsh -File scripts/docs-check.ps1 -FailOnGap
 ```
 
+Windows package build:
+
+```powershell
+python -m pip install -e ".[packaging]"
+pwsh -File scripts/build-windows.ps1
+```
+
 See [VALIDATION.md](VALIDATION.md) for supported Python versions, package checks, security checks, and known validation limitations.
 
 ## Current limitations
 
 - The project is pre-release alpha software.
+- Windows release packages are not digitally signed.
 - Native desktop and TUI accessibility are not fully verified.
 - Physical power-loss durability is not proven.
 - Licensed hosted LanguageTool and live hosted AI providers are covered only by limited or mocked contract tests.

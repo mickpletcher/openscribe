@@ -45,6 +45,7 @@ Use for dependency, packaging, architecture, security, release, or broad data-mo
 - `uv` for isolated multi-version and wheel checks.
 - Project development dependencies from `.[dev]`.
 - Node.js 22 or later for task-pane contract tests.
+- Inno Setup 6 or later for the Windows installer build.
 - Set `UV_LINK_MODE=copy` if the Windows filesystem cannot create uv cache hardlinks.
 - Set `QT_QPA_PLATFORM=offscreen` for headless Qt tests. Native desktop review is a separate gate.
 
@@ -110,6 +111,23 @@ uv run --isolated --python 3.13 --no-project --with $wheel.FullName openscribe -
 Expected exit code: `0`.
 Expected output: top-level `openscribe` usage and command list.
 Typical runtime: under one minute after dependency caching.
+
+### Windows executable and installer
+
+Run on Windows from the repository root:
+
+```powershell
+$env:UV_LINK_MODE = "copy"
+uv run --isolated --python 3.13 --extra packaging pwsh -File scripts/build-windows.ps1
+$installer = Get-ChildItem -LiteralPath artifacts -Filter "OpenScribe-Setup-*.exe" | Select-Object -First 1
+pwsh -File scripts/test-windows-installer.ps1 -Installer $installer.FullName
+```
+
+Expected exit code: `0` for both commands.
+
+Expected output: a portable ZIP, setup executable, and `SHA256SUMS.txt` under `artifacts`. The package must contain the OpenScribe license and bundled runtime dependency notices. The package smoke must launch the frozen desktop import path, create a synthetic project, preview and apply snapshot restore, and export DOCX, PDF, and EPUB. The installer smoke must pass install, upgrade, Start menu shortcut, GUI launch, uninstall, and project-preservation checks.
+
+Use `-SkipInstaller` only when producing or diagnosing the portable package without Inno Setup. It does not satisfy the full Windows package gate.
 
 ### Sample index integrity
 
@@ -259,6 +277,16 @@ Automated tests mock the LanguageTool `/v2/check` response. A local synthetic sm
 Risk: authentication or service-specific behavior at a licensed hosted endpoint can differ from the self-hosted server.
 
 Follow-up: test a licensed hosted endpoint only with explicit approval, isolated credentials, and nonprivate synthetic text before claiming hosted compatibility.
+
+### VL-007: Windows release trust and clean-machine compatibility are unverified
+
+Requirement: signed Windows packages plus install, launch, export, upgrade, and uninstall testing on a clean supported Windows machine.
+
+Reason: the automated workflow and local smoke tests exercise the frozen application and installer, but release artifacts are not digitally signed and have not been tested on a separate clean Windows installation.
+
+Risk: SmartScreen can warn or block a novice user, and a dependency present on the build machine could conceal a clean-machine packaging defect.
+
+Follow-up: sign release artifacts through a protected CI identity, verify the signature and checksum in CI, and run the documented package workflow in a disposable clean Windows VM before a public stable release.
 
 ## Validation Matrix
 
