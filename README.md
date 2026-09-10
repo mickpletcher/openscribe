@@ -147,7 +147,7 @@ These controls reduce risk. They do not replace an independent backup. Read [Saf
 - research notes, citations, paper structure, and conference material workflows
 - DOCX, PDF, and EPUB export
 - optional local LanguageTool proofreading
-- optional AI review with explicit hosted-transfer consent
+- optional AI page and chapter drafting plus review, with explicit hosted-transfer consent
 - experimental tagged Word export and import
 - per-user Windows installer and portable Windows package
 
@@ -165,9 +165,15 @@ The desktop and TUI can preview and apply suggestions to the current draft with 
 
 See [LanguageTool setup and troubleshooting](docs/troubleshooting.md#languagetool-does-not-connect).
 
-## Optional AI review
+## AI-assisted book writing
 
-AI is not required for project creation, writing, saving, searching, recovery, or export.
+Connect a hosted or local model, select a chapter or scene, and choose **Write with AI**. Describe what should happen, including the intended events, characters, setting, tone, point of view, and constraints. Generate either an approximately 250 to 350 word page or a complete chapter draft.
+
+OpenScribe previews generated prose before applying it. An accepted page is inserted at the cursor. An accepted chapter replaces only the selected chapter in the editor. It remains an unsaved recovery draft until you review it and press `Ctrl+S`; the normal conflict check and checkpoint run before the manuscript file changes.
+
+AI is not required for manual writing, saving, searching, recovery, or export.
+
+On its first desktop launch, OpenScribe asks whether to connect an AI model. The setup supports OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, a dedicated LM Studio preset, OpenAI-compatible hosted APIs, and other local servers such as Ollama, LocalAI, and vLLM. The connection test sends no manuscript text. Pasted API keys are saved separately by provider in the operating system credential store, never in the project. Select **Not now** to keep AI disabled. Use **AI setup** later to change the provider, model, or endpoint.
 
 Install provider support only if you need it:
 
@@ -175,7 +181,9 @@ Install provider support only if you need it:
 python -m pip install -e ".[ai]"
 ```
 
-OpenScribe shows the provider, model, endpoint, and character count before manuscript text is sent to a hosted service. Each hosted command requires `--allow-data-transfer`. Local loopback endpoints do not require that flag.
+OpenScribe shows the provider, model, and character count before manuscript text is sent from the desktop to a hosted service and asks for approval on every writing request. Each hosted CLI command requires `--allow-data-transfer`. Local loopback endpoints do not require transfer approval.
+
+LM Studio can run on the same computer or another computer. For a remote model, LM Link is the simplest supported route. A direct network endpoint must use HTTPS because OpenScribe rejects nonlocal plain HTTP. OpenScribe cannot tell when a loopback service such as LM Link forwards a request to another computer, so review that service's routing before sending private writing.
 
 See [AI setup](docs/ai-setup.md).
 

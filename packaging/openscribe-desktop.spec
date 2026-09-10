@@ -7,11 +7,11 @@ analysis = Analysis(
     pathex=[str(root / "src")],
     binaries=[],
     datas=[(str(root / "src" / "openscribe" / "word_addin"), "openscribe/word_addin")],
-    hiddenimports=[],
+    hiddenimports=["anthropic", "google.genai", "keyring", "keyring.backends.Windows", "mistralai.client", "openai"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["anthropic", "google.genai", "mistralai", "openai"],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )

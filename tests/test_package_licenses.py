@@ -18,6 +18,11 @@ def test_package_license_notice_includes_runtime_dependencies(tmp_path: Path) ->
 
     assert result.returncode == 0, result.stdout + result.stderr
     notice = output.read_text(encoding="utf-8")
+    assert "anthropic " in notice
+    assert "google-genai " in notice
+    assert "keyring " in notice
+    assert "mistralai " in notice
+    assert "openai " in notice
     assert "PySide6 " in notice
     assert "textual " in notice
     assert "typer " in notice

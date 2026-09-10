@@ -158,6 +158,14 @@ Before a hosted AI or licensed hosted LanguageTool request, OpenScribe displays 
 
 Review the disclosure every time. Do not send private manuscript text unless you understand and accept the provider's terms and data handling.
 
+The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, LM Studio, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
+
+Local AI is treated as local only when the configured endpoint resolves to loopback. A LAN, VPN, or internet endpoint still crosses the machine boundary. Non-loopback AI endpoints require HTTPS and explicit transfer approval even when the provider is labeled local.
+
+LM Link and other proxies can accept a request on loopback and forward it to another computer. OpenScribe cannot inspect that routing and will not show its non-loopback confirmation. When using LM Link, treat the linked computer as a manuscript recipient even though the configured endpoint is `127.0.0.1`.
+
+**Write with AI** sends the complete selected chapter or scene plus the writer's description. The generated page or chapter is previewed before use. Accepted text is placed in an unsaved recovery draft and does not change the manuscript file until the writer saves it. If the selected text changes while generation is running, OpenScribe refuses the returned result.
+
 The desktop and TUI allow local LanguageTool endpoints only. Automated use of LanguageTool's free public endpoint is rejected.
 
 ## Experimental Word round trips

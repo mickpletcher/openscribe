@@ -8,18 +8,37 @@ import pytest
 from openscribe.ai import (
     AIConfigurationError,
     AISettings,
+    generate_draft,
+    load_api_key,
     requires_data_transfer_consent,
     run_ai_task,
+    save_api_key,
     summarize_text,
+)
+from openscribe.ai import (
+    test_ai_connection as check_ai_connection,
 )
 
 
 class _FakeOpenAIClient:
     last_kwargs = None
+    last_response_kwargs = None
 
     def __init__(self, *args, **kwargs) -> None:
         type(self).last_kwargs = kwargs
-        self.responses = SimpleNamespace(create=lambda **call_kwargs: SimpleNamespace(output_text="openai summary"))
+
+        def create(**call_kwargs):
+            type(self).last_response_kwargs = call_kwargs
+            return SimpleNamespace(output_text="openai summary")
+
+        self.responses = SimpleNamespace(create=create)
+        self.chat = SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **call_kwargs: SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="compatible summary"))]
+                )
+            )
+        )
 
 
 class _FakeAnthropicClient:
@@ -80,16 +99,37 @@ class _FakeMistralClient:
         (
             "mistral",
             "MISTRAL_API_KEY",
-            "mistralai",
+            "mistralai.client",
             SimpleNamespace(Mistral=_FakeMistralClient),
             "mistral summary",
+        ),
+        (
+            "lm-studio",
+            "LM_STUDIO_BASE_URL",
+            "openai",
+            SimpleNamespace(OpenAI=_FakeOpenAIClient),
+            "compatible summary",
         ),
         (
             "openai-compatible-local",
             "OPENAI_COMPATIBLE_LOCAL_BASE_URL",
             "openai",
             SimpleNamespace(OpenAI=_FakeOpenAIClient),
-            "openai summary",
+            "compatible summary",
+        ),
+        (
+            "xai",
+            "XAI_API_KEY",
+            "openai",
+            SimpleNamespace(OpenAI=_FakeOpenAIClient),
+            "compatible summary",
+        ),
+        (
+            "deepseek",
+            "DEEPSEEK_API_KEY",
+            "openai",
+            SimpleNamespace(OpenAI=_FakeOpenAIClient),
+            "compatible summary",
         ),
     ],
 )
@@ -104,9 +144,11 @@ def test_summarize_text_routes_supported_providers(
     monkeypatch.setenv(env_name, "test-key")
     if provider == "azure-openai":
         monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com/openai/v1/")
-    if provider == "openai-compatible-local":
-        monkeypatch.setenv("OPENAI_COMPATIBLE_LOCAL_BASE_URL", "http://localhost:1234/v1")
-        monkeypatch.delenv("OPENAI_COMPATIBLE_LOCAL_API_KEY", raising=False)
+    if provider in {"lm-studio", "openai-compatible-local"}:
+        endpoint_env = "LM_STUDIO_BASE_URL" if provider == "lm-studio" else "OPENAI_COMPATIBLE_LOCAL_BASE_URL"
+        key_env = "LM_STUDIO_API_KEY" if provider == "lm-studio" else "OPENAI_COMPATIBLE_LOCAL_API_KEY"
+        monkeypatch.setenv(endpoint_env, "http://localhost:1234/v1")
+        monkeypatch.delenv(key_env, raising=False)
         _FakeOpenAIClient.last_kwargs = None
 
     monkeypatch.setitem(sys.modules, module_name, module_value)
@@ -115,16 +157,27 @@ def test_summarize_text_routes_supported_providers(
         google_module.genai = module_value
         monkeypatch.setitem(sys.modules, "google", google_module)
 
-    settings = AISettings(enabled=True, provider=provider, model="test-model")
+    endpoint = "http://localhost:1234/v1" if provider in {"lm-studio", "openai-compatible-local"} else ""
+    if provider == "xai":
+        endpoint = "https://api.x.ai/v1/"
+    if provider == "deepseek":
+        endpoint = "https://api.deepseek.com/"
+    if provider == "azure-openai":
+        endpoint = "https://example.openai.azure.com/openai/v1/"
+    settings = AISettings(enabled=True, provider=provider, model="test-model", endpoint=endpoint)
     result = summarize_text(
         "Sample text",
         settings,
         "chapter",
-        allow_data_transfer=provider != "openai-compatible-local",
+        allow_data_transfer=provider not in {"lm-studio", "openai-compatible-local"},
     )
 
     assert result == expected
-    if provider == "openai-compatible-local":
+    if provider == "openai":
+        assert _FakeOpenAIClient.last_response_kwargs["store"] is False
+    if provider in {"lm-studio", "openai-compatible-local", "xai", "deepseek"}:
+        assert result == "compatible summary"
+    if provider in {"lm-studio", "openai-compatible-local"}:
         assert _FakeOpenAIClient.last_kwargs == {
             "api_key": "local",
             "base_url": "http://localhost:1234/v1",
@@ -185,12 +238,14 @@ def test_local_provider_does_not_require_data_transfer_consent(monkeypatch) -> N
         ("metadata", "", "Suggest a concise title"),
         ("brainstorm", "What could go wrong?", "Direction: What could go wrong?"),
         ("query", "Who found the ledger?", "Who found the ledger?"),
+        ("draft-page", "Reveal the hidden map.", "approximately 250 to 350 words"),
+        ("draft-chapter", "Resolve the station conflict.", "complete chapter draft"),
     ],
 )
 def test_run_ai_task_builds_scoped_read_only_prompts(monkeypatch, task, question, expected_fragment) -> None:
     captured: dict[str, str] = {}
 
-    def fake_provider(prompt: str, model: str) -> str:
+    def fake_provider(prompt: str, settings: AISettings) -> str:
         captured["prompt"] = prompt
         return "review output"
 
@@ -213,8 +268,120 @@ def test_run_ai_task_builds_scoped_read_only_prompts(monkeypatch, task, question
 
 
 def test_project_query_requires_a_question(monkeypatch) -> None:
-    monkeypatch.setattr("openscribe.ai._summarize_with_openai", lambda prompt, model: "unused")
+    monkeypatch.setattr("openscribe.ai._summarize_with_openai", lambda prompt, settings: "unused")
     settings = AISettings(enabled=True, provider="openai", model="test-model")
 
     with pytest.raises(AIConfigurationError, match="nonempty question"):
         run_ai_task("Private manuscript", settings, "project manuscript", "query", allow_data_transfer=True)
+
+
+def test_generate_draft_requires_supported_scope_and_description(monkeypatch) -> None:
+    monkeypatch.setattr("openscribe.ai._summarize_with_openai", lambda prompt, settings: prompt)
+    settings = AISettings(enabled=True, provider="openai", model="test-model")
+
+    result = generate_draft(
+        "Existing chapter",
+        settings,
+        "chapter",
+        "page",
+        "Continue with the storm arriving.",
+        allow_data_transfer=True,
+    )
+
+    assert "Writing direction: Continue with the storm arriving." in result
+    assert result.endswith("Existing chapter")
+    with pytest.raises(AIConfigurationError, match="Describe"):
+        generate_draft("", settings, "chapter", "page", "", allow_data_transfer=True)
+    with pytest.raises(AIConfigurationError, match="scope"):
+        generate_draft("", settings, "chapter", "book", "description", allow_data_transfer=True)
+
+
+def test_provider_key_uses_environment_before_credential_store(monkeypatch) -> None:
+    credential = "environment" + "-value"
+    monkeypatch.setenv("OPENAI_API_KEY", credential)
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: pytest.fail("keyring should not load"))
+    assert load_api_key("openai") == credential
+
+
+def test_provider_key_round_trip_uses_separate_credential_store_accounts(monkeypatch) -> None:
+    credential = "synthetic" + "-value"
+    stored = {}
+    keyring = SimpleNamespace(
+        get_password=lambda service, account: stored.get((service, account)),
+        set_password=lambda service, account, value: stored.__setitem__((service, account), value),
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: keyring)
+    save_api_key("anthropic", credential)
+    assert load_api_key("anthropic") == credential
+    assert ("OpenScribe", "anthropic-api-key") in stored
+
+
+def test_openai_connection_checks_model_without_manuscript(monkeypatch) -> None:
+    credential = "synthetic" + "-value"
+    checked = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            checked["client"] = kwargs
+            self.responses = SimpleNamespace(create=lambda **call_kwargs: checked.update(request=call_kwargs))
+
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: SimpleNamespace(OpenAI=FakeClient))
+    check_ai_connection(AISettings(True, "openai", "gpt-test"), credential)
+    assert checked == {
+        "client": {"api_key": credential, "timeout": 15.0, "max_retries": 0},
+        "request": {
+            "model": "gpt-test",
+            "input": "This is an OpenScribe connection test. Reply with OK.",
+            "max_output_tokens": 16,
+            "store": False,
+        },
+    }
+
+
+def test_local_connection_uses_configured_endpoint_without_requiring_a_key(monkeypatch) -> None:
+    checked = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            checked["client"] = kwargs
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **call_kwargs: checked.update(request=call_kwargs))
+            )
+
+    monkeypatch.delenv("OPENAI_COMPATIBLE_LOCAL_API_KEY", raising=False)
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: SimpleNamespace(OpenAI=FakeClient))
+    settings = AISettings(True, "openai-compatible-local", "local-model", "http://127.0.0.1:11434/v1/")
+    check_ai_connection(settings)
+    assert checked["client"] == {
+        "api_key": "local",
+        "base_url": "http://127.0.0.1:11434/v1/",
+        "timeout": 15.0,
+        "max_retries": 0,
+    }
+    assert checked["request"]["messages"][0]["content"].startswith("This is an OpenScribe connection test")
+
+
+@pytest.mark.parametrize(
+    ("provider", "module"),
+    [
+        ("anthropic", SimpleNamespace(Anthropic=_FakeAnthropicClient)),
+        ("gemini", SimpleNamespace(Client=_FakeGeminiClient)),
+        ("mistral", SimpleNamespace(Mistral=_FakeMistralClient)),
+    ],
+)
+def test_hosted_connection_routes_supported_provider(monkeypatch, provider, module) -> None:
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: module)
+    check_ai_connection(AISettings(True, provider, "test-model"), "synthetic-value")
+
+
+def test_remote_compatible_endpoint_requires_transfer_consent() -> None:
+    settings = AISettings(True, "openai-compatible", "remote-model", "https://models.example.test/v1/")
+    assert requires_data_transfer_consent(settings)
+
+
+def test_connection_rejects_nonlocal_plain_http_before_loading_provider_client(monkeypatch) -> None:
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: pytest.fail("client must not load"))
+    settings = AISettings(True, "openai-compatible", "remote-model", "http://192.0.2.1/v1/")
+    with pytest.raises(AIConfigurationError, match="must use HTTPS"):
+        check_ai_connection(settings, "synthetic-value")

@@ -8,6 +8,7 @@ from docx import Document
 from typer.testing import CliRunner
 
 import openscribe.compile as compile_module
+from openscribe.ai import AIConfigurationError
 from openscribe.cli import app
 from openscribe.project import list_chapters
 from openscribe.proofreading import ProofreadingIssue, ProofreadingResult
@@ -1199,6 +1200,11 @@ def test_hosted_ai_requires_and_displays_data_transfer_approval(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    def missing_key():
+        raise AIConfigurationError("OPENAI_API_KEY is not set and no saved OpenAI API key is available.")
+
+    monkeypatch.setattr("openscribe.ai.load_api_key", lambda provider: missing_key())
     assert runner.invoke(app, ["init", "North County"]).exit_code == 0
     assert runner.invoke(app, ["new", "part", "Opening"]).exit_code == 0
     assert (

@@ -125,7 +125,7 @@ pwsh -File scripts/test-windows-installer.ps1 -Installer $installer.FullName
 
 Expected exit code: `0` for both commands.
 
-Expected output: a portable ZIP, setup executable, and `SHA256SUMS.txt` under `artifacts`. The package must contain the OpenScribe license and bundled runtime dependency notices. The package smoke must launch the frozen desktop import path, create a synthetic project, preview and apply snapshot restore, and export DOCX, PDF, and EPUB. The installer smoke must pass install, upgrade, Start menu shortcut, GUI launch, uninstall, and project-preservation checks.
+Expected output: a portable ZIP, setup executable, and `SHA256SUMS.txt` under `artifacts`. The package must contain the OpenScribe license and bundled runtime dependency notices. The package smoke must launch the frozen desktop import path, import the bundled OpenAI, Anthropic, Google Gen AI, Mistral, and credential-store dependencies without making a network request, create a synthetic project, preview and apply snapshot restore, and export DOCX, PDF, and EPUB. The installer smoke must pass install, upgrade, Start menu shortcut, GUI launch, uninstall, and project-preservation checks.
 
 Use `-SkipInstaller` only when producing or diagnosing the portable package without Inno Setup. It does not satisfy the full Windows package gate.
 
