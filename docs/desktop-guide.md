@@ -23,13 +23,35 @@ Source installations use the activated Python environment:
 openscribe desktop
 ```
 
+## First launch AI setup
+
+The first desktop launch asks whether to connect an AI model.
+
+To connect:
+
+1. Choose OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, LM Studio, another local server, or another OpenAI-compatible provider.
+2. Enter or select the model ID.
+3. For Azure, local, or custom compatible providers, enter the API endpoint.
+4. Enter an API key. A local server may not require one.
+5. Select **Connect**.
+
+The connection test sends a short synthetic test message to check the key, endpoint, billing, and selected model. It does not send manuscript text. Pasted keys are saved separately by provider in the operating system credential store and are not written to `.openscribe\project.yaml`. A local endpoint such as Ollama defaults to `http://127.0.0.1:11434/v1/` and can use no key.
+
+For LM Studio on the same computer, use `http://127.0.0.1:1234/v1/`. For LM Studio on another computer, use LM Link or an HTTPS-protected network endpoint. Plain HTTP network addresses are rejected. See [LM Studio setup](ai-setup.md#lm-studio).
+
+Select **Not now** to keep AI disabled. The prompt is not shown again automatically. Use **AI setup** on the toolbar whenever you want to change the provider, model, endpoint, or credential.
+
+If a project is open when you connect, AI is enabled for that project. If no project is open, the connected model becomes the default for projects subsequently created through the desktop application. Existing projects are not changed automatically.
+
+Connecting does not approve manuscript transfer. Desktop AI writing asks before every hosted request. Hosted CLI commands disclose the provider, model, and text size and require `--allow-data-transfer` for each request.
+
 ## Understand the window
 
 The window has four main areas:
 
 | Area | Purpose |
 |---|---|
-| Toolbar | Project, save, structure, proofreading, export, checkpoint, restore, and Word actions |
+| Toolbar | Project, save, structure, AI writing, proofreading, AI setup, export, checkpoint, restore, and Word actions |
 | Project binder | Chapters, scenes, characters, research, and notes |
 | Manuscript editor | Draft text for the selected chapter or scene |
 | Reference panel | Proofreading findings and supporting information |
@@ -71,6 +93,25 @@ A save does three things:
 OpenScribe does not silently replace a newer external edit.
 
 The chapter editor is for prose. Keep scene headings and hidden identity markers intact. Use **New scene**, **Move up**, and **Move down** for structure changes.
+
+## Write a page or chapter with AI
+
+1. Connect a model through **AI setup**.
+2. Select a chapter or scene in the binder.
+3. Put the cursor where the next page should be inserted. For a complete chapter, select the chapter rather than one of its scenes.
+4. Select **Write with AI** or press `Ctrl+Shift+G`.
+5. Choose **Page, about 250 to 350 words** or **Complete chapter**.
+6. Describe what should happen. Include the events, characters, setting, tone, point of view, and constraints that matter.
+7. For a hosted provider, review the provider, model, and manuscript character count, then approve or reject that request.
+8. Review the generated prose. Select **Apply** only if you want it in the editor.
+9. Revise or undo the generated text as needed.
+10. Press `Ctrl+S` when the draft is ready.
+
+Page scope inserts generated prose at the current cursor. Chapter scope replaces the selected chapter text in the editor. Neither mode writes directly to the manuscript file. Accepted output remains an unsaved recovery draft until you save it.
+
+If you edit or navigate away while generation is running, delayed output is not applied. Page means an approximate prose length, not a guaranteed printed page count.
+
+OpenScribe sends the complete selected chapter or scene as context, together with your description. Do not select **Approve and send** for a remote provider unless you are comfortable sending that text. LM Link uses a loopback endpoint but processes the request on a linked computer, so OpenScribe cannot display its normal non-loopback confirmation for that route.
 
 ## Navigate with unsaved text
 

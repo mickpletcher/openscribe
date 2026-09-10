@@ -1,5 +1,23 @@
 # changelog
 
+## 2026-09-10
+
+### First launch hosted and local AI connection
+
+* added provider selection for OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, local model servers, and other OpenAI-compatible APIs
+* added editable model and endpoint fields with local presets for Ollama, LM Studio, LocalAI, and vLLM workflows
+* stored pasted keys separately by provider in the operating system credential store while retaining provider-specific environment overrides
+* persisted non-secret endpoint URLs for active projects and new desktop-project defaults
+* used OpenAI-compatible Chat Completions for broad local-server compatibility and retained destination-based transfer approval
+* bundled every supported provider SDK in Windows desktop and CLI packages with license and frozen-import coverage
+* corrected Mistral client loading for the current `mistralai.client` package interface
+* documented the multi-provider bring-your-own-key and local-endpoint trust boundaries
+* added LM Studio as a named keyless local provider with its standard `http://127.0.0.1:1234/v1/` endpoint
+* added desktop **Write with AI** generation from writer descriptions at approximate-page or complete-chapter scope
+* previewed generated prose before placing it in the unsaved editor draft and refused stale results after editor or selection changes
+* added per-request hosted transfer approval showing the provider, model, and selected manuscript character count
+* expanded novice documentation for AI drafting, same-computer LM Studio, remote LM Link routing, HTTPS-only direct network access, connection troubleshooting, and loopback forwarding disclosure
+
 ## 2026-09-08
 
 ### Windows installation packages

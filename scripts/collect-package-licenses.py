@@ -9,7 +9,7 @@ from packaging.utils import canonicalize_name
 
 
 def runtime_distributions() -> list:
-    pending = ["openscribe", "PySide6"]
+    pending = ["anthropic", "google-genai", "keyring", "mistralai", "openai", "openscribe", "PySide6"]
     seen: set[str] = set()
     resolved = []
     while pending:

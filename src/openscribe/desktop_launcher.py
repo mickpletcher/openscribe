@@ -24,6 +24,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if arguments.smoke_test:
         assert AuthorWindow
+        import anthropic
+        import keyring
+        import openai
+        from google import genai
+        from mistralai.client import Mistral
+
+        assert anthropic and genai and keyring and Mistral and openai
         return 0
     launch(arguments.project)
     return 0

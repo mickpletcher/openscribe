@@ -313,6 +313,67 @@ python -m pip install -e ".[ai]"
 
 See [AI setup](ai-setup.md) for provider configuration.
 
+## First launch AI connection fails
+
+The first launch connection test sends a short synthetic test message, not manuscript text. It verifies the API key, endpoint, billing, and selected model.
+
+Check all of the following:
+
+1. the selected provider matches the API key
+2. API billing or credits are available when required
+3. the selected model ID or Azure deployment name is available to that account
+4. the endpoint is correct for Azure, local, or custom compatible providers
+5. the local server is running and the selected model is installed
+6. Windows can reach the configured endpoint
+7. the operating system credential store is available
+
+The error deliberately does not repeat the API key. Use **AI setup** on the desktop toolbar to retry. You can instead set the provider-specific environment variable before starting OpenScribe; it takes priority over a saved key.
+
+For Ollama, start Ollama, make sure the model is installed, choose **Local AI**, and use `http://127.0.0.1:11434/v1/`. LM Studio commonly uses `http://127.0.0.1:1234/v1/`. No key is normally required for a loopback server.
+
+## Write with AI is unavailable or fails
+
+Check these items in order:
+
+1. Open a project and select a chapter or scene.
+2. Select **AI setup** and confirm that a provider connects successfully.
+3. For a complete chapter, select the chapter itself rather than one of its scenes.
+4. Enter a specific writing description. A blank description is rejected.
+5. Confirm the selected model supports text generation and has enough context capacity for the selected manuscript text.
+
+If OpenScribe says the draft changed while generation was running, nothing was applied. Review your current text and run **Write with AI** again. This protection prevents an older response from replacing newer work.
+
+If the result opens in the preview but does not appear in the manuscript file, select **Apply**, review the editor, and press `Ctrl+S`. Applying AI text changes only the unsaved recovery draft. It does not automatically save the manuscript.
+
+## LM Studio on another computer does not connect
+
+The easiest remote setup is LM Link. Follow the [LM Link instructions](https://lmstudio.ai/docs/developer/core/lmlink), load the model on the remote computer, start the LM Studio server on the OpenScribe computer, and keep OpenScribe's endpoint set to:
+
+```text
+http://127.0.0.1:1234/v1/
+```
+
+LM Link forwards the request to the linked computer. OpenScribe cannot detect that forwarding and will not display its non-loopback confirmation. Do not link a computer you do not trust with your manuscript.
+
+For a direct network connection, first test whether Windows can reach the remote computer. Replace the example address with the LM Studio computer's actual address:
+
+```powershell
+Test-NetConnection -ComputerName 192.168.1.50 -Port 1234
+```
+
+`TcpTestSucceeded` must be `True`. If it is `False`, confirm that LM Studio is running, **Serve on Local Network** is enabled, both computers are on the expected network, and the server firewall allows the port.
+
+LM Studio's normal address, such as `http://192.168.1.50:1234/v1/`, is not accepted by OpenScribe. Nonlocal endpoints must use HTTPS. Put LM Studio behind a trusted HTTPS reverse proxy or internal gateway, enable LM Studio authentication, and enter the HTTPS address and API token in **AI setup**.
+
+To check an HTTPS endpoint without sending manuscript text:
+
+```powershell
+$headers = @{ Authorization = "Bearer YOUR_TEST_TOKEN" }
+Invoke-RestMethod -Uri "https://lmstudio.example.test/v1/models" -Headers $headers
+```
+
+Use a temporary or limited test token in command history. Never put an API token in the endpoint URL. Do not expose LM Studio through router port forwarding or directly to the public internet.
+
 ## Snapshot restore shows unexpected deletions
 
 Cancel. A restore without `--apply` is only a preview.

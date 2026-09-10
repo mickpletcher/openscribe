@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QSettings, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QFont, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,6 +28,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from openscribe.ai import (
+    AI_PROVIDERS,
+    AISettings,
+    generate_draft,
+    has_api_key,
+    load_ai_settings,
+    provider_definition,
+    save_api_key,
+    test_ai_connection,
+)
+from openscribe.ai import (
+    requires_data_transfer_consent as ai_requires_data_transfer_consent,
+)
 from openscribe.compile import compile_project
 from openscribe.editing import EditSession
 from openscribe.project import (
@@ -40,15 +53,34 @@ from openscribe.project import (
     list_chapters,
     load_project_config,
     plan_reorder_scene,
+    save_project_config,
     scene_operation_diff,
 )
 from openscribe.proofreading import (
     check_text,
     load_languagetool_settings,
     preview_replacement,
-    requires_data_transfer_consent,
+)
+from openscribe.proofreading import (
+    requires_data_transfer_consent as proofreading_requires_data_transfer_consent,
 )
 from openscribe.snapshots import create_snapshot, list_snapshots, preview_snapshot_restore, restore_snapshot
+
+AI_INSERTION_MARKER = "[OPENSCRIBE INSERT THE NEW PAGE HERE]"
+
+
+def _ai_writing_context(text: str, scope: str, cursor_position: int) -> str:
+    if scope != "page":
+        return text
+    encoded = text.encode("utf-16-le")
+    byte_position = cursor_position * 2
+    if byte_position < 0 or byte_position > len(encoded):
+        raise ValueError("The editor cursor position is invalid. Generate the draft again.")
+    try:
+        python_position = len(encoded[:byte_position].decode("utf-16-le"))
+    except UnicodeDecodeError as exc:
+        raise ValueError("The editor cursor position splits a Unicode character. Generate the draft again.") from exc
+    return text[:python_position] + f"\n\n{AI_INSERTION_MARKER}\n\n" + text[python_position:]
 
 
 class ProofreadingWorker(QThread):
@@ -62,6 +94,36 @@ class ProofreadingWorker(QThread):
     def run(self):
         try:
             self.completed.emit(check_text(self.text, self.settings), self.text, self.session)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self.failed.emit(str(exc))
+
+
+class AIWritingWorker(QThread):
+    completed = Signal(str, str, str, int, object)
+    failed = Signal(str)
+
+    def __init__(self, text, settings, context_label, scope, description, cursor_position, session, consent, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self.settings = settings
+        self.context_label = context_label
+        self.scope = scope
+        self.description = description
+        self.cursor_position = cursor_position
+        self.session = session
+        self.consent = consent
+
+    def run(self):
+        try:
+            result = generate_draft(
+                _ai_writing_context(self.text, self.scope, self.cursor_position),
+                self.settings,
+                self.context_label,
+                self.scope,
+                self.description,
+                allow_data_transfer=self.consent,
+            )
+            self.completed.emit(result, self.scope, self.text, self.cursor_position, self.session)
         except (OSError, RuntimeError, ValueError) as exc:
             self.failed.emit(str(exc))
 
@@ -82,14 +144,154 @@ class ReviewDialog(QDialog):
         layout.addWidget(buttons)
 
 
+class AIWritingDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Write with AI")
+        self.resize(620, 430)
+        layout = QVBoxLayout(self)
+        heading = QLabel("Describe what should happen next")
+        heading.setObjectName("documentTitle")
+        layout.addWidget(heading)
+        guidance = QLabel(
+            "Include the events, characters, setting, tone, point of view, and constraints the draft should follow. "
+            "The result is previewed before it is added to your unsaved draft."
+        )
+        guidance.setWordWrap(True)
+        layout.addWidget(guidance)
+        layout.addWidget(QLabel("Draft scope"))
+        self.scope = QComboBox()
+        self.scope.addItem("Page, about 250 to 350 words", "page")
+        self.scope.addItem("Complete chapter", "chapter")
+        self.scope.setAccessibleName("AI writing scope")
+        layout.addWidget(self.scope)
+        layout.addWidget(QLabel("Writing description"))
+        self.description = QPlainTextEdit()
+        self.description.setAccessibleName("AI writing description")
+        self.description.setPlaceholderText(
+            "Example: Mara enters the abandoned station at dusk, finds evidence that her brother was here, "
+            "and hears someone approaching. Keep the tone tense and stay in close third person."
+        )
+        layout.addWidget(self.description)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Generate draft")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def scope_id(self) -> str:
+        return str(self.scope.currentData())
+
+    def writing_description(self) -> str:
+        return self.description.toPlainText().strip()
+
+
+class AISetupDialog(QDialog):
+    def __init__(
+        self,
+        provider: str,
+        model: str,
+        endpoint: str,
+        available_keys: dict[str, bool],
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.available_keys = available_keys
+        self.setWindowTitle("Connect an AI model")
+        self.resize(620, 440)
+        layout = QVBoxLayout(self)
+        heading = QLabel("Connect an AI model")
+        heading.setObjectName("documentTitle")
+        layout.addWidget(heading)
+        self.disclosure = QLabel(
+            "Connecting tests the API key and model without sending manuscript text. "
+            "Later AI commands require explicit approval before sending manuscript text to a hosted endpoint. "
+            "A loopback local endpoint keeps requests on this computer."
+        )
+        self.disclosure.setWordWrap(True)
+        layout.addWidget(self.disclosure)
+        layout.addWidget(QLabel("Provider"))
+        self.provider = QComboBox()
+        for definition in AI_PROVIDERS:
+            self.provider.addItem(definition.label, definition.provider_id)
+        self.provider.setAccessibleName("AI provider")
+        layout.addWidget(self.provider)
+        self.account_link = QLabel()
+        self.account_link.setOpenExternalLinks(True)
+        layout.addWidget(self.account_link)
+        layout.addWidget(QLabel("Model ID"))
+        self.model = QComboBox()
+        self.model.setEditable(True)
+        self.model.setAccessibleName("AI model ID")
+        layout.addWidget(self.model)
+        layout.addWidget(QLabel("API endpoint"))
+        self.endpoint = QLineEdit()
+        self.endpoint.setAccessibleName("AI API endpoint")
+        layout.addWidget(self.endpoint)
+        self.key_label = QLabel("API key")
+        layout.addWidget(self.key_label)
+        self.api_key = QLineEdit()
+        self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.api_key.setAccessibleName("AI API key")
+        layout.addWidget(self.api_key)
+        self.storage = QLabel(
+            "A pasted key is stored in your operating system credential store. "
+            "It is never written to the project or shown again. The provider's environment variable takes priority."
+        )
+        self.storage.setWordWrap(True)
+        layout.addWidget(self.storage)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Connect")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Not now")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        provider_index = self.provider.findData(provider)
+        self.provider.setCurrentIndex(provider_index if provider_index >= 0 else 0)
+        self.provider.currentIndexChanged.connect(lambda: self._provider_changed())
+        self._provider_changed(model, endpoint)
+
+    def _provider_changed(self, model: str = "", endpoint: str = "") -> None:
+        definition = provider_definition(self.provider_id())
+        self.model.clear()
+        self.model.addItems(definition.models)
+        self.model.setCurrentText(model or definition.models[0])
+        self.endpoint.setEnabled(definition.endpoint_required)
+        self.endpoint.setText(endpoint or definition.default_endpoint)
+        self.endpoint.setPlaceholderText("Not required" if not definition.endpoint_required else definition.default_endpoint)
+        self.account_link.setText(f'<a href="{definition.account_url}">Provider setup and API key instructions</a>')
+        if definition.api_key_optional:
+            self.key_label.setText("API key (optional)")
+            placeholder = "Optional saved key available" if self.available_keys.get(definition.provider_id) else "Optional"
+        else:
+            self.key_label.setText("API key")
+            placeholder = "Saved key available" if self.available_keys.get(definition.provider_id) else "Paste an API key"
+        self.api_key.clear()
+        self.api_key.setPlaceholderText(placeholder)
+
+    def provider_id(self) -> str:
+        return str(self.provider.currentData())
+
+    def model_id(self) -> str:
+        return self.model.currentText().strip()
+
+    def entered_api_key(self) -> str:
+        return self.api_key.text().strip()
+
+    def endpoint_url(self) -> str:
+        return self.endpoint.text().strip() if self.endpoint.isEnabled() else ""
+
+
 class AuthorWindow(QMainWindow):
-    def __init__(self, root: Path | None = None):
+    def __init__(self, root: Path | None = None, *, show_ai_onboarding: bool = True, app_settings=None):
         super().__init__()
+        self.app_settings = app_settings or QSettings("OpenScribe", "OpenScribe")
         self.root = None
         self.config = {}
         self.sessions = {}
         self.active_session = None
         self.worker = None
+        self.ai_worker = None
         self.checked_text = ""
         self.finding_items = []
         self.pending_replacement = None
@@ -113,6 +315,7 @@ class AuthorWindow(QMainWindow):
             ("Move up", lambda: self.move_scene(-1), ""), ("Move down", lambda: self.move_scene(1), ""),
             ("Proofread", self.proofread, "Ctrl+G"), ("Export", self.choose_export, ""),
             ("Checkpoint", self.checkpoint, ""), ("Restore", self.choose_restore, ""),
+            ("Write with AI", self.write_with_ai, "Ctrl+Shift+G"), ("AI setup", self.configure_ai, ""),
             ("Word export", self.word_export, ""), ("Word import", self.word_import, ""),
         ):
             action = QAction(label, self)
@@ -182,6 +385,68 @@ class AuthorWindow(QMainWindow):
         self.draft_timer.start()
         if root is not None:
             self._run(lambda: self.open_project(root))
+        if show_ai_onboarding:
+            QTimer.singleShot(0, self.show_ai_onboarding)
+
+    def show_ai_onboarding(self):
+        if not self.app_settings.value("onboarding/ai_prompt_completed", False, type=bool):
+            self._run(lambda: self.configure_ai(first_run=True))
+
+    def configure_ai(self, *, first_run: bool = False):
+        project_ai = self.config.get("ai", {})
+        current_provider = str(project_ai.get("provider", "")).strip() if project_ai.get("enabled") else ""
+        current_model = str(project_ai.get("model", "")).strip() if project_ai.get("enabled") else ""
+        current_endpoint = str(project_ai.get("endpoint", "")).strip() if project_ai.get("enabled") else ""
+        if not current_provider:
+            current_provider = str(self.app_settings.value("ai/provider", "openai"))
+        if not current_model:
+            current_model = str(self.app_settings.value("ai/model", "gpt-5.6-terra"))
+        if not current_endpoint:
+            current_endpoint = str(self.app_settings.value("ai/endpoint", ""))
+        available_keys = {definition.provider_id: has_api_key(definition.provider_id) for definition in AI_PROVIDERS}
+        dialog = AISetupDialog(current_provider, current_model, current_endpoint, available_keys, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            if first_run:
+                self.app_settings.setValue("onboarding/ai_prompt_completed", True)
+                self.app_settings.sync()
+            return
+        provider = dialog.provider_id()
+        model = dialog.model_id()
+        endpoint = dialog.endpoint_url()
+        entered_key = dialog.entered_api_key()
+        settings = AISettings(True, provider, model, endpoint)
+        test_ai_connection(settings, entered_key or None)
+        if entered_key:
+            save_api_key(provider, entered_key)
+        saved_config = {"enabled": True, "provider": provider, "model": model}
+        if endpoint:
+            saved_config["endpoint"] = endpoint
+        provider_label = provider_definition(provider).label
+        if self.root is not None:
+            self.config["ai"] = saved_config
+            save_project_config(self.root, self.config)
+            self.statusBar().showMessage(f"Connected {provider_label} model {model} for this project")
+        else:
+            self.statusBar().showMessage(f"Connected {provider_label} model {model}; new desktop projects will use it")
+        self.app_settings.setValue("onboarding/ai_prompt_completed", True)
+        self.app_settings.setValue("ai/provider", provider)
+        self.app_settings.setValue("ai/model", model)
+        self.app_settings.setValue("ai/endpoint", endpoint)
+        self.app_settings.sync()
+
+    def apply_saved_ai_default(self, root: Path) -> None:
+        provider = str(self.app_settings.value("ai/provider", "")).strip()
+        if provider not in {definition.provider_id for definition in AI_PROVIDERS}:
+            return
+        model = str(self.app_settings.value("ai/model", "")).strip()
+        if not model:
+            return
+        endpoint = str(self.app_settings.value("ai/endpoint", "")).strip()
+        config = load_project_config(root)
+        config["ai"] = {"enabled": True, "provider": provider, "model": model}
+        if endpoint:
+            config["ai"]["endpoint"] = endpoint
+        save_project_config(root, config)
 
     def _run(self, callback):
         try:
@@ -337,7 +602,9 @@ class AuthorWindow(QMainWindow):
             return
         title, accepted = QInputDialog.getText(self, "New project", "Project title")
         if accepted and title.strip():
-            self.open_project(init_project(Path(folder), title.strip()))
+            root = init_project(Path(folder), title.strip())
+            self.apply_saved_ai_default(root)
+            self.open_project(root)
 
     def choose_project(self):
         folder = QFileDialog.getExistingDirectory(self, "Open project folder")
@@ -382,13 +649,84 @@ class AuthorWindow(QMainWindow):
         if not self.active_session or (self.worker and self.worker.isRunning()):
             return
         settings = load_languagetool_settings(self.config)
-        if requires_data_transfer_consent(settings):
+        if proofreading_requires_data_transfer_consent(settings):
             raise ValueError("Desktop proofreading is local only. Use the CLI consent flow for hosted services.")
         self.worker = ProofreadingWorker(self.editor.toPlainText(), settings, self.active_session, self)
         self.worker.completed.connect(self.proofreading_complete)
         self.worker.failed.connect(self.show_error)
         self.statusBar().showMessage("Checking with local LanguageTool...")
         self.worker.start()
+
+    def write_with_ai(self):
+        if not self.active_session or (self.ai_worker and self.ai_worker.isRunning()):
+            return
+        settings = load_ai_settings(self.config)
+        dialog = AIWritingDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        scope = dialog.scope_id()
+        description = dialog.writing_description()
+        if not description:
+            raise ValueError("Describe what the AI should write.")
+        if scope == "chapter" and self.active_session.scene_id is not None:
+            raise ValueError("Select the chapter in the binder before generating a complete chapter draft.")
+        text = self.editor.toPlainText()
+        consent = not ai_requires_data_transfer_consent(settings)
+        if not consent:
+            definition = provider_definition(settings.provider)
+            answer = QMessageBox.question(
+                self,
+                "Send manuscript context?",
+                f"This sends {len(text):,} characters from the selected manuscript text plus your writing "
+                f"description to {definition.label}, model {settings.model}. Send it for this request?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            consent = True
+        context_label = "chapter" if self.active_session.scene_id is None else "scene"
+        self.ai_worker = AIWritingWorker(
+            text,
+            settings,
+            context_label,
+            scope,
+            description,
+            self.editor.textCursor().position(),
+            self.active_session,
+            consent,
+            self,
+        )
+        self.ai_worker.completed.connect(
+            lambda generated, scope, before, cursor_position, session: self._run(
+                lambda: self.ai_writing_complete(generated, scope, before, cursor_position, session)
+            )
+        )
+        self.ai_worker.failed.connect(self.show_error)
+        self.statusBar().showMessage(f"Generating {scope} draft with {provider_definition(settings.provider).label}...")
+        self.ai_worker.start()
+
+    def ai_writing_complete(self, generated, scope, before, cursor_position, session):
+        if session is not self.active_session or before != self.editor.toPlainText():
+            self.statusBar().showMessage("Text changed while AI was writing. Generated text was not applied.")
+            return
+        generated = generated.strip()
+        if not generated:
+            raise ValueError("The AI provider returned an empty draft.")
+        if ReviewDialog(f"Review AI {scope} draft", generated, self).exec() != QDialog.DialogCode.Accepted:
+            self.statusBar().showMessage("AI draft discarded")
+            return
+        cursor = self.editor.textCursor()
+        if scope == "chapter":
+            cursor.select(QTextCursor.SelectionType.Document)
+            cursor.insertText(generated)
+        else:
+            cursor.setPosition(cursor_position)
+            prefix = "" if cursor.atStart() else "\n\n"
+            suffix = "" if cursor.atEnd() else "\n\n"
+            cursor.insertText(prefix + generated + suffix)
+        self.stash()
+        self.statusBar().showMessage(f"AI {scope} draft added. Review it, then save when ready.")
 
     def proofreading_complete(self, result, text, session):
         if session is not self.active_session or text != self.editor.toPlainText():

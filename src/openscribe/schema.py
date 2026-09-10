@@ -69,7 +69,7 @@ def validate_project_config(value: Any, context: str) -> dict[str, Any]:
 
     ai = _optional_mapping(config, "ai", context)
     _boolean_fields(ai, ("enabled",), f"{context}.ai")
-    _string_fields(ai, ("provider", "model"), f"{context}.ai")
+    _string_fields(ai, ("provider", "model", "endpoint"), f"{context}.ai")
 
     proofreading = _optional_mapping(config, "proofreading", context)
     _boolean_fields(proofreading, ("enabled",), f"{context}.proofreading")
