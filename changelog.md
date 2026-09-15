@@ -1,5 +1,12 @@
 # changelog
 
+## 2026-09-14
+
+### Version 0.1.1 prerelease
+
+* published the current multi-provider AI writing build as downloadable Windows installer and portable ZIP packages
+* retained SHA-256 checksums, packaged workflow tests, and the pre-release alpha and unsigned-package warnings
+
 ## 2026-09-10
 
 ### First launch hosted and local AI connection

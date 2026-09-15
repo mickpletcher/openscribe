@@ -91,7 +91,7 @@ def check_text(
         headers={
             "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-            "User-Agent": "OpenScribe/0.1.0",
+            "User-Agent": "OpenScribe/0.1.1",
         },
         method="POST",
     )

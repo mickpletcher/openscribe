@@ -4,7 +4,7 @@ Open source desktop, terminal, and command-line writing software for books and o
 
 **Status:** Active pre-release alpha
 
-**Version:** 0.1.0
+**Version:** 0.1.1
 
 **Supported Python:** 3.11, 3.12, and 3.13
 
