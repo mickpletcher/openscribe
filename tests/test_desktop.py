@@ -186,7 +186,17 @@ def test_ai_setup_dialog_masks_key_and_accepts_editable_model(qtbot):
     assert dialog.model_id() == "custom-model"
     assert not dialog.endpoint.isEnabled()
     providers = {dialog.provider.itemData(index) for index in range(dialog.provider.count())}
-    assert {"openai", "anthropic", "gemini", "mistral", "xai", "deepseek", "azure-openai", "lm-studio"} <= providers
+    assert {
+        "openai",
+        "anthropic",
+        "gemini",
+        "mistral",
+        "xai",
+        "deepseek",
+        "azure-openai",
+        "lm-studio",
+        "freellmapi",
+    } <= providers
 
 
 def test_ai_setup_dialog_has_lm_studio_preset(qtbot):
@@ -197,6 +207,18 @@ def test_ai_setup_dialog_has_lm_studio_preset(qtbot):
     assert dialog.endpoint_url() == "http://127.0.0.1:1234/v1/"
     assert dialog.endpoint.isEnabled()
     assert "optional" in dialog.key_label.text().lower()
+
+
+def test_ai_setup_dialog_has_freellmapi_preset_and_project_link(qtbot):
+    dialog = AISetupDialog("freellmapi", "", "", {})
+    qtbot.addWidget(dialog)
+    assert dialog.provider_id() == "freellmapi"
+    assert dialog.model_id() == "auto"
+    assert dialog.endpoint_url() == "http://127.0.0.1:3001/v1/"
+    assert dialog.endpoint.isEnabled()
+    assert "github.com/tashfeenahmed/freellmapi" in dialog.account_link.text()
+    assert "optional" not in dialog.key_label.text().lower()
+    assert "forwards it to hosted model providers" in dialog.disclosure.text()
 
 
 def test_ai_writing_dialog_collects_scope_and_description(qtbot):
@@ -278,6 +300,45 @@ def test_hosted_ai_writing_requires_per_request_consent(window, monkeypatch):
 
     window.write_with_ai()
 
+    assert window.ai_worker is None
+
+
+def test_freellmapi_consent_discloses_hosted_forwarding(window, monkeypatch):
+    window.binder.setCurrentItem(scene_item(window))
+    window.config["ai"] = {
+        "enabled": True,
+        "provider": "freellmapi",
+        "model": "auto",
+        "endpoint": "http://127.0.0.1:3001/v1/",
+    }
+
+    class AcceptedWriting:
+        def __init__(self, *args):
+            return None
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def scope_id(self):
+            return "page"
+
+        def writing_description(self):
+            return "Continue the arrival scene."
+
+    disclosure = {}
+    monkeypatch.setattr("openscribe.desktop.AIWritingDialog", AcceptedWriting)
+
+    def reject_transfer(parent, title, message, *args):
+        disclosure["title"] = title
+        disclosure["message"] = message
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "question", reject_transfer)
+
+    window.write_with_ai()
+
+    assert disclosure["title"] == "Send manuscript context?"
+    assert "FreeLLMAPI will forward it to a hosted model provider" in disclosure["message"]
     assert window.ai_worker is None
 
 

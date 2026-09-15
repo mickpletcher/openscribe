@@ -205,8 +205,7 @@ class AISetupDialog(QDialog):
         layout.addWidget(heading)
         self.disclosure = QLabel(
             "Connecting tests the API key and model without sending manuscript text. "
-            "Later AI commands require explicit approval before sending manuscript text to a hosted endpoint. "
-            "A loopback local endpoint keeps requests on this computer."
+            "Later AI commands require explicit approval before sending manuscript text to a hosted endpoint."
         )
         self.disclosure.setWordWrap(True)
         layout.addWidget(self.disclosure)
@@ -253,6 +252,18 @@ class AISetupDialog(QDialog):
 
     def _provider_changed(self, model: str = "", endpoint: str = "") -> None:
         definition = provider_definition(self.provider_id())
+        if definition.provider_id == "freellmapi":
+            routing_disclosure = (
+                " FreeLLMAPI accepts the request locally, then forwards it to hosted model providers. "
+                "Every manuscript request requires separate approval."
+            )
+        else:
+            routing_disclosure = " A loopback local endpoint normally keeps requests on this computer."
+        self.disclosure.setText(
+            "Connecting tests the API key and model without sending manuscript text. "
+            "Later AI commands require explicit approval before sending manuscript text to a hosted endpoint."
+            + routing_disclosure
+        )
         self.model.clear()
         self.model.addItems(definition.models)
         self.model.setCurrentText(model or definition.models[0])
@@ -674,11 +685,17 @@ class AuthorWindow(QMainWindow):
         consent = not ai_requires_data_transfer_consent(settings)
         if not consent:
             definition = provider_definition(settings.provider)
+            forwarding_disclosure = (
+                " FreeLLMAPI will forward it to a hosted model provider."
+                if definition.provider_id == "freellmapi"
+                else ""
+            )
             answer = QMessageBox.question(
                 self,
                 "Send manuscript context?",
                 f"This sends {len(text):,} characters from the selected manuscript text plus your writing "
-                f"description to {definition.label}, model {settings.model}. Send it for this request?",
+                f"description to {definition.label}, model {settings.model}.{forwarding_disclosure} "
+                "Send it for this request?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

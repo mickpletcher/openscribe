@@ -12,3 +12,4 @@
 | ADR-008 | Strict identity references and byte-exact scene plans | Accepted | 2026-09-08 | Identity lookup, repair, board migration, and scene operations | None | None |
 | ADR-009 | First launch AI connection | Accepted | 2026-09-10 | Hosted and local desktop AI onboarding and credential storage | None | None |
 | ADR-010 | Previewed AI manuscript drafting | Accepted | 2026-09-10 | Description-driven page and chapter drafting | None | None |
+| ADR-011 | FreeLLMAPI provider | Accepted | 2026-09-15 | Free-tier gateway onboarding and hosted-transfer classification | None | None |

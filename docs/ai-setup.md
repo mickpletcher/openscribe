@@ -86,9 +86,9 @@ The desktop application asks for AI setup on first launch. Choose a provider, en
 
 OpenScribe stores pasted keys separately by provider in the operating system credential store. It does not put them in project YAML or application settings. The provider-specific environment variable takes priority over a saved key. Local servers may omit the API key.
 
-Supported desktop choices are OpenAI, Anthropic Claude, Google Gemini, Mistral AI, xAI Grok, DeepSeek, Azure OpenAI, LM Studio, other local OpenAI-compatible servers, and other OpenAI-compatible providers. Model IDs remain editable because access and model catalogs change.
+Supported desktop choices are OpenAI, Anthropic Claude, Google Gemini, Mistral AI, xAI Grok, DeepSeek, Azure OpenAI, FreeLLMAPI, LM Studio, other local OpenAI-compatible servers, and other OpenAI-compatible providers. Model IDs remain editable because access and model catalogs change.
 
-For **Write with AI**, every hosted or non-loopback request displays the provider, model, and number of manuscript characters that will be sent. Approval applies only to that request. The writing description is sent with the selected manuscript context. Loopback requests do not show the transfer confirmation. A loopback proxy, tunnel, or LM Link can still forward a request to another computer, and OpenScribe cannot detect that forwarding.
+For **Write with AI**, every hosted or non-loopback request displays the provider, model, and number of manuscript characters that will be sent. Approval applies only to that request. The writing description is sent with the selected manuscript context. Loopback requests do not show the transfer confirmation unless FreeLLMAPI is selected. A loopback proxy, tunnel, or LM Link can still forward a request to another computer, and OpenScribe cannot detect that forwarding.
 
 ### OpenAI
 
@@ -190,6 +190,33 @@ Choose **xAI Grok** in the desktop setup or use `provider: xai`. The default end
 ### DeepSeek
 
 Choose **DeepSeek** in the desktop setup or use `provider: deepseek`. The default endpoint is `https://api.deepseek.com/`. Set `DEEPSEEK_API_KEY`; `DEEPSEEK_BASE_URL` can override the endpoint.
+
+### FreeLLMAPI
+
+[FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) is a separate local gateway that combines supported free-tier model providers behind one OpenAI-compatible endpoint. OpenScribe links to its project from the setup dialog. FreeLLMAPI must be installed, running, and configured before OpenScribe can connect.
+
+1. Install the current FreeLLMAPI desktop release or follow its self-hosting instructions.
+2. Open its local dashboard at `http://localhost:3001/`.
+3. Add the provider keys required for the free-tier models you intend to use.
+4. Copy the unified FreeLLMAPI API key from its Keys page.
+5. In OpenScribe, select **AI setup**, then choose **FreeLLMAPI**.
+6. Keep model `auto` to let the gateway select a model, or enter a model or profile ID exposed by your gateway.
+7. Keep endpoint `http://127.0.0.1:3001/v1/` for the default local install.
+8. Paste the unified key and select **Connect**.
+
+The resulting project configuration is similar to:
+
+```yaml
+ai:
+  enabled: true
+  provider: freellmapi
+  model: auto
+  endpoint: http://127.0.0.1:3001/v1/
+```
+
+`FREELLMAPI_API_KEY` and `FREELLMAPI_BASE_URL` can override the saved key and endpoint. OpenScribe stores a pasted unified key in the operating system credential store.
+
+The local gateway forwards prompts and manuscript context to hosted model providers. OpenScribe therefore displays the transfer confirmation for every FreeLLMAPI manuscript request even though the preset endpoint is loopback. FreeLLMAPI does not guarantee access without provider accounts or keys. Available models, quotas, retention, and acceptable use depend on the gateway configuration and the upstream providers. Its project describes the service as intended for personal experimentation.
 
 ## On prem or local model servers
 

@@ -1,5 +1,14 @@
 # changelog
 
+## 2026-09-15
+
+### FreeLLMAPI provider
+
+* added a FreeLLMAPI setup choice linked to its GitHub project, with `auto` routing and the default local gateway endpoint
+* stored the gateway's unified key in the existing operating system credential store path
+* required explicit hosted-transfer approval for every FreeLLMAPI manuscript request because its loopback gateway forwards content to external providers
+* documented installation, provider-key requirements, routing limits, and the personal-experimentation scope without promising unrestricted free access
+
 ## 2026-09-14
 
 ### Version 0.1.1 prerelease

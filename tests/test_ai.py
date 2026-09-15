@@ -10,6 +10,7 @@ from openscribe.ai import (
     AISettings,
     generate_draft,
     load_api_key,
+    provider_definition,
     requires_data_transfer_consent,
     run_ai_task,
     save_api_key,
@@ -378,6 +379,32 @@ def test_hosted_connection_routes_supported_provider(monkeypatch, provider, modu
 def test_remote_compatible_endpoint_requires_transfer_consent() -> None:
     settings = AISettings(True, "openai-compatible", "remote-model", "https://models.example.test/v1/")
     assert requires_data_transfer_consent(settings)
+
+
+def test_freellmapi_preset_routes_through_local_gateway_but_requires_transfer_consent(monkeypatch) -> None:
+    checked = {}
+    credential = "synthetic" + "-value"
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            checked["client"] = kwargs
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **call_kwargs: checked.update(request=call_kwargs))
+            )
+
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: SimpleNamespace(OpenAI=FakeClient))
+    settings = AISettings(True, "freellmapi", "auto")
+
+    assert provider_definition("freellmapi").account_url == "https://github.com/tashfeenahmed/freellmapi"
+    assert requires_data_transfer_consent(settings)
+    check_ai_connection(settings, credential)
+    assert checked["client"] == {
+        "api_key": credential,
+        "base_url": "http://127.0.0.1:3001/v1/",
+        "timeout": 15.0,
+        "max_retries": 0,
+    }
+    assert checked["request"]["model"] == "auto"
 
 
 def test_connection_rejects_nonlocal_plain_http_before_loading_provider_client(monkeypatch) -> None:

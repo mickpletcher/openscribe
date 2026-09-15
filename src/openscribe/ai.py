@@ -6,9 +6,11 @@ from dataclasses import dataclass
 
 from openscribe.network import local_endpoint
 
-HOSTED_PROVIDERS = frozenset({"openai", "azure-openai", "anthropic", "gemini", "mistral", "xai", "deepseek"})
+HOSTED_PROVIDERS = frozenset(
+    {"openai", "azure-openai", "anthropic", "gemini", "mistral", "xai", "deepseek", "freellmapi"}
+)
 OPENAI_COMPATIBLE_PROVIDERS = frozenset(
-    {"lm-studio", "openai-compatible-local", "openai-compatible", "xai", "deepseek"}
+    {"lm-studio", "openai-compatible-local", "openai-compatible", "xai", "deepseek", "freellmapi"}
 )
 CREDENTIAL_SERVICE = "OpenScribe"
 
@@ -94,6 +96,16 @@ AI_PROVIDERS = (
         "LM_STUDIO_BASE_URL",
         "http://127.0.0.1:1234/v1/",
         True,
+        True,
+    ),
+    AIProvider(
+        "freellmapi",
+        "FreeLLMAPI",
+        ("auto", "auto:fast", "auto:smart", "fusion"),
+        "FREELLMAPI_API_KEY",
+        "https://github.com/tashfeenahmed/freellmapi",
+        "FREELLMAPI_BASE_URL",
+        "http://127.0.0.1:3001/v1/",
         True,
     ),
     AIProvider(
@@ -274,13 +286,16 @@ def resolve_endpoint(settings: AISettings) -> str:
 
 
 def requires_data_transfer_consent(settings: AISettings) -> bool:
-    if settings.provider.strip().lower() in OPENAI_COMPATIBLE_PROVIDERS:
+    provider = settings.provider.strip().lower()
+    if provider in HOSTED_PROVIDERS:
+        return True
+    if provider in OPENAI_COMPATIBLE_PROVIDERS:
         endpoint = resolve_endpoint(settings)
         try:
             return not local_endpoint(endpoint)
         except ValueError as exc:
             raise AIConfigurationError(str(exc)) from exc
-    return settings.provider.strip().lower() in HOSTED_PROVIDERS
+    return False
 
 
 def summarize_text(

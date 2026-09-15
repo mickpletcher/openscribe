@@ -158,9 +158,11 @@ Before a hosted AI or licensed hosted LanguageTool request, OpenScribe displays 
 
 Review the disclosure every time. Do not send private manuscript text unless you understand and accept the provider's terms and data handling.
 
-The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, LM Studio, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
+The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
 
 Local AI is treated as local only when the configured endpoint resolves to loopback. A LAN, VPN, or internet endpoint still crosses the machine boundary. Non-loopback AI endpoints require HTTPS and explicit transfer approval even when the provider is labeled local.
+
+FreeLLMAPI is the explicit exception to the normal loopback rule. Its OpenScribe preset connects to a local gateway, but that gateway routes requests to external providers. OpenScribe therefore requires hosted-transfer approval for every FreeLLMAPI manuscript request. Review the data handling and limits of both FreeLLMAPI and the provider that handles the selected model.
 
 LM Link and other proxies can accept a request on loopback and forward it to another computer. OpenScribe cannot inspect that routing and will not show its non-loopback confirmation. When using LM Link, treat the linked computer as a manuscript recipient even though the configured endpoint is `127.0.0.1`.
 
