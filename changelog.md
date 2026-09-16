@@ -2,6 +2,11 @@
 
 ## 2026-09-15
 
+### Version 0.1.2 prerelease
+
+* packaged the brainstorming flowchart, previewed book-outline creation, OpenRouter provider, and current FreeLLMAPI integration for public download
+* retained the per-user Windows installer, portable ZIP, SHA-256 checksums, and pre-release unsigned-package warning
+
 ### OpenRouter provider
 
 * added an OpenRouter setup choice using its OpenAI-compatible API, account-key link, and editable model IDs

@@ -160,7 +160,7 @@ def write_addin_manifest(bridge: WordBridge, output: Path):
     atomic_write_text(output, f'''<?xml version="1.0" encoding="UTF-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="TaskPaneApp">
- <Id>e964a66d-d75e-40ae-993f-b7d941212998</Id><Version>0.1.1.0</Version>
+ <Id>e964a66d-d75e-40ae-993f-b7d941212998</Id><Version>0.1.2.0</Version>
  <ProviderName>OpenScribe</ProviderName><DefaultLocale>en-US</DefaultLocale>
  <DisplayName DefaultValue="OpenScribe local round trip" />
  <Description DefaultValue="Preview and apply Word edits to a local OpenScribe project." />
