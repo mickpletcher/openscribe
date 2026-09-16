@@ -67,14 +67,17 @@ Do not disable the conflict check.
 
 ## Checkpoints
 
-Create a checkpoint before:
+OpenScribe automatically creates a checkpoint before these applied operations:
 
 - moving, splitting, or merging scenes
 - applying a migration or identity repair
 - importing Word changes
 - creating manuscript parts and chapters from a brainstorming outline
 - applying a snapshot restore
-- making a large manual rewrite
+
+Checkpoint creation completes before manuscript files are replaced. If checkpoint creation fails, the operation stops without changing the manuscript. Scene commands and snapshot restore print the automatic backup path after a successful apply.
+
+Create a named manual checkpoint before a large manual rewrite, an agent-driven session, or any other work where a recognizable recovery point will help:
 
 Create one with:
 
@@ -105,7 +108,7 @@ Apply only after review:
 openscribe snapshot restore "before-major-edit" --apply
 ```
 
-Apply creates an automatic backup, stages the replacement, updates managed paths, and records a recovery journal.
+Apply creates a separate automatic backup of the current project before touching managed files. It then stages the selected checkpoint, updates managed paths, and records a recovery journal. If backup creation fails, restore stops without changing managed files. If replacement fails, OpenScribe attempts to restore the automatic backup.
 
 An exact restore can delete managed files created after the selected checkpoint. That deletion is intentional and appears in the preview.
 

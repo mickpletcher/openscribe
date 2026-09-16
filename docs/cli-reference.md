@@ -170,7 +170,7 @@ openscribe scene merge "Bus Stop" --with "The Call" --chapter "Arrival"
 openscribe scene merge "Bus Stop" --with "The Call" --chapter "Arrival" --apply
 ```
 
-Applied operations create checkpoints.
+Every `scene move`, `scene split`, and `scene merge` command with `--apply` creates an automatic checkpoint before replacing any manuscript file. The checkpoint contains the exact pre-apply state. The command prints its path as `Backup:`. If checkpoint creation fails, the manuscript is not changed.
 
 ## Reading and project views
 
@@ -305,6 +305,8 @@ openscribe snapshot restore "end-of-session" --apply
 ```
 
 Restore can remove managed files that were created after the checkpoint. Review the preview first. See [Safety and recovery](safety-and-recovery.md).
+
+`snapshot restore --apply` first creates a separate automatic backup of the project's current state. It then applies the selected checkpoint. The command prints the automatic backup path. If backup creation fails, restore does not modify managed files.
 
 ## Derived index
 

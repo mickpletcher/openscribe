@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 import yaml
@@ -642,6 +643,9 @@ def test_checkpoint_snapshot_diff_and_restore(tmp_path: Path) -> None:
     assert str(added_path.relative_to(root)).replace("\\", "/") in preview.deleted
     assert str(template_path.relative_to(root)).replace("\\", "/") in preview.modified
 
+    current_chapter = chapter_path.read_bytes()
+    current_template = template_path.read_bytes()
+    current_added = added_path.read_bytes()
     result = restore_snapshot(root, snapshot_dir.name)
     restored_text = chapter_path.read_text(encoding="utf-8")
     assert "Original text." in restored_text
@@ -649,6 +653,10 @@ def test_checkpoint_snapshot_diff_and_restore(tmp_path: Path) -> None:
     assert not added_path.exists()
     assert template_path.read_text(encoding="utf-8") == "name: original\n"
     assert result.backup_path.exists()
+    with ZipFile(result.backup_path / "checkpoint.zip") as archive:
+        assert archive.read(chapter_path.relative_to(root).as_posix()) == current_chapter
+        assert archive.read(template_path.relative_to(root).as_posix()) == current_template
+        assert archive.read(added_path.relative_to(root).as_posix()) == current_added
 
 
 def test_snapshot_restore_rolls_back_when_staged_replacement_fails(

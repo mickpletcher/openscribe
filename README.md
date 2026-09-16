@@ -135,9 +135,9 @@ OpenScribe protects writing in several ways:
 - unsaved desktop and TUI drafts survive navigation
 - closing with unsaved text requires a Save, Discard, or Cancel decision
 - saving checks whether another program changed the chapter on disk
-- saves and structural changes create checkpoints
+- saves and structural changes create checkpoints before replacing manuscript files
 - snapshot restore previews changes before `--apply`
-- restore creates an automatic backup and uses a recovery journal
+- restore creates an automatic backup before touching managed files and uses a recovery journal
 - migrations and identity repair are explicit operations, not ordinary reads
 - duplicate chapter or scene titles require immutable IDs instead of ambiguous aliases
 - hosted AI and proofreading require a disclosure and explicit transfer approval

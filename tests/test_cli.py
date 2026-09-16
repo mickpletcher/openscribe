@@ -12,6 +12,7 @@ from openscribe.ai import AIConfigurationError
 from openscribe.cli import app
 from openscribe.project import list_chapters
 from openscribe.proofreading import ProofreadingIssue, ProofreadingResult
+from openscribe.snapshots import list_snapshots
 
 runner = CliRunner()
 
@@ -1470,11 +1471,13 @@ def test_scene_commands_preview_then_apply(tmp_path: Path, monkeypatch) -> None:
         ["scene", "move", "Bus Stop", "--chapter", "Arrival", "--position", "2", "--apply"],
     )
     assert applied.exit_code == 0
-    assert "Applied scene operation" in applied.stdout
+    assert "Applied scene operation. Backup:" in applied.stdout
     assert chapter_path.read_text(encoding="utf-8").index("## Town Hall") < chapter_path.read_text(
         encoding="utf-8"
     ).index("## Bus Stop")
 
+    before_split = chapter_path.read_bytes()
+    snapshot_count = len(list_snapshots(tmp_path))
     split = runner.invoke(
         app,
         [
@@ -1491,8 +1494,16 @@ def test_scene_commands_preview_then_apply(tmp_path: Path, monkeypatch) -> None:
         ],
     )
     assert split.exit_code == 0
+    assert "Applied scene operation. Backup:" in split.stdout
     assert "## After the Pause" in chapter_path.read_text(encoding="utf-8")
+    split_snapshots = list_snapshots(tmp_path)
+    assert len(split_snapshots) == snapshot_count + 1
+    assert str(split_snapshots[0]["label"]).startswith("automatic backup before Split scene")
+    with ZipFile(tmp_path / str(split_snapshots[0]["path"]) / "checkpoint.zip") as archive:
+        assert archive.read(chapter_path.relative_to(tmp_path).as_posix()) == before_split
 
+    before_merge = chapter_path.read_bytes()
+    snapshot_count = len(split_snapshots)
     merge = runner.invoke(
         app,
         [
@@ -1507,7 +1518,13 @@ def test_scene_commands_preview_then_apply(tmp_path: Path, monkeypatch) -> None:
         ],
     )
     assert merge.exit_code == 0
+    assert "Applied scene operation. Backup:" in merge.stdout
     assert "## After the Pause" not in chapter_path.read_text(encoding="utf-8")
+    merge_snapshots = list_snapshots(tmp_path)
+    assert len(merge_snapshots) == snapshot_count + 1
+    assert str(merge_snapshots[0]["label"]).startswith("automatic backup before Merge scene")
+    with ZipFile(tmp_path / str(merge_snapshots[0]["path"]) / "checkpoint.zip") as archive:
+        assert archive.read(chapter_path.relative_to(tmp_path).as_posix()) == before_merge
 
 
 def test_migrate_commands_report_current_project_version(tmp_path: Path, monkeypatch) -> None:

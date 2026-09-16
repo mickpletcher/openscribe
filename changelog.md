@@ -2,6 +2,12 @@
 
 ## 2026-09-15
 
+### Pre-change CLI recovery checkpoints
+
+* clarified that scene move, split, and merge apply commands create an automatic checkpoint before replacing manuscript files and print its path
+* clarified that snapshot restore creates a separate backup of the current project before applying the selected checkpoint
+* added regression checks that inspect the generated archives and verify they contain the exact pre-change manuscript state
+
 ### Repository verification badges
 
 * added live CI, Windows package, release, supported Python, and license badges directly below the repository title
