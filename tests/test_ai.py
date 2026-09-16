@@ -139,6 +139,20 @@ class _FakeMistralClient:
             SimpleNamespace(OpenAI=_FakeOpenAIClient),
             "compatible summary",
         ),
+        (
+            "huggingface",
+            "HF_TOKEN",
+            "openai",
+            SimpleNamespace(OpenAI=_FakeOpenAIClient),
+            "compatible summary",
+        ),
+        (
+            "ollama",
+            "OLLAMA_BASE_URL",
+            "openai",
+            SimpleNamespace(OpenAI=_FakeOpenAIClient),
+            "compatible summary",
+        ),
     ],
 )
 def test_summarize_text_routes_supported_providers(
@@ -150,11 +164,27 @@ def test_summarize_text_routes_supported_providers(
     expected: str,
 ) -> None:
     monkeypatch.setenv(env_name, "test-key")
+    endpoint_environment = {
+        "xai": "XAI_BASE_URL",
+        "deepseek": "DEEPSEEK_BASE_URL",
+        "openrouter": "OPENROUTER_BASE_URL",
+        "huggingface": "HF_INFERENCE_BASE_URL",
+    }.get(provider)
+    if endpoint_environment:
+        monkeypatch.delenv(endpoint_environment, raising=False)
     if provider == "azure-openai":
         monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com/openai/v1/")
-    if provider in {"lm-studio", "openai-compatible-local"}:
-        endpoint_env = "LM_STUDIO_BASE_URL" if provider == "lm-studio" else "OPENAI_COMPATIBLE_LOCAL_BASE_URL"
-        key_env = "LM_STUDIO_API_KEY" if provider == "lm-studio" else "OPENAI_COMPATIBLE_LOCAL_API_KEY"
+    if provider in {"lm-studio", "ollama", "openai-compatible-local"}:
+        endpoint_env = {
+            "lm-studio": "LM_STUDIO_BASE_URL",
+            "ollama": "OLLAMA_BASE_URL",
+            "openai-compatible-local": "OPENAI_COMPATIBLE_LOCAL_BASE_URL",
+        }[provider]
+        key_env = {
+            "lm-studio": "LM_STUDIO_API_KEY",
+            "ollama": "OLLAMA_API_KEY",
+            "openai-compatible-local": "OPENAI_COMPATIBLE_LOCAL_API_KEY",
+        }[provider]
         monkeypatch.setenv(endpoint_env, "http://localhost:1234/v1")
         monkeypatch.delenv(key_env, raising=False)
         _FakeOpenAIClient.last_kwargs = None
@@ -165,13 +195,15 @@ def test_summarize_text_routes_supported_providers(
         google_module.genai = module_value
         monkeypatch.setitem(sys.modules, "google", google_module)
 
-    endpoint = "http://localhost:1234/v1" if provider in {"lm-studio", "openai-compatible-local"} else ""
+    endpoint = "http://localhost:1234/v1" if provider in {"lm-studio", "ollama", "openai-compatible-local"} else ""
     if provider == "xai":
         endpoint = "https://api.x.ai/v1/"
     if provider == "deepseek":
         endpoint = "https://api.deepseek.com/"
     if provider == "openrouter":
         endpoint = "https://openrouter.ai/api/v1/"
+    if provider == "huggingface":
+        endpoint = "https://router.huggingface.co/v1/"
     if provider == "azure-openai":
         endpoint = "https://example.openai.azure.com/openai/v1/"
     settings = AISettings(enabled=True, provider=provider, model="test-model", endpoint=endpoint)
@@ -179,15 +211,23 @@ def test_summarize_text_routes_supported_providers(
         "Sample text",
         settings,
         "chapter",
-        allow_data_transfer=provider not in {"lm-studio", "openai-compatible-local"},
+        allow_data_transfer=provider not in {"lm-studio", "ollama", "openai-compatible-local"},
     )
 
     assert result == expected
     if provider == "openai":
         assert _FakeOpenAIClient.last_response_kwargs["store"] is False
-    if provider in {"lm-studio", "openai-compatible-local", "xai", "deepseek", "openrouter"}:
+    if provider in {
+        "lm-studio",
+        "ollama",
+        "openai-compatible-local",
+        "xai",
+        "deepseek",
+        "openrouter",
+        "huggingface",
+    }:
         assert result == "compatible summary"
-    if provider in {"lm-studio", "openai-compatible-local"}:
+    if provider in {"lm-studio", "ollama", "openai-compatible-local"}:
         assert _FakeOpenAIClient.last_kwargs == {
             "api_key": "local",
             "base_url": "http://localhost:1234/v1",
@@ -441,6 +481,71 @@ def test_openrouter_preset_uses_openai_compatible_api_and_requires_transfer_cons
         "max_retries": 0,
     }
     assert checked["request"]["model"] == "openrouter/auto"
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "account_url", "base_url", "requires_consent", "credential"),
+    [
+        (
+            "huggingface",
+            "openai/gpt-oss-120b:fastest",
+            "https://huggingface.co/settings/tokens",
+            "https://router.huggingface.co/v1/",
+            True,
+            "synthetic-value",
+        ),
+        (
+            "ollama",
+            "llama3.2",
+            "https://docs.ollama.com/api/openai-compatibility",
+            "http://127.0.0.1:11434/v1/",
+            False,
+            None,
+        ),
+        (
+            "xai",
+            "grok-4.6",
+            "https://console.x.ai/",
+            "https://api.x.ai/v1/",
+            True,
+            "synthetic-value",
+        ),
+    ],
+)
+def test_named_provider_presets_use_openai_compatible_api(
+    monkeypatch,
+    provider,
+    model,
+    account_url,
+    base_url,
+    requires_consent,
+    credential,
+) -> None:
+    checked = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            checked["client"] = kwargs
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **call_kwargs: checked.update(request=call_kwargs))
+            )
+
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: SimpleNamespace(OpenAI=FakeClient))
+    definition = provider_definition(provider)
+    monkeypatch.delenv(definition.endpoint_environment, raising=False)
+    settings = AISettings(True, provider, model)
+
+    assert definition.account_url == account_url
+    assert requires_data_transfer_consent(settings) is requires_consent
+    check_ai_connection(settings, credential)
+    assert checked["client"] == {
+        "api_key": credential or "local",
+        "base_url": base_url,
+        "timeout": 15.0,
+        "max_retries": 0,
+    }
+    assert checked["request"]["model"] == model
 
 
 def test_connection_rejects_nonlocal_plain_http_before_loading_provider_client(monkeypatch) -> None:

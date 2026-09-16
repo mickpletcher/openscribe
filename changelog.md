@@ -2,6 +2,18 @@
 
 ## 2026-09-15
 
+### Repository verification badges
+
+* added live CI, Windows package, release, supported Python, and license badges directly below the repository title
+* documented which test, lint, security, documentation, packaging, and installer checks back the workflow badges
+
+### Hugging Face, Grok, and Llama provider choices
+
+* added a named Hugging Face Inference Providers connection using its OpenAI-compatible router, separate `HF_TOKEN` credential entry, and mandatory hosted-transfer approval
+* added a named Meta Llama through Ollama connection using the local OpenAI-compatible endpoint, editable Llama model IDs, and optional authentication
+* retained the existing xAI Grok connection and added direct preset coverage for its model, endpoint, credential link, and hosted-transfer classification
+* updated the AI setup and troubleshooting guides for all three choices
+
 ### Version 0.1.2 prerelease
 
 * packaged the brainstorming flowchart, previewed book-outline creation, OpenRouter provider, and current FreeLLMAPI integration for public download

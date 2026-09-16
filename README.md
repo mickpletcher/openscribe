@@ -1,5 +1,13 @@
 # OpenScribe
 
+[![CI](https://github.com/mickpletcher/openscribe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mickpletcher/openscribe/actions/workflows/ci.yml)
+[![Windows package](https://github.com/mickpletcher/openscribe/actions/workflows/windows-package.yml/badge.svg?branch=main)](https://github.com/mickpletcher/openscribe/actions/workflows/windows-package.yml)
+[![Latest release](https://img.shields.io/github/v/release/mickpletcher/openscribe?include_prereleases&sort=semver)](https://github.com/mickpletcher/openscribe/releases)
+[![Python 3.11, 3.12, and 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/mickpletcher/openscribe/blob/main/pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/mickpletcher/openscribe/blob/main/LICENSE)
+
+The CI check covers the supported Python test matrix, coverage floor, Ruff lint, Word task-pane tests, dependency audit, Bandit scan, secret scan, documentation validation, package build, and CLI smoke tests. The Windows package check builds and exercises the installer and portable distribution.
+
 Open source desktop, terminal, and command-line writing software for books and other long-form projects.
 
 **Status:** Active pre-release alpha
@@ -175,7 +183,7 @@ OpenScribe previews generated prose before applying it. An accepted page is inse
 
 AI is not required for manual writing, saving, searching, recovery, or export.
 
-On its first desktop launch, OpenScribe asks whether to connect an AI model. The setup supports OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, [OpenRouter](https://openrouter.ai/), [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a dedicated LM Studio preset, OpenAI-compatible hosted APIs, and other local servers such as Ollama, LocalAI, and vLLM. The connection test sends no manuscript text. Pasted API keys are saved separately by provider in the operating system credential store, never in the project. Select **Not now** to keep AI disabled. Use **AI setup** later to change the provider, model, or endpoint.
+On its first desktop launch, OpenScribe asks whether to connect an AI model. The setup supports OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, [Hugging Face](https://huggingface.co/docs/inference-providers/), [OpenRouter](https://openrouter.ai/), [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a dedicated LM Studio preset, and Meta Llama through a named local [Ollama](https://docs.ollama.com/api/openai-compatibility) preset. It also supports other OpenAI-compatible hosted and local APIs. The connection test sends no manuscript text. Pasted API keys are saved separately by provider in the operating system credential store, never in the project. Select **Not now** to keep AI disabled. Use **AI setup** later to change the provider, model, or endpoint.
 
 Install provider support only if you need it:
 
@@ -183,7 +191,7 @@ Install provider support only if you need it:
 python -m pip install -e ".[ai]"
 ```
 
-OpenScribe shows the provider, model, and character count before manuscript text is sent from the desktop to a hosted service and asks for approval on every writing request. Each hosted CLI command requires `--allow-data-transfer`. OpenRouter requests are sent through OpenRouter to the selected upstream model provider. Local loopback endpoints do not require transfer approval unless the selected provider is FreeLLMAPI, which routes requests from its local gateway to hosted providers.
+OpenScribe shows the provider, model, and character count before manuscript text is sent from the desktop to a hosted service and asks for approval on every writing request. Each hosted CLI command requires `--allow-data-transfer`. Hugging Face and OpenRouter can route requests to upstream inference providers. The Meta Llama preset uses the local Ollama loopback endpoint by default. Local loopback endpoints do not require transfer approval unless the selected provider is FreeLLMAPI, which routes requests from its local gateway to hosted providers.
 
 LM Studio can run on the same computer or another computer. For a remote model, LM Link is the simplest supported route. A direct network endpoint must use HTTPS because OpenScribe rejects nonlocal plain HTTP. OpenScribe cannot tell when a loopback service such as LM Link forwards a request to another computer, so review that service's routing before sending private writing.
 

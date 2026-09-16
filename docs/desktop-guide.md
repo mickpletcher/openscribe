@@ -29,21 +29,21 @@ The first desktop launch asks whether to connect an AI model.
 
 To connect:
 
-1. Choose OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, OpenRouter, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible provider.
+1. Choose OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, Hugging Face, OpenRouter, FreeLLMAPI, LM Studio, Meta Llama through Ollama, another local server, or another OpenAI-compatible provider.
 2. Enter or select the model ID.
 3. For Azure, local, or custom compatible providers, enter the API endpoint.
 4. Enter an API key. A local server may not require one.
 5. Select **Connect**.
 
-The connection test sends a short synthetic test message to check the key, endpoint, billing, and selected model. It does not send manuscript text. Pasted keys are saved separately by provider in the operating system credential store and are not written to `.openscribe\project.yaml`. A local endpoint such as Ollama defaults to `http://127.0.0.1:11434/v1/` and can use no key.
+The connection test sends a short synthetic test message to check the key, endpoint, billing, and selected model. It does not send manuscript text. Pasted keys are saved separately by provider in the operating system credential store and are not written to `.openscribe\project.yaml`. The named Meta Llama through Ollama choice defaults to `http://127.0.0.1:11434/v1/` and can use no key.
 
-For OpenRouter, create an API key, select an OpenRouter model ID, and keep the preset `https://openrouter.ai/api/v1/` endpoint. For FreeLLMAPI, install and configure its local gateway first, copy its unified API key, and keep the preset `http://127.0.0.1:3001/v1/` endpoint. For LM Studio on the same computer, use `http://127.0.0.1:1234/v1/`. For LM Studio on another computer, use LM Link or an HTTPS-protected network endpoint. Plain HTTP network addresses are rejected. See [AI setup](ai-setup.md#openrouter) and [FreeLLMAPI setup](ai-setup.md#freellmapi).
+For Hugging Face, create a token allowed to call Inference Providers and keep `https://router.huggingface.co/v1/`. For OpenRouter, create an API key, select an OpenRouter model ID, and keep `https://openrouter.ai/api/v1/`. For FreeLLMAPI, install and configure its local gateway first, copy its unified API key, and keep `http://127.0.0.1:3001/v1/`. For Meta Llama through Ollama, pull the selected Llama model and keep `http://127.0.0.1:11434/v1/` for a same-computer server. For LM Studio on the same computer, use `http://127.0.0.1:1234/v1/`. For LM Studio on another computer, use LM Link or an HTTPS-protected network endpoint. Plain HTTP network addresses are rejected. See [AI setup](ai-setup.md#hugging-face), [OpenRouter setup](ai-setup.md#openrouter), [FreeLLMAPI setup](ai-setup.md#freellmapi), and [Meta Llama through Ollama](ai-setup.md#meta-llama-through-ollama).
 
 Select **Not now** to keep AI disabled. The prompt is not shown again automatically. Use **AI setup** on the toolbar whenever you want to change the provider, model, endpoint, or credential.
 
 If a project is open when you connect, AI is enabled for that project. If no project is open, the connected model becomes the default for projects subsequently created through the desktop application. Existing projects are not changed automatically.
 
-Connecting does not approve manuscript transfer. Desktop AI writing asks before every hosted request. Hosted CLI commands disclose the provider, model, and text size and require `--allow-data-transfer` for each request. OpenRouter routes content to the selected upstream model provider. FreeLLMAPI requests always use this hosted-transfer gate because its local gateway forwards content to external model providers.
+Connecting does not approve manuscript transfer. Desktop AI writing asks before every hosted request. Hosted CLI commands disclose the provider, model, and text size and require `--allow-data-transfer` for each request. Hugging Face and OpenRouter can route content to upstream inference providers. FreeLLMAPI requests always use this hosted-transfer gate because its local gateway forwards content to external model providers.
 
 ## Understand the window
 

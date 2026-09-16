@@ -15,12 +15,23 @@ HOSTED_PROVIDERS = frozenset(
         "mistral",
         "xai",
         "deepseek",
+        "huggingface",
         "openrouter",
         "freellmapi",
     }
 )
 OPENAI_COMPATIBLE_PROVIDERS = frozenset(
-    {"lm-studio", "openai-compatible-local", "openai-compatible", "xai", "deepseek", "openrouter", "freellmapi"}
+    {
+        "lm-studio",
+        "ollama",
+        "openai-compatible-local",
+        "openai-compatible",
+        "xai",
+        "deepseek",
+        "huggingface",
+        "openrouter",
+        "freellmapi",
+    }
 )
 CREDENTIAL_SERVICE = "OpenScribe"
 
@@ -108,6 +119,16 @@ AI_PROVIDERS = (
         True,
     ),
     AIProvider(
+        "huggingface",
+        "Hugging Face",
+        ("openai/gpt-oss-120b:fastest", "openai/gpt-oss-20b:fastest", "model-id:fastest"),
+        "HF_TOKEN",
+        "https://huggingface.co/settings/tokens",
+        "HF_INFERENCE_BASE_URL",
+        "https://router.huggingface.co/v1/",
+        True,
+    ),
+    AIProvider(
         "lm-studio",
         "LM Studio",
         ("openai/gpt-oss-20b", "model-identifier"),
@@ -115,6 +136,17 @@ AI_PROVIDERS = (
         "https://lmstudio.ai/docs/developer/openai-compat",
         "LM_STUDIO_BASE_URL",
         "http://127.0.0.1:1234/v1/",
+        True,
+        True,
+    ),
+    AIProvider(
+        "ollama",
+        "Meta Llama (Ollama)",
+        ("llama3.2", "llama3.2:1b", "llama-model-id"),
+        "OLLAMA_API_KEY",
+        "https://docs.ollama.com/api/openai-compatibility",
+        "OLLAMA_BASE_URL",
+        "http://127.0.0.1:11434/v1/",
         True,
         True,
     ),

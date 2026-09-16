@@ -285,6 +285,11 @@ class AISetupDialog(QDialog):
                 " OpenRouter routes requests to the selected upstream model provider. "
                 "Every manuscript request requires separate approval."
             )
+        elif definition.provider_id == "huggingface":
+            routing_disclosure = (
+                " Hugging Face may route requests to the selected upstream inference provider. "
+                "Every manuscript request requires separate approval."
+            )
         else:
             routing_disclosure = " A loopback local endpoint normally keeps requests on this computer."
         self.disclosure.setText(
@@ -1040,7 +1045,11 @@ class AuthorWindow(QMainWindow):
                 else (
                     " OpenRouter will route it to the selected upstream model provider."
                     if definition.provider_id == "openrouter"
-                    else ""
+                    else (
+                        " Hugging Face may route it to the selected upstream inference provider."
+                        if definition.provider_id == "huggingface"
+                        else ""
+                    )
                 )
             )
             answer = QMessageBox.question(

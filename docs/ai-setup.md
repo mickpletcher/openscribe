@@ -86,7 +86,7 @@ The desktop application asks for AI setup on first launch. Choose a provider, en
 
 OpenScribe stores pasted keys separately by provider in the operating system credential store. It does not put them in project YAML or application settings. The provider-specific environment variable takes priority over a saved key. Local servers may omit the API key.
 
-Supported desktop choices are OpenAI, Anthropic Claude, Google Gemini, Mistral AI, xAI Grok, DeepSeek, Azure OpenAI, OpenRouter, FreeLLMAPI, LM Studio, other local OpenAI-compatible servers, and other OpenAI-compatible providers. Model IDs remain editable because access and model catalogs change.
+Supported desktop choices are OpenAI, Anthropic Claude, Google Gemini, Mistral AI, xAI Grok, DeepSeek, Azure OpenAI, Hugging Face, OpenRouter, FreeLLMAPI, LM Studio, Meta Llama through Ollama, other local OpenAI-compatible servers, and other OpenAI-compatible providers. Model IDs remain editable because access and model catalogs change.
 
 For **Write with AI**, every hosted or non-loopback request displays the provider, model, and number of manuscript characters that will be sent. Approval applies only to that request. The writing description is sent with the selected manuscript context. Loopback requests do not show the transfer confirmation unless FreeLLMAPI is selected. A loopback proxy, tunnel, or LM Link can still forward a request to another computer, and OpenScribe cannot detect that forwarding.
 
@@ -191,6 +191,29 @@ Choose **xAI Grok** in the desktop setup or use `provider: xai`. The default end
 
 Choose **DeepSeek** in the desktop setup or use `provider: deepseek`. The default endpoint is `https://api.deepseek.com/`. Set `DEEPSEEK_API_KEY`; `DEEPSEEK_BASE_URL` can override the endpoint.
 
+### Hugging Face
+
+[Hugging Face Inference Providers](https://huggingface.co/docs/inference-providers/) exposes an OpenAI-compatible router backed by multiple inference providers. Create a token with permission to call Inference Providers, select **Hugging Face**, and keep the preset `https://router.huggingface.co/v1/` endpoint. Model IDs and provider availability change, so copy a current chat-completion model ID from the [Inference Models catalog](https://huggingface.co/models?inference_provider=all&pipeline_tag=text-generation). A provider or routing policy can be appended to the model ID when supported.
+
+Project config:
+
+```yaml
+ai:
+  enabled: true
+  provider: huggingface
+  model: openai/gpt-oss-120b:fastest
+  endpoint: https://router.huggingface.co/v1/
+```
+
+Environment:
+
+```powershell
+$env:HF_TOKEN="your_fine_grained_token_here"
+$env:HF_INFERENCE_BASE_URL="https://router.huggingface.co/v1/" # optional override
+```
+
+Every manuscript request requires explicit transfer approval. Hugging Face may route the request to another inference provider. Review the selected model, routing provider, price, quota, and both services' data policies before sending private writing. Free credits and model availability are not guaranteed.
+
 ### OpenRouter
 
 [OpenRouter](https://openrouter.ai/) exposes many model providers through one OpenAI-compatible API. Create an [OpenRouter API key](https://openrouter.ai/settings/keys), select **OpenRouter** in AI setup, and keep the preset `https://openrouter.ai/api/v1/` endpoint.
@@ -254,6 +277,30 @@ Examples:
 * vLLM
 * LocalAI
 * another internal OpenAI compatible gateway
+
+### Meta Llama through Ollama
+
+Choose **Meta Llama (Ollama)** to run a Llama model through Ollama's OpenAI-compatible local API. OpenScribe defaults to the `llama3.2` model and `http://127.0.0.1:11434/v1/` endpoint, but the model ID stays editable.
+
+1. Install and start Ollama.
+2. Download the default model with `ollama pull llama3.2`, or pull another Llama model that fits your computer.
+3. In OpenScribe, select **AI setup**, then choose **Meta Llama (Ollama)**.
+4. Enter the installed model ID.
+5. Keep `http://127.0.0.1:11434/v1/` for a same-computer Ollama server.
+6. Leave the API key empty unless your gateway requires one.
+7. Select **Connect**.
+
+Project config:
+
+```yaml
+ai:
+  enabled: true
+  provider: ollama
+  model: llama3.2
+  endpoint: http://127.0.0.1:11434/v1/
+```
+
+`OLLAMA_BASE_URL` and the optional `OLLAMA_API_KEY` can override the saved endpoint and key. The default loopback endpoint keeps requests on this computer. A remote endpoint must use HTTPS and requires approval before each manuscript transfer.
 
 ### LM Studio
 

@@ -329,7 +329,9 @@ Check all of the following:
 
 The error deliberately does not repeat the API key. Use **AI setup** on the desktop toolbar to retry. You can instead set the provider-specific environment variable before starting OpenScribe; it takes priority over a saved key.
 
-For Ollama, start Ollama, make sure the model is installed, choose **Local AI**, and use `http://127.0.0.1:11434/v1/`. LM Studio commonly uses `http://127.0.0.1:1234/v1/`. No key is normally required for a loopback server.
+For a Meta Llama model, start Ollama, make sure the model is installed, choose **Meta Llama (Ollama)**, and use `http://127.0.0.1:11434/v1/`. LM Studio commonly uses `http://127.0.0.1:1234/v1/`. No key is normally required for a loopback server.
+
+For Hugging Face, confirm the token has permission to call Inference Providers, the model supports chat completion through an active provider, and the endpoint is `https://router.huggingface.co/v1/`. Model access, provider capacity, credits, and routing policies can all cause a connection test to fail.
 
 ## Write with AI is unavailable or fails
 

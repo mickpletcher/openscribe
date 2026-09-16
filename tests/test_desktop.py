@@ -233,7 +233,9 @@ def test_ai_setup_dialog_masks_key_and_accepts_editable_model(qtbot):
         "deepseek",
         "azure-openai",
         "openrouter",
+        "huggingface",
         "lm-studio",
+        "ollama",
         "freellmapi",
     } <= providers
 
@@ -270,6 +272,55 @@ def test_ai_setup_dialog_has_openrouter_preset_and_disclosure(qtbot):
     assert "openrouter.ai/settings/keys" in dialog.account_link.text()
     assert "optional" not in dialog.key_label.text().lower()
     assert "routes requests to the selected upstream model provider" in dialog.disclosure.text()
+
+
+def test_ai_setup_dialog_discloses_huggingface_upstream_routing(qtbot):
+    dialog = AISetupDialog("huggingface", "", "", {})
+    qtbot.addWidget(dialog)
+    assert "may route requests to the selected upstream inference provider" in dialog.disclosure.text()
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "endpoint", "account_link", "key_optional"),
+    [
+        (
+            "huggingface",
+            "openai/gpt-oss-120b:fastest",
+            "https://router.huggingface.co/v1/",
+            "huggingface.co/settings/tokens",
+            False,
+        ),
+        (
+            "ollama",
+            "llama3.2",
+            "http://127.0.0.1:11434/v1/",
+            "docs.ollama.com/api/openai-compatibility",
+            True,
+        ),
+        (
+            "xai",
+            "grok-4.6",
+            "https://api.x.ai/v1/",
+            "console.x.ai",
+            False,
+        ),
+    ],
+)
+def test_ai_setup_dialog_has_named_provider_preset(
+    qtbot,
+    provider,
+    model,
+    endpoint,
+    account_link,
+    key_optional,
+):
+    dialog = AISetupDialog(provider, "", "", {})
+    qtbot.addWidget(dialog)
+    assert dialog.provider_id() == provider
+    assert dialog.model_id() == model
+    assert dialog.endpoint_url() == endpoint
+    assert account_link in dialog.account_link.text()
+    assert ("optional" in dialog.key_label.text().lower()) is key_optional
 
 
 def test_ai_writing_dialog_collects_scope_and_description(qtbot):
@@ -427,6 +478,43 @@ def test_openrouter_consent_discloses_upstream_routing(window, monkeypatch):
     window.write_with_ai()
 
     assert "OpenRouter will route it to the selected upstream model provider" in disclosure["message"]
+    assert window.ai_worker is None
+
+
+def test_huggingface_consent_discloses_upstream_routing(window, monkeypatch):
+    window.binder.setCurrentItem(scene_item(window))
+    window.config["ai"] = {
+        "enabled": True,
+        "provider": "huggingface",
+        "model": "openai/gpt-oss-120b:fastest",
+        "endpoint": "https://router.huggingface.co/v1/",
+    }
+
+    class AcceptedWriting:
+        def __init__(self, *args):
+            return None
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def scope_id(self):
+            return "page"
+
+        def writing_description(self):
+            return "Continue the arrival scene."
+
+    disclosure = {}
+    monkeypatch.setattr("openscribe.desktop.AIWritingDialog", AcceptedWriting)
+
+    def reject_transfer(parent, title, message, *args):
+        disclosure["message"] = message
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "question", reject_transfer)
+
+    window.write_with_ai()
+
+    assert "Hugging Face may route it to the selected upstream inference provider" in disclosure["message"]
     assert window.ai_worker is None
 
 

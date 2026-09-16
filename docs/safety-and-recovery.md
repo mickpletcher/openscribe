@@ -161,13 +161,15 @@ Before a hosted AI or licensed hosted LanguageTool request, OpenScribe displays 
 
 Review the disclosure every time. Do not send private manuscript text unless you understand and accept the provider's terms and data handling.
 
-The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, OpenRouter, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
+The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, Hugging Face, OpenRouter, FreeLLMAPI, LM Studio, Meta Llama through Ollama, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
 
 Local AI is treated as local only when the configured endpoint resolves to loopback. A LAN, VPN, or internet endpoint still crosses the machine boundary. Non-loopback AI endpoints require HTTPS and explicit transfer approval even when the provider is labeled local.
 
 FreeLLMAPI is the explicit exception to the normal loopback rule. Its OpenScribe preset connects to a local gateway, but that gateway routes requests to external providers. OpenScribe therefore requires hosted-transfer approval for every FreeLLMAPI manuscript request. Review the data handling and limits of both FreeLLMAPI and the provider that handles the selected model.
 
 OpenRouter is always treated as a hosted provider. OpenScribe asks before every manuscript request and discloses that OpenRouter routes the content to the selected upstream model provider. Review the policies of both services.
+
+Hugging Face is always treated as a hosted provider. OpenScribe asks before every manuscript request and discloses that Hugging Face may route the content to the selected upstream inference provider. Review the selected model, routing provider, and both services' policies.
 
 LM Link and other proxies can accept a request on loopback and forward it to another computer. OpenScribe cannot inspect that routing and will not show its non-loopback confirmation. When using LM Link, treat the linked computer as a manuscript recipient even though the configured endpoint is `127.0.0.1`.
 
