@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QFont, QTextCursor
+from PySide6.QtCore import QLineF, QPointF, QSettings, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QAction, QBrush, QColor, QFont, QPainter, QPen, QPolygonF, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
+    QGraphicsItem,
+    QGraphicsLineItem,
+    QGraphicsPolygonItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+    QGraphicsView,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -40,6 +49,20 @@ from openscribe.ai import (
 )
 from openscribe.ai import (
     requires_data_transfer_consent as ai_requires_data_transfer_consent,
+)
+from openscribe.board import (
+    BoardNote,
+    add_link,
+    add_note,
+    apply_board_outline,
+    auto_layout,
+    delete_note,
+    list_notes,
+    move_note,
+    outline_plan_text,
+    plan_board_outline,
+    remove_link,
+    update_note,
 )
 from openscribe.compile import compile_project
 from openscribe.editing import EditSession
@@ -257,6 +280,11 @@ class AISetupDialog(QDialog):
                 " FreeLLMAPI accepts the request locally, then forwards it to hosted model providers. "
                 "Every manuscript request requires separate approval."
             )
+        elif definition.provider_id == "openrouter":
+            routing_disclosure = (
+                " OpenRouter routes requests to the selected upstream model provider. "
+                "Every manuscript request requires separate approval."
+            )
         else:
             routing_disclosure = " A loopback local endpoint normally keeps requests on this computer."
         self.disclosure.setText(
@@ -293,6 +321,322 @@ class AISetupDialog(QDialog):
         return self.endpoint.text().strip() if self.endpoint.isEnabled() else ""
 
 
+class BrainstormIdeaDialog(QDialog):
+    def __init__(self, note: BoardNote | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit brainstorming idea" if note else "Add brainstorming idea")
+        self.resize(520, 360)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.title = QLineEdit(note.title if note else "")
+        self.title.setAccessibleName("Idea title")
+        self.group = QLineEdit(note.group if note else "")
+        self.group.setAccessibleName("Book part")
+        self.group.setPlaceholderText("Example: Act One or Part I")
+        form.addRow("Idea or chapter title", self.title)
+        form.addRow("Book part", self.group)
+        layout.addLayout(form)
+        layout.addWidget(QLabel("Details or chapter synopsis"))
+        self.body = QPlainTextEdit(note.body if note else "")
+        self.body.setAccessibleName("Idea details")
+        layout.addWidget(self.body)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def values(self) -> tuple[str, str, str]:
+        return self.title.text().strip(), self.body.toPlainText().strip(), self.group.text().strip()
+
+
+class BrainstormNodeItem(QGraphicsRectItem):
+    SCALE = 12
+
+    def __init__(self, note: BoardNote, moved):
+        super().__init__(0, 0, 210, 105)
+        self.note_id = note.note_id
+        self.moved = moved
+        self.setPos(note.x * self.SCALE, note.y * self.SCALE)
+        self.setBrush(QBrush(QColor("#fff7c7")))
+        self.setPen(QPen(QColor("#6b633a"), 2))
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setZValue(1)
+        label = QGraphicsTextItem(self)
+        group = note.group.strip() or "Outline"
+        details = note.body.strip().replace("\n", " ")
+        if len(details) > 90:
+            details = details[:87].rstrip() + "..."
+        label.setPlainText(f"{note.title}\n{group}\n{details}".rstrip())
+        label.setTextWidth(190)
+        label.setPos(10, 7)
+        label.setDefaultTextColor(QColor("#252b2d"))
+        label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setToolTip(f"{note.note_id}\n{note.body}".rstrip())
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        self.moved(
+            self.note_id,
+            max(0, round(self.pos().x() / self.SCALE)),
+            max(0, round(self.pos().y() / self.SCALE)),
+        )
+
+
+class BrainstormDialog(QDialog):
+    def __init__(self, root: Path, parent=None):
+        super().__init__(parent)
+        self.root = root
+        self.node_items: dict[str, BrainstormNodeItem] = {}
+        self.setWindowTitle("Brainstorm book outline")
+        self.resize(1180, 760)
+        layout = QVBoxLayout(self)
+        heading = QLabel("Brainstorming flowchart")
+        heading.setObjectName("documentTitle")
+        layout.addWidget(heading)
+        guidance = QLabel(
+            "Add ideas, assign each one to a book part, and connect them in reading order. "
+            "Drag cards to organize the canvas. Create outline previews the parts and chapters before writing them."
+        )
+        guidance.setWordWrap(True)
+        layout.addWidget(guidance)
+        controls = QHBoxLayout()
+        for label, handler in (
+            ("Add idea", self.add_idea),
+            ("Edit idea", self.edit_idea),
+            ("Delete idea", self.delete_idea),
+            ("Connect ideas", self.connect_idea),
+            ("Remove connection", self.disconnect_idea),
+            ("Auto arrange", self.arrange),
+            ("Create outline", self.create_outline),
+        ):
+            button = QPushButton(label)
+            button.clicked.connect(handler)
+            controls.addWidget(button)
+        controls.addStretch()
+        layout.addLayout(controls)
+        splitter = QSplitter()
+        self.scene = QGraphicsScene(self)
+        self.canvas = QGraphicsView(self.scene)
+        self.canvas.setAccessibleName("Brainstorming flowchart canvas")
+        self.canvas.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.canvas.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        splitter.addWidget(self.canvas)
+        self.idea_list = QListWidget()
+        self.idea_list.setAccessibleName("Brainstorming ideas")
+        self.idea_list.currentRowChanged.connect(self._list_selection_changed)
+        self.scene.selectionChanged.connect(self._canvas_selection_changed)
+        splitter.addWidget(self.idea_list)
+        splitter.setSizes([900, 250])
+        layout.addWidget(splitter)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.refresh()
+
+    def refresh(self, selected_id: str = "") -> None:
+        self.scene.blockSignals(True)
+        self.idea_list.blockSignals(True)
+        self.scene.clear()
+        self.idea_list.clear()
+        self.node_items = {}
+        notes = list_notes(self.root)
+        for note in notes:
+            if note.hidden:
+                continue
+            item = BrainstormNodeItem(note, self._move_node)
+            self.scene.addItem(item)
+            self.node_items[note.note_id] = item
+            list_item_text = f"{note.note_id}  {note.title}  [{note.group.strip() or 'Outline'}]"
+            self.idea_list.addItem(list_item_text)
+            self.idea_list.item(self.idea_list.count() - 1).setData(Qt.ItemDataRole.UserRole, note.note_id)
+        for note in notes:
+            if note.note_id not in self.node_items:
+                continue
+            for target_id in note.links:
+                if target_id in self.node_items:
+                    self._draw_arrow(self.node_items[note.note_id], self.node_items[target_id])
+        self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-80, -80, 160, 160))
+        self.scene.blockSignals(False)
+        self.idea_list.blockSignals(False)
+        if selected_id:
+            self._select_note(selected_id)
+
+    def selected_note(self) -> BoardNote | None:
+        selected = [item for item in self.scene.selectedItems() if isinstance(item, BrainstormNodeItem)]
+        note_id = selected[0].note_id if selected else ""
+        if not note_id and self.idea_list.currentItem():
+            note_id = str(self.idea_list.currentItem().data(Qt.ItemDataRole.UserRole))
+        return next((note for note in list_notes(self.root) if note.note_id == note_id), None)
+
+    def add_idea(self) -> None:
+        dialog = BrainstormIdeaDialog(parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        title, body, group = dialog.values()
+        if not title:
+            QMessageBox.warning(self, "Idea title required", "Enter a title for the brainstorming idea.")
+            return
+        count = len(list_notes(self.root))
+        note = add_note(self.root, title, body=body, group=group, x=(count % 3) * 22, y=(count // 3) * 10)
+        self.refresh(note.note_id)
+
+    def edit_idea(self) -> None:
+        note = self.selected_note()
+        if note is None:
+            QMessageBox.information(self, "Select an idea", "Select an idea to edit.")
+            return
+        dialog = BrainstormIdeaDialog(note, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        title, body, group = dialog.values()
+        if not title:
+            QMessageBox.warning(self, "Idea title required", "Enter a title for the brainstorming idea.")
+            return
+        update_note(self.root, note.note_id, title=title, body=body, group=group)
+        self.refresh(note.note_id)
+
+    def delete_idea(self) -> None:
+        note = self.selected_note()
+        if note is None:
+            QMessageBox.information(self, "Select an idea", "Select an idea to delete.")
+            return
+        if QMessageBox.question(
+            self,
+            "Delete idea",
+            f"Delete '{note.title}' and its flowchart connections?",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        delete_note(self.root, note.note_id)
+        self.refresh()
+
+    def connect_idea(self) -> None:
+        source = self.selected_note()
+        if source is None:
+            QMessageBox.information(self, "Select an idea", "Select the idea that should come first.")
+            return
+        targets = [note for note in list_notes(self.root) if not note.hidden and note.note_id != source.note_id]
+        if not targets:
+            QMessageBox.information(self, "Add another idea", "Add another idea before creating a connection.")
+            return
+        choices = [f"{note.note_id}  {note.title}" for note in targets]
+        choice, accepted = QInputDialog.getItem(self, "Connect ideas", "Next idea", choices, 0, False)
+        if accepted:
+            target = targets[choices.index(choice)]
+            add_link(self.root, source.note_id, target.note_id)
+            self.refresh(source.note_id)
+
+    def disconnect_idea(self) -> None:
+        source = self.selected_note()
+        if source is None:
+            QMessageBox.information(self, "Select an idea", "Select the source idea for the connection.")
+            return
+        notes = {note.note_id: note for note in list_notes(self.root)}
+        targets = [notes[note_id] for note_id in source.links if note_id in notes]
+        if not targets:
+            QMessageBox.information(self, "No connections", "The selected idea has no outgoing connections.")
+            return
+        choices = [f"{note.note_id}  {note.title}" for note in targets]
+        choice, accepted = QInputDialog.getItem(self, "Remove connection", "Connected idea", choices, 0, False)
+        if accepted:
+            target = targets[choices.index(choice)]
+            remove_link(self.root, source.note_id, target.note_id)
+            self.refresh(source.note_id)
+
+    def arrange(self) -> None:
+        auto_layout(self.root)
+        self.refresh()
+
+    def create_outline(self) -> None:
+        plan = plan_board_outline(self.root)
+        if ReviewDialog("Review brainstorming outline", outline_plan_text(plan), self).exec() != QDialog.DialogCode.Accepted:
+            return
+        backup, created = apply_board_outline(self.root, plan)
+        self.refresh()
+        parent = self.parent()
+        if isinstance(parent, AuthorWindow):
+            parent.rebuild_binder()
+            parent.statusBar().showMessage(
+                f"Created {len(created)} outline chapters with checkpoint {backup.name}"
+            )
+        QMessageBox.information(self, "Outline created", f"Created {len(created)} draft chapters.")
+
+    def _move_node(self, note_id: str, x: int, y: int) -> None:
+        move_note(self.root, note_id, x, y)
+        QTimer.singleShot(0, lambda: self.refresh(note_id))
+
+    def _select_note(self, note_id: str) -> None:
+        item = self.node_items.get(note_id)
+        if item:
+            item.setSelected(True)
+            self.canvas.ensureVisible(item)
+        for row in range(self.idea_list.count()):
+            list_item = self.idea_list.item(row)
+            if list_item.data(Qt.ItemDataRole.UserRole) == note_id:
+                self.idea_list.setCurrentRow(row)
+                break
+
+    def _list_selection_changed(self, row: int) -> None:
+        if row < 0:
+            return
+        note_id = str(self.idea_list.item(row).data(Qt.ItemDataRole.UserRole))
+        self.scene.blockSignals(True)
+        self.scene.clearSelection()
+        if note_id in self.node_items:
+            self.node_items[note_id].setSelected(True)
+            self.canvas.ensureVisible(self.node_items[note_id])
+        self.scene.blockSignals(False)
+
+    def _canvas_selection_changed(self) -> None:
+        selected = [item for item in self.scene.selectedItems() if isinstance(item, BrainstormNodeItem)]
+        if not selected:
+            return
+        note_id = selected[0].note_id
+        self.idea_list.blockSignals(True)
+        for row in range(self.idea_list.count()):
+            if self.idea_list.item(row).data(Qt.ItemDataRole.UserRole) == note_id:
+                self.idea_list.setCurrentRow(row)
+                break
+        self.idea_list.blockSignals(False)
+
+    def _draw_arrow(self, source: BrainstormNodeItem, target: BrainstormNodeItem) -> None:
+        source_center = source.sceneBoundingRect().center()
+        target_center = target.sceneBoundingRect().center()
+        dx = target_center.x() - source_center.x()
+        dy = target_center.y() - source_center.y()
+        factors = []
+        if dx:
+            factors.append((source.rect().width() / 2) / abs(dx))
+        if dy:
+            factors.append((source.rect().height() / 2) / abs(dy))
+        boundary_factor = min(factors) if factors else 0
+        offset = QPointF(dx * boundary_factor, dy * boundary_factor)
+        start = source_center + offset
+        end = target_center - offset
+        line = QLineF(start, end)
+        if line.length() == 0:
+            return
+        line_item = QGraphicsLineItem(line)
+        line_item.setPen(QPen(QColor("#536b78"), 3))
+        line_item.setZValue(0)
+        self.scene.addItem(line_item)
+        angle = math.atan2(end.y() - start.y(), end.x() - start.x())
+        arrow_size = 14
+        left = end - QPointF(
+            math.cos(angle - math.pi / 6) * arrow_size,
+            math.sin(angle - math.pi / 6) * arrow_size,
+        )
+        right = end - QPointF(
+            math.cos(angle + math.pi / 6) * arrow_size,
+            math.sin(angle + math.pi / 6) * arrow_size,
+        )
+        arrow = QGraphicsPolygonItem(QPolygonF([end, left, right]))
+        arrow.setBrush(QBrush(QColor("#536b78")))
+        arrow.setPen(QPen(QColor("#536b78")))
+        arrow.setZValue(0)
+        self.scene.addItem(arrow)
+
+
 class AuthorWindow(QMainWindow):
     def __init__(self, root: Path | None = None, *, show_ai_onboarding: bool = True, app_settings=None):
         super().__init__()
@@ -326,6 +670,7 @@ class AuthorWindow(QMainWindow):
             ("Move up", lambda: self.move_scene(-1), ""), ("Move down", lambda: self.move_scene(1), ""),
             ("Proofread", self.proofread, "Ctrl+G"), ("Export", self.choose_export, ""),
             ("Checkpoint", self.checkpoint, ""), ("Restore", self.choose_restore, ""),
+            ("Brainstorm", self.brainstorm, "Ctrl+B"),
             ("Write with AI", self.write_with_ai, "Ctrl+Shift+G"), ("AI setup", self.configure_ai, ""),
             ("Word export", self.word_export, ""), ("Word import", self.word_import, ""),
         ):
@@ -643,6 +988,10 @@ class AuthorWindow(QMainWindow):
             self.active_session = None
             self.rebuild_binder()
 
+    def brainstorm(self):
+        if self.root is not None:
+            BrainstormDialog(self.root, self).exec()
+
     def move_scene(self, direction):
         if not self.active_session or not self.active_session.scene_id:
             return
@@ -688,7 +1037,11 @@ class AuthorWindow(QMainWindow):
             forwarding_disclosure = (
                 " FreeLLMAPI will forward it to a hosted model provider."
                 if definition.provider_id == "freellmapi"
-                else ""
+                else (
+                    " OpenRouter will route it to the selected upstream model provider."
+                    if definition.provider_id == "openrouter"
+                    else ""
+                )
             )
             answer = QMessageBox.question(
                 self,

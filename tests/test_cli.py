@@ -635,6 +635,35 @@ def test_board_visual_commands(tmp_path: Path, monkeypatch) -> None:
     assert "Board View" in result.stdout
 
 
+def test_board_outline_previews_then_creates_book_structure(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "North County"]).exit_code == 0
+    assert runner.invoke(
+        app,
+        ["board", "note", "add", "Arrival", "--body", "Eli reaches town.", "--group", "Act One"],
+    ).exit_code == 0
+    assert runner.invoke(
+        app,
+        ["board", "note", "add", "Reckoning", "--body", "The truth comes out.", "--group", "Act Two"],
+    ).exit_code == 0
+    assert runner.invoke(app, ["board", "link", "add", "note-001", "note-002"]).exit_code == 0
+
+    preview = runner.invoke(app, ["board", "outline"])
+    assert preview.exit_code == 0
+    assert "Brainstorming Outline" in preview.stdout
+    assert "Part: Act One" in preview.stdout
+    assert "Preview only" in preview.stdout
+    assert list_chapters(tmp_path) == []
+
+    applied = runner.invoke(app, ["board", "outline", "--apply"])
+    assert applied.exit_code == 0
+    assert "Created outline chapters: 2" in applied.stdout
+    assert [(chapter.part, chapter.title) for chapter in list_chapters(tmp_path)] == [
+        ("Act One", "Arrival"),
+        ("Act Two", "Reckoning"),
+    ]
+
+
 def test_find_chapters_filters_by_metadata_and_text(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 

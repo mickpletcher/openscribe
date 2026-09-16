@@ -256,7 +256,7 @@ Follow-up: keep every identity-repair entry point behind the checkpointed stagin
 
 ### VL-001: Hosted AI providers use mocked contracts
 
-Live provider calls require external accounts, credentials, network access, and approval to send test text. Automated tests use fakes and do not prove current remote API compatibility. The FreeLLMAPI tests verify its OpenAI-compatible request shape and mandatory transfer gate, but not a current gateway installation or its upstream providers.
+Live provider calls require external accounts, credentials, network access, and approval to send test text. Automated tests use fakes and do not prove current remote API compatibility. The OpenRouter tests verify its OpenAI-compatible endpoint, request shape, named preset, and mandatory transfer gate, but not a live OpenRouter account or upstream model. The FreeLLMAPI tests verify its OpenAI-compatible request shape and mandatory transfer gate, but not a current gateway installation or its upstream providers.
 
 Risk: a provider SDK or API change can break an adapter while local tests remain green.
 

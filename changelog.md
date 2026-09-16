@@ -2,6 +2,21 @@
 
 ## 2026-09-15
 
+### OpenRouter provider
+
+* added an OpenRouter setup choice using its OpenAI-compatible API, account-key link, and editable model IDs
+* added `openrouter/auto` and `openrouter/free` presets without promising that model availability, quotas, or pricing will remain fixed
+* stored OpenRouter keys separately in the operating system credential store and supported `OPENROUTER_API_KEY` and `OPENROUTER_BASE_URL` overrides
+* required approval for every manuscript transfer and disclosed that OpenRouter routes content to the selected upstream model provider
+
+### Brainstorming flowcharts
+
+* added a draggable desktop flowchart canvas for creating, editing, deleting, arranging, connecting, and disconnecting book ideas
+* added preview-first conversion of visible flowchart ideas into manuscript parts and empty draft chapters
+* stored idea details as chapter synopses and linked created chapters back to their source ideas to prevent duplicate conversion
+* checkpointed outline creation and rejected cycles, missing targets, unresolved legacy links, and board changes after preview
+* added matching `openscribe board outline` preview and `--apply` CLI workflows
+
 ### FreeLLMAPI provider
 
 * added a FreeLLMAPI setup choice linked to its GitHub project, with `auto` routing and the default local gateway endpoint

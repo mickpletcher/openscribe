@@ -7,10 +7,20 @@ from dataclasses import dataclass
 from openscribe.network import local_endpoint
 
 HOSTED_PROVIDERS = frozenset(
-    {"openai", "azure-openai", "anthropic", "gemini", "mistral", "xai", "deepseek", "freellmapi"}
+    {
+        "openai",
+        "azure-openai",
+        "anthropic",
+        "gemini",
+        "mistral",
+        "xai",
+        "deepseek",
+        "openrouter",
+        "freellmapi",
+    }
 )
 OPENAI_COMPATIBLE_PROVIDERS = frozenset(
-    {"lm-studio", "openai-compatible-local", "openai-compatible", "xai", "deepseek", "freellmapi"}
+    {"lm-studio", "openai-compatible-local", "openai-compatible", "xai", "deepseek", "openrouter", "freellmapi"}
 )
 CREDENTIAL_SERVICE = "OpenScribe"
 
@@ -85,6 +95,16 @@ AI_PROVIDERS = (
         "https://portal.azure.com/",
         "AZURE_OPENAI_BASE_URL",
         "https://your-resource.openai.azure.com/openai/v1/",
+        True,
+    ),
+    AIProvider(
+        "openrouter",
+        "OpenRouter",
+        ("openrouter/auto", "openrouter/free", "~openai/gpt-latest"),
+        "OPENROUTER_API_KEY",
+        "https://openrouter.ai/settings/keys",
+        "OPENROUTER_BASE_URL",
+        "https://openrouter.ai/api/v1/",
         True,
     ),
     AIProvider(

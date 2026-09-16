@@ -86,7 +86,7 @@ The desktop application asks for AI setup on first launch. Choose a provider, en
 
 OpenScribe stores pasted keys separately by provider in the operating system credential store. It does not put them in project YAML or application settings. The provider-specific environment variable takes priority over a saved key. Local servers may omit the API key.
 
-Supported desktop choices are OpenAI, Anthropic Claude, Google Gemini, Mistral AI, xAI Grok, DeepSeek, Azure OpenAI, FreeLLMAPI, LM Studio, other local OpenAI-compatible servers, and other OpenAI-compatible providers. Model IDs remain editable because access and model catalogs change.
+Supported desktop choices are OpenAI, Anthropic Claude, Google Gemini, Mistral AI, xAI Grok, DeepSeek, Azure OpenAI, OpenRouter, FreeLLMAPI, LM Studio, other local OpenAI-compatible servers, and other OpenAI-compatible providers. Model IDs remain editable because access and model catalogs change.
 
 For **Write with AI**, every hosted or non-loopback request displays the provider, model, and number of manuscript characters that will be sent. Approval applies only to that request. The writing description is sent with the selected manuscript context. Loopback requests do not show the transfer confirmation unless FreeLLMAPI is selected. A loopback proxy, tunnel, or LM Link can still forward a request to another computer, and OpenScribe cannot detect that forwarding.
 
@@ -190,6 +190,31 @@ Choose **xAI Grok** in the desktop setup or use `provider: xai`. The default end
 ### DeepSeek
 
 Choose **DeepSeek** in the desktop setup or use `provider: deepseek`. The default endpoint is `https://api.deepseek.com/`. Set `DEEPSEEK_API_KEY`; `DEEPSEEK_BASE_URL` can override the endpoint.
+
+### OpenRouter
+
+[OpenRouter](https://openrouter.ai/) exposes many model providers through one OpenAI-compatible API. Create an [OpenRouter API key](https://openrouter.ai/settings/keys), select **OpenRouter** in AI setup, and keep the preset `https://openrouter.ai/api/v1/` endpoint.
+
+The default `openrouter/auto` model lets OpenRouter select a model for each prompt. Enter any current model slug from the [OpenRouter model catalog](https://openrouter.ai/models) when you need a specific model. The `openrouter/free` router is also offered as a preset, but free model availability and rate limits can change. Do not assume a model is free. Review the model price and your account settings before sending a request.
+
+Project config:
+
+```yaml
+ai:
+  enabled: true
+  provider: openrouter
+  model: openrouter/auto
+  endpoint: https://openrouter.ai/api/v1/
+```
+
+Environment:
+
+```powershell
+$env:OPENROUTER_API_KEY="your_key_here"
+$env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1/" # optional override
+```
+
+OpenScribe uses the bundled OpenAI client with OpenRouter's Chat Completions API. OpenRouter's attribution headers are optional and OpenScribe does not send them. Every manuscript request requires explicit transfer approval. OpenRouter then routes the prompt and manuscript context to the selected upstream model provider, so review both OpenRouter's policy and the selected provider's policy before sending private writing.
 
 ### FreeLLMAPI
 

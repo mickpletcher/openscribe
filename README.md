@@ -101,9 +101,10 @@ Do not run `openscribe init` in the OpenScribe source checkout unless you intend
 2. Add chapters and scenes.
 3. Write and press `Ctrl+S` to save.
 4. Create a checkpoint before major structural changes.
-5. Review your outline and word counts.
-6. Export a review copy to DOCX, PDF, or EPUB.
-7. Keep a separate backup outside the project folder.
+5. Use **Brainstorm** to map ideas into a flowchart and preview a book outline.
+6. Review your outline and word counts.
+7. Export a review copy to DOCX, PDF, or EPUB.
+8. Keep a separate backup outside the project folder.
 
 Common commands:
 
@@ -143,6 +144,7 @@ These controls reduce risk. They do not replace an independent backup. Read [Saf
 - immutable chapter and scene identities
 - chapter and scene creation, movement, splitting, merging, and metadata
 - outlines, project status, search, reports, and derived indexes
+- draggable brainstorming flowcharts that preview and create grouped book outlines
 - planning boards, story ideas, characters, settings, items, aliases, and relations
 - research notes, citations, paper structure, and conference material workflows
 - DOCX, PDF, and EPUB export
@@ -173,7 +175,7 @@ OpenScribe previews generated prose before applying it. An accepted page is inse
 
 AI is not required for manual writing, saving, searching, recovery, or export.
 
-On its first desktop launch, OpenScribe asks whether to connect an AI model. The setup supports OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a dedicated LM Studio preset, OpenAI-compatible hosted APIs, and other local servers such as Ollama, LocalAI, and vLLM. The connection test sends no manuscript text. Pasted API keys are saved separately by provider in the operating system credential store, never in the project. Select **Not now** to keep AI disabled. Use **AI setup** later to change the provider, model, or endpoint.
+On its first desktop launch, OpenScribe asks whether to connect an AI model. The setup supports OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, [OpenRouter](https://openrouter.ai/), [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a dedicated LM Studio preset, OpenAI-compatible hosted APIs, and other local servers such as Ollama, LocalAI, and vLLM. The connection test sends no manuscript text. Pasted API keys are saved separately by provider in the operating system credential store, never in the project. Select **Not now** to keep AI disabled. Use **AI setup** later to change the provider, model, or endpoint.
 
 Install provider support only if you need it:
 
@@ -181,7 +183,7 @@ Install provider support only if you need it:
 python -m pip install -e ".[ai]"
 ```
 
-OpenScribe shows the provider, model, and character count before manuscript text is sent from the desktop to a hosted service and asks for approval on every writing request. Each hosted CLI command requires `--allow-data-transfer`. Local loopback endpoints do not require transfer approval unless the selected provider is FreeLLMAPI, which routes requests from its local gateway to hosted providers.
+OpenScribe shows the provider, model, and character count before manuscript text is sent from the desktop to a hosted service and asks for approval on every writing request. Each hosted CLI command requires `--allow-data-transfer`. OpenRouter requests are sent through OpenRouter to the selected upstream model provider. Local loopback endpoints do not require transfer approval unless the selected provider is FreeLLMAPI, which routes requests from its local gateway to hosted providers.
 
 LM Studio can run on the same computer or another computer. For a remote model, LM Link is the simplest supported route. A direct network endpoint must use HTTPS because OpenScribe rejects nonlocal plain HTTP. OpenScribe cannot tell when a loopback service such as LM Link forwards a request to another computer, so review that service's routing before sending private writing.
 
@@ -270,7 +272,7 @@ See [VALIDATION.md](VALIDATION.md) for supported Python versions, package checks
 - Physical power-loss durability is not proven.
 - Licensed hosted LanguageTool and live hosted AI providers are covered only by limited or mocked contract tests.
 - Word round trips and the Office task pane require real-host validation and independent review.
-- Rich scene metadata and drag-based planning are not implemented.
+- Rich scene metadata and drag-based binder reordering are not implemented.
 
 Keep independent backups. Do not use the experimental Word workflow on the only copy of a manuscript.
 

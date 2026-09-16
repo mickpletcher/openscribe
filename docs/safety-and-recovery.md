@@ -72,6 +72,7 @@ Create a checkpoint before:
 - moving, splitting, or merging scenes
 - applying a migration or identity repair
 - importing Word changes
+- creating manuscript parts and chapters from a brainstorming outline
 - applying a snapshot restore
 - making a large manual rewrite
 
@@ -85,6 +86,8 @@ openscribe snapshot list
 Checkpoints are stored inside the project. Copying the whole project to another device or backup location protects against device loss.
 
 Scene move, split, and merge previews remember the exact source bytes. If another tool changes the file after preview, even by changing only line endings, OpenScribe refuses apply. Preview again from the current file before continuing.
+
+Brainstorming outline creation makes its own checkpoint. The preview is tied to the exact board file. If an idea, connection, or position changes after preview, OpenScribe refuses apply and requires a new preview.
 
 ## Restore preview and apply
 
@@ -158,11 +161,13 @@ Before a hosted AI or licensed hosted LanguageTool request, OpenScribe displays 
 
 Review the disclosure every time. Do not send private manuscript text unless you understand and accept the provider's terms and data handling.
 
-The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
+The first desktop launch can test OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, OpenRouter, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible endpoint with a short synthetic message. It does not send manuscript text. Pasted keys are stored separately by provider in the operating system credential store, not in project YAML. Provider-specific environment variables take priority. OpenScribe sends OpenAI and Azure OpenAI Responses requests with `store: false`, but hosted-provider abuse-monitoring and account-level retention policies can still apply.
 
 Local AI is treated as local only when the configured endpoint resolves to loopback. A LAN, VPN, or internet endpoint still crosses the machine boundary. Non-loopback AI endpoints require HTTPS and explicit transfer approval even when the provider is labeled local.
 
 FreeLLMAPI is the explicit exception to the normal loopback rule. Its OpenScribe preset connects to a local gateway, but that gateway routes requests to external providers. OpenScribe therefore requires hosted-transfer approval for every FreeLLMAPI manuscript request. Review the data handling and limits of both FreeLLMAPI and the provider that handles the selected model.
+
+OpenRouter is always treated as a hosted provider. OpenScribe asks before every manuscript request and discloses that OpenRouter routes the content to the selected upstream model provider. Review the policies of both services.
 
 LM Link and other proxies can accept a request on loopback and forward it to another computer. OpenScribe cannot inspect that routing and will not show its non-loopback confirmation. When using LM Link, treat the linked computer as a manuscript recipient even though the configured endpoint is `127.0.0.1`.
 

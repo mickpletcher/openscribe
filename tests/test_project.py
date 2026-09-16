@@ -7,7 +7,18 @@ from pathlib import Path
 import pytest
 import yaml
 
-from openscribe.board import add_chapter_link, add_note, list_notes, render_board
+from openscribe.board import (
+    add_chapter_link,
+    add_link,
+    add_note,
+    apply_board_outline,
+    delete_note,
+    list_notes,
+    outline_plan_text,
+    plan_board_outline,
+    render_board,
+    update_note,
+)
 from openscribe.index import index_is_current, rebuild_project_index
 from openscribe.migrations import MigrationError, migrate_project, plan_project_migration, repair_project_identities
 from openscribe.project import (
@@ -829,3 +840,62 @@ def test_render_board_includes_note_titles(tmp_path: Path) -> None:
     assert "note-001" in board_text
     assert "Clue" in board_text
     assert "Threat" in board_text
+
+
+def test_brainstorm_flowchart_creates_checkpointed_book_outline(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    opening = add_note(root, "Arrival", body="Eli reaches town.", group="Act One", x=20, y=0)
+    inciting = add_note(root, "The Missing Ledger", body="The central mystery appears.", group="Act One", x=0, y=0)
+    ending = add_note(root, "The Flood", body="The town confronts the truth.", group="Act Two", x=40, y=0)
+    add_link(root, inciting.note_id, opening.note_id)
+    add_link(root, opening.note_id, ending.note_id)
+
+    plan = plan_board_outline(root)
+
+    assert [part.title for part in plan.parts] == ["Act One", "Act Two"]
+    assert [chapter.title for chapter in plan.parts[0].chapters] == ["The Missing Ledger", "Arrival"]
+    assert "Idea details become chapter synopses" in outline_plan_text(plan)
+
+    backup, created = apply_board_outline(root, plan)
+
+    assert backup.exists()
+    assert len(created) == 3
+    chapters = list_chapters(root)
+    assert [(chapter.part, chapter.title) for chapter in chapters] == [
+        ("Act One", "The Missing Ledger"),
+        ("Act One", "Arrival"),
+        ("Act Two", "The Flood"),
+    ]
+    assert chapters[0].synopsis == "The central mystery appears."
+    assert all(chapter.body == "" for chapter in chapters)
+    assert all(note.chapter_links for note in list_notes(root))
+    assert list_snapshots(root)
+
+
+def test_brainstorm_outline_rejects_cycles_and_stale_previews(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    first = add_note(root, "First", group="Act One")
+    second = add_note(root, "Second", group="Act Two")
+    add_link(root, first.note_id, second.note_id)
+    plan = plan_board_outline(root)
+    update_note(root, second.note_id, title="Changed", body="", group="")
+
+    with pytest.raises(ValueError, match="changed after preview"):
+        apply_board_outline(root, plan)
+
+    add_link(root, second.note_id, first.note_id)
+    with pytest.raises(ValueError, match="contains a cycle"):
+        plan_board_outline(root)
+
+
+def test_delete_brainstorm_idea_removes_incoming_connections(tmp_path: Path) -> None:
+    root = init_project(tmp_path, "North County")
+    first = add_note(root, "First")
+    second = add_note(root, "Second")
+    add_link(root, first.note_id, second.note_id)
+
+    delete_note(root, second.note_id)
+
+    notes = list_notes(root)
+    assert [note.note_id for note in notes] == [first.note_id]
+    assert notes[0].links == []

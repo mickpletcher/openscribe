@@ -365,6 +365,20 @@ Promote a note into a chapter:
 openscribe board promote note-001 --part "Opening" --chapter "Ledger Clue"
 ```
 
+Preview a complete book outline from visible board notes and their directed links:
+
+```powershell
+openscribe board outline
+```
+
+After reviewing the part and chapter order, create the outline with a checkpoint:
+
+```powershell
+openscribe board outline --apply
+```
+
+The board note group becomes the book part. Notes without a group use `Outline`. Note bodies become chapter synopses. The command skips notes already linked to chapters and refuses cycles, unresolved links, and stale previews.
+
 Run each nested `--help` command for required IDs and options.
 
 ## Elements and relations

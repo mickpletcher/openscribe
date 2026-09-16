@@ -25,9 +25,12 @@ from openscribe.board import (
     add_chapter_link,
     add_link,
     add_note,
+    apply_board_outline,
     auto_layout,
     list_notes,
     move_note,
+    outline_plan_text,
+    plan_board_outline,
     promote_note_to_chapter,
     remove_chapter_link,
     render_board,
@@ -1235,6 +1238,19 @@ def board_view(
 ) -> None:
     root = project_root()
     console.print(Panel(render_board(root, width=width, height=height), title="Board View", border_style="cyan"))
+
+
+@board_app.command("outline")
+def board_outline(apply: bool = typer.Option(False, "--apply", help="Create parts and chapters from the preview.")) -> None:
+    root = project_root()
+    plan = plan_board_outline(root)
+    console.print(Panel(outline_plan_text(plan), title="Brainstorming Outline", border_style="cyan"))
+    if not apply:
+        console.print("Preview only. Use --apply after reviewing the outline.")
+        return
+    backup, created = apply_board_outline(root, plan)
+    console.print(f"Created outline chapters: {len(created)}")
+    console.print(f"Backup: {backup.relative_to(root)}")
 
 
 @element_app.command("add")

@@ -132,6 +132,13 @@ class _FakeMistralClient:
             SimpleNamespace(OpenAI=_FakeOpenAIClient),
             "compatible summary",
         ),
+        (
+            "openrouter",
+            "OPENROUTER_API_KEY",
+            "openai",
+            SimpleNamespace(OpenAI=_FakeOpenAIClient),
+            "compatible summary",
+        ),
     ],
 )
 def test_summarize_text_routes_supported_providers(
@@ -163,6 +170,8 @@ def test_summarize_text_routes_supported_providers(
         endpoint = "https://api.x.ai/v1/"
     if provider == "deepseek":
         endpoint = "https://api.deepseek.com/"
+    if provider == "openrouter":
+        endpoint = "https://openrouter.ai/api/v1/"
     if provider == "azure-openai":
         endpoint = "https://example.openai.azure.com/openai/v1/"
     settings = AISettings(enabled=True, provider=provider, model="test-model", endpoint=endpoint)
@@ -176,7 +185,7 @@ def test_summarize_text_routes_supported_providers(
     assert result == expected
     if provider == "openai":
         assert _FakeOpenAIClient.last_response_kwargs["store"] is False
-    if provider in {"lm-studio", "openai-compatible-local", "xai", "deepseek"}:
+    if provider in {"lm-studio", "openai-compatible-local", "xai", "deepseek", "openrouter"}:
         assert result == "compatible summary"
     if provider in {"lm-studio", "openai-compatible-local"}:
         assert _FakeOpenAIClient.last_kwargs == {
@@ -405,6 +414,33 @@ def test_freellmapi_preset_routes_through_local_gateway_but_requires_transfer_co
         "max_retries": 0,
     }
     assert checked["request"]["model"] == "auto"
+
+
+def test_openrouter_preset_uses_openai_compatible_api_and_requires_transfer_consent(monkeypatch) -> None:
+    checked = {}
+    credential = "synthetic" + "-value"
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            checked["client"] = kwargs
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **call_kwargs: checked.update(request=call_kwargs))
+            )
+
+    monkeypatch.setattr("openscribe.ai._load_dependency", lambda *args: SimpleNamespace(OpenAI=FakeClient))
+    settings = AISettings(True, "openrouter", "openrouter/auto")
+
+    definition = provider_definition("openrouter")
+    assert definition.account_url == "https://openrouter.ai/settings/keys"
+    assert requires_data_transfer_consent(settings)
+    check_ai_connection(settings, credential)
+    assert checked["client"] == {
+        "api_key": credential,
+        "base_url": "https://openrouter.ai/api/v1/",
+        "timeout": 15.0,
+        "max_retries": 0,
+    }
+    assert checked["request"]["model"] == "openrouter/auto"
 
 
 def test_connection_rejects_nonlocal_plain_http_before_loading_provider_client(monkeypatch) -> None:

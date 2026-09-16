@@ -7,11 +7,14 @@ from PySide6.QtCore import QSettings
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QLineEdit, QMessageBox
 
+from openscribe.board import add_link, add_note, list_notes
 from openscribe.desktop import (
     AI_INSERTION_MARKER,
     AISetupDialog,
     AIWritingDialog,
     AuthorWindow,
+    BrainstormDialog,
+    BrainstormIdeaDialog,
     ReviewDialog,
     _ai_writing_context,
 )
@@ -133,6 +136,41 @@ def test_desktop_create_scene_move_export_and_restore(window, monkeypatch):
     assert len(list_chapters(window.root)) == 3
 
 
+def test_brainstorm_dialog_renders_flowchart_and_creates_outline(window, qtbot, monkeypatch):
+    first = add_note(window.root, "Inciting incident", body="The ledger disappears.", group="Act One")
+    second = add_note(window.root, "Confrontation", body="Eli challenges the clerk.", group="Act Two", x=22)
+    add_link(window.root, first.note_id, second.note_id)
+    dialog = BrainstormDialog(window.root, window)
+    qtbot.addWidget(dialog)
+
+    assert set(dialog.node_items) == {first.note_id, second.note_id}
+    assert dialog.idea_list.count() == 2
+    assert len(dialog.scene.items()) > 2
+
+    monkeypatch.setattr(ReviewDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: QMessageBox.StandardButton.Ok)
+    dialog.create_outline()
+
+    chapters = list_chapters(window.root)
+    assert any(chapter.title == "Inciting incident" and chapter.part == "Act One" for chapter in chapters)
+    assert any(chapter.title == "Confrontation" and chapter.part == "Act Two" for chapter in chapters)
+    assert all(note.chapter_links for note in list_notes(window.root))
+
+
+def test_brainstorm_idea_dialog_collects_outline_fields(qtbot):
+    dialog = BrainstormIdeaDialog()
+    qtbot.addWidget(dialog)
+    dialog.title.setText("Midpoint reversal")
+    dialog.group.setText("Act Two")
+    dialog.body.setPlainText("The apparent victory exposes the larger threat.")
+
+    assert dialog.values() == (
+        "Midpoint reversal",
+        "The apparent victory exposes the larger threat.",
+        "Act Two",
+    )
+
+
 def test_desktop_reload_and_project_dialogs(window, monkeypatch, tmp_path):
     window.binder.setCurrentItem(scene_item(window))
     window.editor.insertPlainText("unsaved")
@@ -194,6 +232,7 @@ def test_ai_setup_dialog_masks_key_and_accepts_editable_model(qtbot):
         "xai",
         "deepseek",
         "azure-openai",
+        "openrouter",
         "lm-studio",
         "freellmapi",
     } <= providers
@@ -219,6 +258,18 @@ def test_ai_setup_dialog_has_freellmapi_preset_and_project_link(qtbot):
     assert "github.com/tashfeenahmed/freellmapi" in dialog.account_link.text()
     assert "optional" not in dialog.key_label.text().lower()
     assert "forwards it to hosted model providers" in dialog.disclosure.text()
+
+
+def test_ai_setup_dialog_has_openrouter_preset_and_disclosure(qtbot):
+    dialog = AISetupDialog("openrouter", "", "", {})
+    qtbot.addWidget(dialog)
+    assert dialog.provider_id() == "openrouter"
+    assert dialog.model_id() == "openrouter/auto"
+    assert dialog.endpoint_url() == "https://openrouter.ai/api/v1/"
+    assert dialog.endpoint.isEnabled()
+    assert "openrouter.ai/settings/keys" in dialog.account_link.text()
+    assert "optional" not in dialog.key_label.text().lower()
+    assert "routes requests to the selected upstream model provider" in dialog.disclosure.text()
 
 
 def test_ai_writing_dialog_collects_scope_and_description(qtbot):
@@ -339,6 +390,43 @@ def test_freellmapi_consent_discloses_hosted_forwarding(window, monkeypatch):
 
     assert disclosure["title"] == "Send manuscript context?"
     assert "FreeLLMAPI will forward it to a hosted model provider" in disclosure["message"]
+    assert window.ai_worker is None
+
+
+def test_openrouter_consent_discloses_upstream_routing(window, monkeypatch):
+    window.binder.setCurrentItem(scene_item(window))
+    window.config["ai"] = {
+        "enabled": True,
+        "provider": "openrouter",
+        "model": "openrouter/auto",
+        "endpoint": "https://openrouter.ai/api/v1/",
+    }
+
+    class AcceptedWriting:
+        def __init__(self, *args):
+            return None
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def scope_id(self):
+            return "page"
+
+        def writing_description(self):
+            return "Continue the arrival scene."
+
+    disclosure = {}
+    monkeypatch.setattr("openscribe.desktop.AIWritingDialog", AcceptedWriting)
+
+    def reject_transfer(parent, title, message, *args):
+        disclosure["message"] = message
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "question", reject_transfer)
+
+    window.write_with_ai()
+
+    assert "OpenRouter will route it to the selected upstream model provider" in disclosure["message"]
     assert window.ai_worker is None
 
 

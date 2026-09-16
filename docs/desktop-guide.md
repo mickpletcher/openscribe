@@ -29,7 +29,7 @@ The first desktop launch asks whether to connect an AI model.
 
 To connect:
 
-1. Choose OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible provider.
+1. Choose OpenAI, Anthropic Claude, Google Gemini, Mistral, xAI Grok, DeepSeek, Azure OpenAI, OpenRouter, FreeLLMAPI, LM Studio, another local server, or another OpenAI-compatible provider.
 2. Enter or select the model ID.
 3. For Azure, local, or custom compatible providers, enter the API endpoint.
 4. Enter an API key. A local server may not require one.
@@ -37,13 +37,13 @@ To connect:
 
 The connection test sends a short synthetic test message to check the key, endpoint, billing, and selected model. It does not send manuscript text. Pasted keys are saved separately by provider in the operating system credential store and are not written to `.openscribe\project.yaml`. A local endpoint such as Ollama defaults to `http://127.0.0.1:11434/v1/` and can use no key.
 
-For FreeLLMAPI, install and configure its local gateway first, copy its unified API key, and keep the preset `http://127.0.0.1:3001/v1/` endpoint. For LM Studio on the same computer, use `http://127.0.0.1:1234/v1/`. For LM Studio on another computer, use LM Link or an HTTPS-protected network endpoint. Plain HTTP network addresses are rejected. See [AI setup](ai-setup.md#freellmapi).
+For OpenRouter, create an API key, select an OpenRouter model ID, and keep the preset `https://openrouter.ai/api/v1/` endpoint. For FreeLLMAPI, install and configure its local gateway first, copy its unified API key, and keep the preset `http://127.0.0.1:3001/v1/` endpoint. For LM Studio on the same computer, use `http://127.0.0.1:1234/v1/`. For LM Studio on another computer, use LM Link or an HTTPS-protected network endpoint. Plain HTTP network addresses are rejected. See [AI setup](ai-setup.md#openrouter) and [FreeLLMAPI setup](ai-setup.md#freellmapi).
 
 Select **Not now** to keep AI disabled. The prompt is not shown again automatically. Use **AI setup** on the toolbar whenever you want to change the provider, model, endpoint, or credential.
 
 If a project is open when you connect, AI is enabled for that project. If no project is open, the connected model becomes the default for projects subsequently created through the desktop application. Existing projects are not changed automatically.
 
-Connecting does not approve manuscript transfer. Desktop AI writing asks before every hosted request. Hosted CLI commands disclose the provider, model, and text size and require `--allow-data-transfer` for each request. FreeLLMAPI requests always use this hosted-transfer gate because its local gateway forwards content to external model providers.
+Connecting does not approve manuscript transfer. Desktop AI writing asks before every hosted request. Hosted CLI commands disclose the provider, model, and text size and require `--allow-data-transfer` for each request. OpenRouter routes content to the selected upstream model provider. FreeLLMAPI requests always use this hosted-transfer gate because its local gateway forwards content to external model providers.
 
 ## Understand the window
 
@@ -51,7 +51,7 @@ The window has four main areas:
 
 | Area | Purpose |
 |---|---|
-| Toolbar | Project, save, structure, AI writing, proofreading, AI setup, export, checkpoint, restore, and Word actions |
+| Toolbar | Project, save, structure, brainstorming, AI writing, proofreading, AI setup, export, checkpoint, restore, and Word actions |
 | Project binder | Chapters, scenes, characters, research, and notes |
 | Manuscript editor | Draft text for the selected chapter or scene |
 | Reference panel | Proofreading findings and supporting information |
@@ -79,6 +79,27 @@ To open an existing project, select **Open** and choose the folder containing `.
 6. Select the chapter or scene you want to edit.
 
 If the manuscript has no part yet, the desktop application creates a default `Manuscript` part when you add the first chapter.
+
+## Brainstorm a book outline
+
+Select **Brainstorm** or press `Ctrl+B` to open the flowchart canvas.
+
+1. Select **Add idea**.
+2. Enter an idea or possible chapter title.
+3. Enter the book part, such as `Act One`, `Part I`, or `Investigation`.
+4. Add details that can become the chapter synopsis.
+5. Add more ideas.
+6. Select the idea that should come first and choose **Connect ideas**.
+7. Choose the next idea. The arrow defines reading order.
+8. Drag cards to organize the canvas, or choose **Auto arrange**.
+9. Select **Create outline**.
+10. Review the proposed parts and chapters, then select **Apply**.
+
+Outline creation makes a checkpoint first. Each unlinked visible idea becomes an empty draft chapter. Its details become the chapter synopsis. Its book part becomes the manuscript part. Ideas already linked to chapters are skipped instead of duplicated.
+
+OpenScribe refuses to create the outline when the flowchart contains a cycle, a missing connection target, or an unresolved legacy chapter link. It also refuses an apply if the board changed after preview. Remove one of the cycle connections or run the identity repair shown in the error, then preview again.
+
+Deleting an idea removes its incoming and outgoing flowchart connections. It does not delete a chapter that was previously created from that idea.
 
 ## Write and save
 
